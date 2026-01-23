@@ -68,3 +68,8 @@ func (g *Git) HasStagedChanges() (bool, error) {
 	}
 	return false, nil
 }
+
+// Commit creates a commit with the given message.
+func (g *Git) Commit(message string) error {
+	return exec.Command("git", "-C", g.repoPath, "commit", "-m", message).Run()
+}
