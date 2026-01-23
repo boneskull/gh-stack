@@ -95,3 +95,55 @@ func TestCheckout(t *testing.T) {
 		t.Errorf("expected current branch 'feature', got %q", current)
 	}
 }
+
+func TestIsDirty(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// Clean repo
+	dirty, err := g.IsDirty()
+	if err != nil {
+		t.Fatalf("IsDirty failed: %v", err)
+	}
+	if dirty {
+		t.Error("expected clean repo to not be dirty")
+	}
+
+	// Make it dirty with untracked file
+	os.WriteFile(filepath.Join(dir, "newfile.txt"), []byte("content"), 0644)
+
+	dirty, err = g.IsDirty()
+	if err != nil {
+		t.Fatalf("IsDirty failed: %v", err)
+	}
+	if !dirty {
+		t.Error("expected repo with untracked file to be dirty")
+	}
+}
+
+func TestHasStagedChanges(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// No staged changes initially
+	staged, err := g.HasStagedChanges()
+	if err != nil {
+		t.Fatalf("HasStagedChanges failed: %v", err)
+	}
+	if staged {
+		t.Error("expected no staged changes")
+	}
+
+	// Stage a change
+	f := filepath.Join(dir, "newfile.txt")
+	os.WriteFile(f, []byte("content"), 0644)
+	exec.Command("git", "-C", dir, "add", f).Run()
+
+	staged, err = g.HasStagedChanges()
+	if err != nil {
+		t.Fatalf("HasStagedChanges failed: %v", err)
+	}
+	if !staged {
+		t.Error("expected staged changes after git add")
+	}
+}

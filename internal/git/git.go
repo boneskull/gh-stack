@@ -49,3 +49,22 @@ func (g *Git) Checkout(branch string) error {
 func (g *Git) CreateAndCheckout(name string) error {
 	return exec.Command("git", "-C", g.repoPath, "checkout", "-b", name).Run()
 }
+
+// IsDirty returns true if there are uncommitted changes (staged or unstaged).
+func (g *Git) IsDirty() (bool, error) {
+	out, err := exec.Command("git", "-C", g.repoPath, "status", "--porcelain").Output()
+	if err != nil {
+		return false, err
+	}
+	return len(strings.TrimSpace(string(out))) > 0, nil
+}
+
+// HasStagedChanges returns true if there are staged changes.
+func (g *Git) HasStagedChanges() (bool, error) {
+	err := exec.Command("git", "-C", g.repoPath, "diff", "--cached", "--quiet").Run()
+	if err != nil {
+		// Exit code 1 means there are differences
+		return true, nil
+	}
+	return false, nil
+}
