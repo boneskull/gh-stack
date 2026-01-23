@@ -1,0 +1,14 @@
+# Binaries
+gh-stack
+*.exe
+
+# Test artifacts
+coverage.out
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
