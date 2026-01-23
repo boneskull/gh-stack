@@ -153,3 +153,26 @@ func (g *Git) IsRebaseInProgress() bool {
 func (g *Git) GetGitDir() string {
 	return filepath.Join(g.repoPath, ".git")
 }
+
+// Fetch fetches from origin.
+func (g *Git) Fetch() error {
+	cmd := exec.Command("git", "-C", g.repoPath, "fetch", "origin")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// FastForward fast-forwards a branch to its remote tracking branch.
+func (g *Git) FastForward(branch string) error {
+	// First checkout the branch
+	if err := g.Checkout(branch); err != nil {
+		return err
+	}
+	// Then merge with fast-forward only
+	return exec.Command("git", "-C", g.repoPath, "merge", "--ff-only", "origin/"+branch).Run()
+}
+
+// DeleteBranch deletes a local branch.
+func (g *Git) DeleteBranch(branch string) error {
+	return exec.Command("git", "-C", g.repoPath, "branch", "-D", branch).Run()
+}
