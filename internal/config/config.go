@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -12,6 +13,9 @@ var ErrNotInitialized = errors.New("stack not initialized: run 'gh stack init' f
 
 // ErrBranchNotTracked is returned when a branch is not tracked.
 var ErrBranchNotTracked = errors.New("branch not tracked")
+
+// ErrNoPR is returned when a branch has no associated PR.
+var ErrNoPR = errors.New("no PR associated with branch")
 
 // Config provides access to stack metadata stored in .git/config.
 type Config struct {
@@ -61,6 +65,29 @@ func (c *Config) SetParent(branch, parent string) error {
 func (c *Config) RemoveParent(branch string) error {
 	key := "branch." + branch + ".stackParent"
 	// --unset returns error if key doesn't exist, which is fine
+	exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run()
+	return nil
+}
+
+// GetPR returns the PR number for the given branch.
+func (c *Config) GetPR(branch string) (int, error) {
+	key := "branch." + branch + ".stackPR"
+	out, err := exec.Command("git", "-C", c.repoPath, "config", "--get", key).Output()
+	if err != nil {
+		return 0, ErrNoPR
+	}
+	return strconv.Atoi(strings.TrimSpace(string(out)))
+}
+
+// SetPR sets the PR number for the given branch.
+func (c *Config) SetPR(branch string, pr int) error {
+	key := "branch." + branch + ".stackPR"
+	return exec.Command("git", "-C", c.repoPath, "config", key, strconv.Itoa(pr)).Run()
+}
+
+// RemovePR removes the PR association for a branch.
+func (c *Config) RemovePR(branch string) error {
+	key := "branch." + branch + ".stackPR"
 	exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run()
 	return nil
 }

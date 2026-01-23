@@ -91,3 +91,39 @@ func TestSetAndGetParent(t *testing.T) {
 		t.Errorf("expected parent 'main', got %q", parent)
 	}
 }
+
+func TestPRNumber(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, _ := config.Load(dir)
+
+	// No PR set initially
+	_, err := cfg.GetPR("feature-a")
+	if err == nil {
+		t.Error("expected error for unset PR, got nil")
+	}
+
+	// Set PR
+	if err := cfg.SetPR("feature-a", 1234); err != nil {
+		t.Fatalf("SetPR failed: %v", err)
+	}
+
+	// Get PR
+	pr, err := cfg.GetPR("feature-a")
+	if err != nil {
+		t.Fatalf("GetPR failed: %v", err)
+	}
+	if pr != 1234 {
+		t.Errorf("expected PR 1234, got %d", pr)
+	}
+
+	// Remove PR
+	if err := cfg.RemovePR("feature-a"); err != nil {
+		t.Fatalf("RemovePR failed: %v", err)
+	}
+
+	_, err = cfg.GetPR("feature-a")
+	if err == nil {
+		t.Error("expected error after removing PR, got nil")
+	}
+}
