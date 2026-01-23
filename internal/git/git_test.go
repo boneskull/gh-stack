@@ -49,3 +49,49 @@ func TestCurrentBranch(t *testing.T) {
 		t.Errorf("expected 'main' or 'master', got %q", branch)
 	}
 }
+
+func TestBranchExists(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// Current branch should exist
+	current, _ := g.CurrentBranch()
+	if !g.BranchExists(current) {
+		t.Errorf("expected current branch %q to exist", current)
+	}
+
+	// Nonexistent branch
+	if g.BranchExists("nonexistent-branch-xyz") {
+		t.Error("expected nonexistent branch to not exist")
+	}
+}
+
+func TestCreateBranch(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	err := g.CreateBranch("new-feature")
+	if err != nil {
+		t.Fatalf("CreateBranch failed: %v", err)
+	}
+
+	if !g.BranchExists("new-feature") {
+		t.Error("new branch should exist after creation")
+	}
+}
+
+func TestCheckout(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	g.CreateBranch("feature")
+	err := g.Checkout("feature")
+	if err != nil {
+		t.Fatalf("Checkout failed: %v", err)
+	}
+
+	current, _ := g.CurrentBranch()
+	if current != "feature" {
+		t.Errorf("expected current branch 'feature', got %q", current)
+	}
+}

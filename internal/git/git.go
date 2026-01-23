@@ -28,3 +28,24 @@ func (g *Git) CurrentBranch() (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// BranchExists checks if a branch exists.
+func (g *Git) BranchExists(branch string) bool {
+	err := exec.Command("git", "-C", g.repoPath, "rev-parse", "--verify", "refs/heads/"+branch).Run()
+	return err == nil
+}
+
+// CreateBranch creates a new branch at the current HEAD.
+func (g *Git) CreateBranch(name string) error {
+	return exec.Command("git", "-C", g.repoPath, "branch", name).Run()
+}
+
+// Checkout switches to the specified branch.
+func (g *Git) Checkout(branch string) error {
+	return exec.Command("git", "-C", g.repoPath, "checkout", branch).Run()
+}
+
+// CreateAndCheckout creates a new branch and switches to it.
+func (g *Git) CreateAndCheckout(name string) error {
+	return exec.Command("git", "-C", g.repoPath, "checkout", "-b", name).Run()
+}
