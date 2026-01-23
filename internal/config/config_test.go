@@ -2,6 +2,7 @@
 package config_test
 
 import (
+	"errors"
 	"os/exec"
 	"testing"
 
@@ -58,5 +59,35 @@ func TestSetTrunk(t *testing.T) {
 	}
 	if trunk != "main" {
 		t.Errorf("expected trunk 'main', got %q", trunk)
+	}
+}
+
+func TestGetParent_NotTracked(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, _ := config.Load(dir)
+
+	_, err := cfg.GetParent("feature-a")
+	if !errors.Is(err, config.ErrBranchNotTracked) {
+		t.Errorf("expected ErrBranchNotTracked, got %v", err)
+	}
+}
+
+func TestSetAndGetParent(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, _ := config.Load(dir)
+	cfg.SetTrunk("main")
+
+	if err := cfg.SetParent("feature-a", "main"); err != nil {
+		t.Fatalf("SetParent failed: %v", err)
+	}
+
+	parent, err := cfg.GetParent("feature-a")
+	if err != nil {
+		t.Fatalf("GetParent failed: %v", err)
+	}
+	if parent != "main" {
+		t.Errorf("expected parent 'main', got %q", parent)
 	}
 }

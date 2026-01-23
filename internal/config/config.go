@@ -40,3 +40,27 @@ func (c *Config) SetTrunk(branch string) error {
 	cmd := exec.Command("git", "-C", c.repoPath, "config", "stack.trunk", branch)
 	return cmd.Run()
 }
+
+// GetParent returns the parent branch for the given branch.
+func (c *Config) GetParent(branch string) (string, error) {
+	key := "branch." + branch + ".stackParent"
+	out, err := exec.Command("git", "-C", c.repoPath, "config", "--get", key).Output()
+	if err != nil {
+		return "", ErrBranchNotTracked
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SetParent sets the parent branch for the given branch.
+func (c *Config) SetParent(branch, parent string) error {
+	key := "branch." + branch + ".stackParent"
+	return exec.Command("git", "-C", c.repoPath, "config", key, parent).Run()
+}
+
+// RemoveParent removes the parent tracking for a branch.
+func (c *Config) RemoveParent(branch string) error {
+	key := "branch." + branch + ".stackParent"
+	// --unset returns error if key doesn't exist, which is fine
+	exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run()
+	return nil
+}
