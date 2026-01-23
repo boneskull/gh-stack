@@ -2,8 +2,11 @@
 package config
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -90,4 +93,25 @@ func (c *Config) RemovePR(branch string) error {
 	key := "branch." + branch + ".stackPR"
 	exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run()
 	return nil
+}
+
+// ListTrackedBranches returns all branches that have a stackParent set.
+func (c *Config) ListTrackedBranches() ([]string, error) {
+	// Note: git normalizes config keys to lowercase, so stackParent becomes stackparent
+	out, err := exec.Command("git", "-C", c.repoPath, "config", "--get-regexp", "^branch\\..*\\.stackparent$").Output()
+	if err != nil {
+		// No matches is not an error
+		return []string{}, nil
+	}
+
+	var branches []string
+	re := regexp.MustCompile(`^branch\.(.+)\.stackparent\s+`)
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+			branches = append(branches, matches[1])
+		}
+	}
+	return branches, nil
 }

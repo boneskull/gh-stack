@@ -127,3 +127,30 @@ func TestPRNumber(t *testing.T) {
 		t.Error("expected error after removing PR, got nil")
 	}
 }
+
+func TestListTrackedBranches(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, _ := config.Load(dir)
+	cfg.SetTrunk("main")
+	cfg.SetParent("feature-a", "main")
+	cfg.SetParent("feature-b", "feature-a")
+
+	branches, err := cfg.ListTrackedBranches()
+	if err != nil {
+		t.Fatalf("ListTrackedBranches failed: %v", err)
+	}
+
+	if len(branches) != 2 {
+		t.Errorf("expected 2 branches, got %d", len(branches))
+	}
+
+	// Check both branches are present
+	found := make(map[string]bool)
+	for _, b := range branches {
+		found[b] = true
+	}
+	if !found["feature-a"] || !found["feature-b"] {
+		t.Errorf("missing expected branches, got %v", branches)
+	}
+}
