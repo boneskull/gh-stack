@@ -5,6 +5,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// version is set at build time via ldflags.
+var version = "dev"
+
+func init() {
+	rootCmd.Version = version
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "gh-stack",
 	Short: "Manage stacked pull requests",
