@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -85,4 +86,70 @@ func (g *Git) Push(branch string, force bool) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// GetMergeBase returns the merge base of two branches.
+func (g *Git) GetMergeBase(a, b string) (string, error) {
+	out, err := exec.Command("git", "-C", g.repoPath, "merge-base", a, b).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// GetTip returns the commit SHA at the tip of a branch.
+func (g *Git) GetTip(branch string) (string, error) {
+	out, err := exec.Command("git", "-C", g.repoPath, "rev-parse", branch).Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// NeedsRebase returns true if branch needs to be rebased onto parent.
+func (g *Git) NeedsRebase(branch, parent string) (bool, error) {
+	mergeBase, err := g.GetMergeBase(branch, parent)
+	if err != nil {
+		return false, err
+	}
+	parentTip, err := g.GetTip(parent)
+	if err != nil {
+		return false, err
+	}
+	return mergeBase != parentTip, nil
+}
+
+// Rebase rebases the current branch onto target.
+func (g *Git) Rebase(onto string) error {
+	cmd := exec.Command("git", "-C", g.repoPath, "rebase", onto)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// RebaseContinue continues an in-progress rebase.
+func (g *Git) RebaseContinue() error {
+	cmd := exec.Command("git", "-C", g.repoPath, "rebase", "--continue")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// RebaseAbort aborts an in-progress rebase.
+func (g *Git) RebaseAbort() error {
+	return exec.Command("git", "-C", g.repoPath, "rebase", "--abort").Run()
+}
+
+// IsRebaseInProgress checks if a rebase is in progress.
+func (g *Git) IsRebaseInProgress() bool {
+	rebaseMerge := filepath.Join(g.repoPath, ".git", "rebase-merge")
+	rebaseApply := filepath.Join(g.repoPath, ".git", "rebase-apply")
+	_, err1 := os.Stat(rebaseMerge)
+	_, err2 := os.Stat(rebaseApply)
+	return err1 == nil || err2 == nil
+}
+
+// GetGitDir returns the .git directory path.
+func (g *Git) GetGitDir() string {
+	return filepath.Join(g.repoPath, ".git")
 }
