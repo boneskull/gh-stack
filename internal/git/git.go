@@ -3,6 +3,7 @@ package git
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -72,4 +73,16 @@ func (g *Git) HasStagedChanges() (bool, error) {
 // Commit creates a commit with the given message.
 func (g *Git) Commit(message string) error {
 	return exec.Command("git", "-C", g.repoPath, "commit", "-m", message).Run()
+}
+
+// Push force-pushes a branch to origin with lease.
+func (g *Git) Push(branch string, force bool) error {
+	args := []string{"-C", g.repoPath, "push", "origin", branch}
+	if force {
+		args = append(args, "--force-with-lease")
+	}
+	cmd := exec.Command("git", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
