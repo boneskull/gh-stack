@@ -39,3 +39,24 @@ func TestGetTrunk_NotInitialized(t *testing.T) {
 		t.Error("expected error when trunk not set, got nil")
 	}
 }
+
+func TestSetTrunk(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if err := cfg.SetTrunk("main"); err != nil {
+		t.Fatalf("SetTrunk failed: %v", err)
+	}
+
+	trunk, err := cfg.GetTrunk()
+	if err != nil {
+		t.Fatalf("GetTrunk failed: %v", err)
+	}
+	if trunk != "main" {
+		t.Errorf("expected trunk 'main', got %q", trunk)
+	}
+}

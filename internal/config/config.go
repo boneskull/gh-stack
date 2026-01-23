@@ -34,3 +34,9 @@ func (c *Config) GetTrunk() (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// SetTrunk sets the trunk branch name.
+func (c *Config) SetTrunk(branch string) error {
+	cmd := exec.Command("git", "-C", c.repoPath, "config", "stack.trunk", branch)
+	return cmd.Run()
+}
