@@ -68,3 +68,37 @@ func Build(cfg *config.Config) (*Node, error) {
 
 	return root, nil
 }
+
+// FindNode finds a node by name in the tree.
+func FindNode(root *Node, name string) *Node {
+	if root.Name == name {
+		return root
+	}
+	for _, child := range root.Children {
+		if found := FindNode(child, name); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// GetAncestors returns all ancestors from node to root (excluding the node itself).
+func GetAncestors(node *Node) []*Node {
+	var ancestors []*Node
+	current := node.Parent
+	for current != nil {
+		ancestors = append(ancestors, current)
+		current = current.Parent
+	}
+	return ancestors
+}
+
+// GetDescendants returns all descendants of a node (excluding the node itself).
+func GetDescendants(node *Node) []*Node {
+	var descendants []*Node
+	for _, child := range node.Children {
+		descendants = append(descendants, child)
+		descendants = append(descendants, GetDescendants(child)...)
+	}
+	return descendants
+}

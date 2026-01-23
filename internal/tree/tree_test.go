@@ -51,3 +51,42 @@ func TestBuildTree(t *testing.T) {
 		t.Errorf("expected 2 children of feature-a, got %d", len(featureA.Children))
 	}
 }
+
+func TestFindNode(t *testing.T) {
+	cfg, _ := setupTestRepo(t)
+	cfg.SetTrunk("main")
+	cfg.SetParent("feature-a", "main")
+
+	root, _ := tree.Build(cfg)
+
+	node := tree.FindNode(root, "feature-a")
+	if node == nil {
+		t.Fatal("FindNode returned nil")
+	}
+	if node.Name != "feature-a" {
+		t.Errorf("expected 'feature-a', got %q", node.Name)
+	}
+
+	notFound := tree.FindNode(root, "nonexistent")
+	if notFound != nil {
+		t.Error("expected nil for nonexistent branch")
+	}
+}
+
+func TestGetAncestors(t *testing.T) {
+	cfg, _ := setupTestRepo(t)
+	cfg.SetTrunk("main")
+	cfg.SetParent("feature-a", "main")
+	cfg.SetParent("feature-b", "feature-a")
+
+	root, _ := tree.Build(cfg)
+	node := tree.FindNode(root, "feature-b")
+
+	ancestors := tree.GetAncestors(node)
+	if len(ancestors) != 2 {
+		t.Fatalf("expected 2 ancestors, got %d", len(ancestors))
+	}
+	if ancestors[0].Name != "feature-a" || ancestors[1].Name != "main" {
+		t.Errorf("unexpected ancestors: %v", ancestors)
+	}
+}
