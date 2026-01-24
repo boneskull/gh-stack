@@ -1,0 +1,17 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    ':enableVulnerabilityAlerts',
+    ':semanticCommits',
+    'helpers:pinGitHubActionDigests',
+    ':configMigration',
+    ':automergeDigest',
+    ':automergeMinor',
+  ],
+  labels: ['dependencies'],
+  lockFileMaintenance: {
+    enabled: true,
+    automerge: true,
+  },
+}
