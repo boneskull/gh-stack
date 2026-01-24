@@ -1,6 +1,7 @@
 package github
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -60,6 +61,72 @@ func TestGenerateStackComment(t *testing.T) {
 		// The current PR should have the ← indicator
 		if !strings.Contains(comment, "←") {
 			t.Error("current PR should be highlighted with ←")
+		}
+	})
+}
+
+func TestGenerateStackComment_EdgeCases(t *testing.T) {
+	t.Run("single PR targeting trunk", func(t *testing.T) {
+		root := &tree.Node{Name: "main"}
+		feature := &tree.Node{Name: "feature", PR: 1, Parent: root}
+		root.Children = []*tree.Node{feature}
+
+		comment := GenerateStackComment(root, "feature", "main")
+
+		if strings.Contains(comment, "[!WARNING]") {
+			t.Error("single PR targeting trunk should not have warning")
+		}
+		if !strings.Contains(comment, "← #1 (this PR)") {
+			t.Error("should highlight current PR")
+		}
+	})
+
+	t.Run("deeply nested stack", func(t *testing.T) {
+		root := &tree.Node{Name: "main"}
+		prev := root
+		for i := 1; i <= 5; i++ {
+			node := &tree.Node{
+				Name:   fmt.Sprintf("level-%d", i),
+				PR:     i,
+				Parent: prev,
+			}
+			prev.Children = []*tree.Node{node}
+			prev = node
+		}
+
+		comment := GenerateStackComment(root, "level-3", "main")
+
+		// Should show all levels
+		for i := 1; i <= 5; i++ {
+			if !strings.Contains(comment, fmt.Sprintf("#%d", i)) {
+				t.Errorf("should contain PR #%d", i)
+			}
+		}
+	})
+
+	t.Run("branch with siblings", func(t *testing.T) {
+		root := &tree.Node{Name: "main"}
+		a := &tree.Node{Name: "feature-a", PR: 1, Parent: root}
+		b := &tree.Node{Name: "feature-b", PR: 2, Parent: root}
+		root.Children = []*tree.Node{a, b}
+
+		comment := GenerateStackComment(root, "feature-a", "main")
+
+		if !strings.Contains(comment, "feature-a") {
+			t.Error("should contain current branch")
+		}
+		if !strings.Contains(comment, "feature-b") {
+			t.Error("should contain sibling branch")
+		}
+	})
+
+	t.Run("branch not found returns empty", func(t *testing.T) {
+		root := &tree.Node{Name: "main"}
+
+		comment := GenerateStackComment(root, "nonexistent", "main")
+
+		if comment != "" {
+			t.Error("should return empty for nonexistent branch")
 		}
 	})
 }
