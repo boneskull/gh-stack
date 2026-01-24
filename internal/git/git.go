@@ -2,15 +2,34 @@
 package git
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+
+	"github.com/cli/safeexec"
 )
 
 // ErrDirtyWorkTree is returned when the working tree has uncommitted changes.
 var ErrDirtyWorkTree = errors.New("working tree has uncommitted changes")
+
+var (
+	gitPath     string
+	gitPathOnce sync.Once
+	gitPathErr  error
+)
+
+// resolveGitPath finds the git executable using safeexec to prevent PATH injection.
+func resolveGitPath() (string, error) {
+	gitPathOnce.Do(func() {
+		gitPath, gitPathErr = safeexec.LookPath("git")
+	})
+	return gitPath, gitPathErr
+}
 
 // Git provides git operations for a repository.
 type Git struct {
@@ -22,48 +41,88 @@ func New(repoPath string) *Git {
 	return &Git{repoPath: repoPath}
 }
 
+// run executes a git command and returns stdout. Stderr is captured for error messages.
+func (g *Git) run(args ...string) (string, error) {
+	gitBin, err := resolveGitPath()
+	if err != nil {
+		return "", fmt.Errorf("failed to find git: %w", err)
+	}
+
+	fullArgs := append([]string{"-C", g.repoPath}, args...)
+	cmd := exec.Command(gitBin, fullArgs...)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("git %s: %s", args[0], strings.TrimSpace(stderr.String()))
+		}
+		return "", fmt.Errorf("git %s: %w", args[0], err)
+	}
+
+	return strings.TrimSpace(stdout.String()), nil
+}
+
+// runInteractive executes a git command with stdout/stderr connected to the terminal.
+func (g *Git) runInteractive(args ...string) error {
+	gitBin, err := resolveGitPath()
+	if err != nil {
+		return fmt.Errorf("failed to find git: %w", err)
+	}
+
+	fullArgs := append([]string{"-C", g.repoPath}, args...)
+	cmd := exec.Command(gitBin, fullArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// runSilent executes a git command and discards output, returning only success/failure.
+func (g *Git) runSilent(args ...string) error {
+	_, err := g.run(args...)
+	return err
+}
+
 // CurrentBranch returns the name of the current branch.
 func (g *Git) CurrentBranch() (string, error) {
-	out, err := exec.Command("git", "-C", g.repoPath, "rev-parse", "--abbrev-ref", "HEAD").Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
+	return g.run("rev-parse", "--abbrev-ref", "HEAD")
 }
 
 // BranchExists checks if a branch exists.
 func (g *Git) BranchExists(branch string) bool {
-	err := exec.Command("git", "-C", g.repoPath, "rev-parse", "--verify", "refs/heads/"+branch).Run()
+	err := g.runSilent("rev-parse", "--verify", "refs/heads/"+branch)
 	return err == nil
 }
 
 // CreateBranch creates a new branch at the current HEAD.
 func (g *Git) CreateBranch(name string) error {
-	return exec.Command("git", "-C", g.repoPath, "branch", name).Run()
+	return g.runSilent("branch", name)
 }
 
 // Checkout switches to the specified branch.
 func (g *Git) Checkout(branch string) error {
-	return exec.Command("git", "-C", g.repoPath, "checkout", branch).Run()
+	return g.runSilent("checkout", branch)
 }
 
 // CreateAndCheckout creates a new branch and switches to it.
 func (g *Git) CreateAndCheckout(name string) error {
-	return exec.Command("git", "-C", g.repoPath, "checkout", "-b", name).Run()
+	return g.runSilent("checkout", "-b", name)
 }
 
 // IsDirty returns true if there are uncommitted changes (staged or unstaged).
 func (g *Git) IsDirty() (bool, error) {
-	out, err := exec.Command("git", "-C", g.repoPath, "status", "--porcelain").Output()
+	out, err := g.run("status", "--porcelain")
 	if err != nil {
 		return false, err
 	}
-	return len(strings.TrimSpace(string(out))) > 0, nil
+	return len(out) > 0, nil
 }
 
 // HasStagedChanges returns true if there are staged changes.
 func (g *Git) HasStagedChanges() (bool, error) {
-	err := exec.Command("git", "-C", g.repoPath, "diff", "--cached", "--quiet").Run()
+	err := g.runSilent("diff", "--cached", "--quiet")
 	if err != nil {
 		// Exit code 1 means there are differences
 		return true, nil
@@ -73,37 +132,26 @@ func (g *Git) HasStagedChanges() (bool, error) {
 
 // Commit creates a commit with the given message.
 func (g *Git) Commit(message string) error {
-	return exec.Command("git", "-C", g.repoPath, "commit", "-m", message).Run()
+	return g.runSilent("commit", "-m", message)
 }
 
 // Push force-pushes a branch to origin with lease.
 func (g *Git) Push(branch string, force bool) error {
-	args := []string{"-C", g.repoPath, "push", "origin", branch}
+	args := []string{"push", "origin", branch}
 	if force {
 		args = append(args, "--force-with-lease")
 	}
-	cmd := exec.Command("git", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return g.runInteractive(args...)
 }
 
 // GetMergeBase returns the merge base of two branches.
 func (g *Git) GetMergeBase(a, b string) (string, error) {
-	out, err := exec.Command("git", "-C", g.repoPath, "merge-base", a, b).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
+	return g.run("merge-base", a, b)
 }
 
 // GetTip returns the commit SHA at the tip of a branch.
 func (g *Git) GetTip(branch string) (string, error) {
-	out, err := exec.Command("git", "-C", g.repoPath, "rev-parse", branch).Output()
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(out)), nil
+	return g.run("rev-parse", branch)
 }
 
 // NeedsRebase returns true if branch needs to be rebased onto parent.
@@ -121,23 +169,17 @@ func (g *Git) NeedsRebase(branch, parent string) (bool, error) {
 
 // Rebase rebases the current branch onto target.
 func (g *Git) Rebase(onto string) error {
-	cmd := exec.Command("git", "-C", g.repoPath, "rebase", onto)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return g.runInteractive("rebase", onto)
 }
 
 // RebaseContinue continues an in-progress rebase.
 func (g *Git) RebaseContinue() error {
-	cmd := exec.Command("git", "-C", g.repoPath, "rebase", "--continue")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return g.runInteractive("rebase", "--continue")
 }
 
 // RebaseAbort aborts an in-progress rebase.
 func (g *Git) RebaseAbort() error {
-	return exec.Command("git", "-C", g.repoPath, "rebase", "--abort").Run()
+	return g.runSilent("rebase", "--abort")
 }
 
 // IsRebaseInProgress checks if a rebase is in progress.
@@ -156,10 +198,7 @@ func (g *Git) GetGitDir() string {
 
 // Fetch fetches from origin.
 func (g *Git) Fetch() error {
-	cmd := exec.Command("git", "-C", g.repoPath, "fetch", "origin")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return g.runInteractive("fetch", "origin")
 }
 
 // FastForward fast-forwards a branch to its remote tracking branch.
@@ -169,10 +208,10 @@ func (g *Git) FastForward(branch string) error {
 		return err
 	}
 	// Then merge with fast-forward only
-	return exec.Command("git", "-C", g.repoPath, "merge", "--ff-only", "origin/"+branch).Run()
+	return g.runSilent("merge", "--ff-only", "origin/"+branch)
 }
 
 // DeleteBranch deletes a local branch.
 func (g *Git) DeleteBranch(branch string) error {
-	return exec.Command("git", "-C", g.repoPath, "branch", "-D", branch).Run()
+	return g.runSilent("branch", "-D", branch)
 }
