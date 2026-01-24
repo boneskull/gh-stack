@@ -15,6 +15,10 @@ type PR struct {
 	Number int    `json:"number"`
 	State  string `json:"state"`
 	Merged bool   `json:"merged"`
+	Draft  bool   `json:"draft"`
+	Base   struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
 }
 
 // Comment represents a GitHub issue/PR comment.
@@ -79,6 +83,38 @@ func (c *Client) CreatePR(head, base, title, body string) (int, error) {
 	return response.Number, nil
 }
 
+// CreateDraftPR creates a new pull request as a draft.
+func (c *Client) CreateDraftPR(head, base, title, body string) (int, error) {
+	path := fmt.Sprintf("repos/%s/%s/pulls", c.owner, c.repo)
+
+	request := struct {
+		Head  string `json:"head"`
+		Base  string `json:"base"`
+		Title string `json:"title"`
+		Body  string `json:"body"`
+		Draft bool   `json:"draft"`
+	}{
+		Head:  head,
+		Base:  base,
+		Title: title,
+		Body:  body,
+		Draft: true,
+	}
+
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	var response PR
+	err = c.rest.Post(path, bytes.NewReader(reqBody), &response)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create draft PR: %w", err)
+	}
+
+	return response.Number, nil
+}
+
 // GetPR fetches PR details by number.
 func (c *Client) GetPR(number int) (*PR, error) {
 	path := fmt.Sprintf("repos/%s/%s/pulls/%d", c.owner, c.repo, number)
@@ -110,6 +146,43 @@ func (c *Client) UpdatePRBase(number int, base string) error {
 	err = c.rest.Patch(path, bytes.NewReader(reqBody), nil)
 	if err != nil {
 		return fmt.Errorf("failed to update PR #%d base: %w", number, err)
+	}
+
+	return nil
+}
+
+// MarkPRReady converts a draft PR to ready for review.
+// Uses the GraphQL API since REST doesn't support this operation.
+func (c *Client) MarkPRReady(prNumber int) error {
+	// First get the PR's node_id for GraphQL
+	path := fmt.Sprintf("repos/%s/%s/pulls/%d", c.owner, c.repo, prNumber)
+
+	var prData struct {
+		NodeID string `json:"node_id"`
+	}
+	if err := c.rest.Get(path, &prData); err != nil {
+		return fmt.Errorf("failed to get PR #%d: %w", prNumber, err)
+	}
+
+	// Use GraphQL mutation to mark ready
+	query := `mutation($id: ID!) {
+		markPullRequestReadyForReview(input: {pullRequestId: $id}) {
+			pullRequest { number }
+		}
+	}`
+
+	variables := map[string]any{"id": prData.NodeID}
+	reqBody := map[string]any{
+		"query":     query,
+		"variables": variables,
+	}
+	reqBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal GraphQL request: %w", err)
+	}
+
+	if err := c.rest.Post("graphql", bytes.NewReader(reqBytes), nil); err != nil {
+		return fmt.Errorf("failed to mark PR #%d ready: %w", prNumber, err)
 	}
 
 	return nil
