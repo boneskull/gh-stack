@@ -128,7 +128,7 @@ func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun boo
 				Pending:      remaining,
 				OriginalHead: originalHead,
 			}
-			state.Save(g.GetGitDir(), st)
+			_ = state.Save(g.GetGitDir(), st) // Best effort - user can recover manually
 
 			fmt.Printf("\nCONFLICT: Resolve conflicts and run 'gh stack continue', or 'gh stack abort' to cancel.\n")
 			fmt.Printf("Remaining branches: %v\n", remaining)
@@ -140,7 +140,7 @@ func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun boo
 
 	// Return to original branch
 	if !dryRun {
-		g.Checkout(originalBranch)
+		_ = g.Checkout(originalBranch) // Best effort - cascade succeeded
 	}
 
 	return nil

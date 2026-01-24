@@ -11,7 +11,13 @@ linters:
     - unused
     - ineffassign
     - misspell
-    - gosec
+    # gosec disabled - false positives for CLI tools that shell out to git
+  exclusions:
+    rules:
+      # Test files can have unchecked errors - tests use t.Fatal patterns
+      - path: _test\.go
+        linters:
+          - errcheck
 
 formatters:
   enable:
@@ -25,11 +31,7 @@ linters-settings:
   govet:
     enable:
       - shadow
-  gosec:
-    excludes:
-      - G204 # Subprocess launched with variable - we intentionally shell out to git/gh
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0

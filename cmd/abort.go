@@ -43,8 +43,8 @@ func runAbort(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Clean up state
-	state.Remove(g.GetGitDir())
+	// Clean up state (ignore error - best effort cleanup)
+	_ = state.Remove(g.GetGitDir())
 
 	fmt.Printf("Cascade aborted. Original HEAD was %s\n", st.OriginalHead)
 	return nil

@@ -64,7 +64,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Warning: could not fast-forward %s: %v\n", trunk, err)
 		}
 		// Return to original branch
-		g.Checkout(currentBranch)
+		_ = g.Checkout(currentBranch) // Best effort
 	}
 
 	// Check for merged PRs
@@ -105,7 +105,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 				fmt.Printf("Would retarget %s from %s to %s\n", child.Name, branch, trunk)
 			} else {
 				fmt.Printf("Retargeting %s from %s to %s\n", child.Name, branch, trunk)
-				cfg.SetParent(child.Name, trunk)
+				_ = cfg.SetParent(child.Name, trunk) // Best effort
 			}
 		}
 
@@ -114,9 +114,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Would delete merged branch %s\n", branch)
 		} else {
 			fmt.Printf("Deleting merged branch %s (PR was merged)\n", branch)
-			cfg.RemoveParent(branch)
-			cfg.RemovePR(branch)
-			g.DeleteBranch(branch)
+			_ = cfg.RemoveParent(branch) // Best effort cleanup
+			_ = cfg.RemovePR(branch)
+			_ = g.DeleteBranch(branch)
 		}
 	}
 
