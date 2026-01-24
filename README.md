@@ -135,6 +135,30 @@ gh-stack stores metadata in your local `.git/config`:
 
 No remote service required. Your stack relationships stay with your repository.
 
+## Comparison
+
+### vs. Graphite
+
+[Graphite](https://graphite.dev/) is a SaaS product with a polished CLI and web dashboard. It requires an account and stores stack metadata on their servers. gh-stack stores everything locally in `.git/config`—no account, no remote dependency.
+
+### vs. spr
+
+[spr](https://github.com/ejoffe/spr) enforces a strict "one commit = one PR" model. You work on a single branch, and each commit automatically becomes a separate PR. You cannot merge PRs through GitHub's UI—you must use `spr merge`.
+
+gh-stack uses a traditional "one branch = one PR" model. You control what goes into each PR, create PRs when you're ready, and merge through GitHub normally. More flexibility, less automation.
+
+### vs. git-town
+
+[git-town](https://github.com/git-town/git-town) is a general-purpose Git workflow tool that automates branch creation, synchronization, and cleanup across many workflows (Git Flow, GitHub Flow, trunk-based development). Stacked changes are one feature among many.
+
+gh-stack focuses exclusively on stacked PRs. If you want a comprehensive Git workflow tool, use git-town. If you want a lightweight tool just for managing PR stacks on GitHub, use gh-stack.
+
+### vs. git-branchless
+
+[git-branchless](https://github.com/arxanas/git-branchless) is a powerful suite that enhances Git with undo functionality, interactive commit graph editing, and patch-stack workflows. It's designed for power users and optimized for massive repositories.
+
+gh-stack is narrower in scope: it tracks parent-child relationships between branches and helps you manage the resulting PRs. It doesn't modify how Git works—it just adds stack awareness on top.
+
 ## Acknowledgements
 
 Inspired by [Graphite](https://graphite.dev/).
