@@ -2,12 +2,17 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main # limit to main, because pushes to pull-requested branches are triggered below
   pull_request:
-    branches: [main]
+    # any pull request
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
