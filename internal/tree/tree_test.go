@@ -90,3 +90,47 @@ func TestGetAncestors(t *testing.T) {
 		t.Errorf("unexpected ancestors: %v", ancestors)
 	}
 }
+
+func TestGetDescendants(t *testing.T) {
+	cfg, _ := setupTestRepo(t)
+	cfg.SetTrunk("main")
+	cfg.SetParent("feature-a", "main")
+	cfg.SetParent("feature-b", "feature-a")
+	cfg.SetParent("feature-c", "feature-a")
+	cfg.SetParent("feature-d", "feature-b")
+
+	root, _ := tree.Build(cfg)
+	node := tree.FindNode(root, "feature-a")
+
+	descendants := tree.GetDescendants(node)
+
+	// Should get feature-b, feature-c, feature-d in depth-first order
+	if len(descendants) != 3 {
+		t.Fatalf("expected 3 descendants, got %d", len(descendants))
+	}
+
+	// Verify all expected descendants are present
+	names := make(map[string]bool)
+	for _, d := range descendants {
+		names[d.Name] = true
+	}
+	for _, expected := range []string{"feature-b", "feature-c", "feature-d"} {
+		if !names[expected] {
+			t.Errorf("missing descendant: %s", expected)
+		}
+	}
+}
+
+func TestGetDescendantsEmpty(t *testing.T) {
+	cfg, _ := setupTestRepo(t)
+	cfg.SetTrunk("main")
+	cfg.SetParent("feature-a", "main")
+
+	root, _ := tree.Build(cfg)
+	node := tree.FindNode(root, "feature-a")
+
+	descendants := tree.GetDescendants(node)
+	if len(descendants) != 0 {
+		t.Errorf("expected 0 descendants for leaf node, got %d", len(descendants))
+	}
+}

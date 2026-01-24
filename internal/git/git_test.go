@@ -147,3 +147,112 @@ func TestHasStagedChanges(t *testing.T) {
 		t.Error("expected staged changes after git add")
 	}
 }
+
+func TestGetTip(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	current, _ := g.CurrentBranch()
+	tip, err := g.GetTip(current)
+	if err != nil {
+		t.Fatalf("GetTip failed: %v", err)
+	}
+
+	// Should be a 40-character hex SHA
+	if len(tip) != 40 {
+		t.Errorf("expected 40-char SHA, got %q (len %d)", tip, len(tip))
+	}
+}
+
+func TestGetMergeBase(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	current, _ := g.CurrentBranch()
+
+	// Create a branch, make a commit on each
+	g.CreateBranch("feature")
+	originalTip, _ := g.GetTip(current)
+
+	// Commit on main
+	os.WriteFile(filepath.Join(dir, "main.txt"), []byte("main"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "main commit").Run()
+
+	// Commit on feature
+	g.Checkout("feature")
+	os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("feature"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "feature commit").Run()
+
+	// Merge base should be the original tip
+	base, err := g.GetMergeBase(current, "feature")
+	if err != nil {
+		t.Fatalf("GetMergeBase failed: %v", err)
+	}
+	if base != originalTip {
+		t.Errorf("expected merge base %q, got %q", originalTip, base)
+	}
+}
+
+func TestDeleteBranch(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	g.CreateBranch("to-delete")
+	if !g.BranchExists("to-delete") {
+		t.Fatal("branch should exist before deletion")
+	}
+
+	err := g.DeleteBranch("to-delete")
+	if err != nil {
+		t.Fatalf("DeleteBranch failed: %v", err)
+	}
+
+	if g.BranchExists("to-delete") {
+		t.Error("branch should not exist after deletion")
+	}
+}
+
+func TestGetGitDir(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	gitDir := g.GetGitDir()
+	expected := filepath.Join(dir, ".git")
+	if gitDir != expected {
+		t.Errorf("expected %q, got %q", expected, gitDir)
+	}
+}
+
+func TestNeedsRebase(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	current, _ := g.CurrentBranch()
+
+	// Create feature branch
+	g.CreateBranch("feature")
+
+	// Initially, feature doesn't need rebase (same commit)
+	needs, err := g.NeedsRebase("feature", current)
+	if err != nil {
+		t.Fatalf("NeedsRebase failed: %v", err)
+	}
+	if needs {
+		t.Error("feature should not need rebase initially")
+	}
+
+	// Add commit to main - now feature needs rebase
+	os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "new commit").Run()
+
+	needs, err = g.NeedsRebase("feature", current)
+	if err != nil {
+		t.Fatalf("NeedsRebase failed: %v", err)
+	}
+	if !needs {
+		t.Error("feature should need rebase after main moved forward")
+	}
+}
