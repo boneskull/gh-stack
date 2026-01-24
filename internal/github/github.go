@@ -2,11 +2,12 @@
 package github
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"os/exec"
-	"strconv"
-	"strings"
+
+	"github.com/cli/go-gh/v2/pkg/api"
+	"github.com/cli/go-gh/v2/pkg/repository"
 )
 
 // PR represents a GitHub pull request.
@@ -16,41 +17,138 @@ type PR struct {
 	Merged bool   `json:"merged"`
 }
 
-// CreatePR creates a new pull request and returns the PR number.
-func CreatePR(base, title, body string) (int, error) {
-	args := []string{"pr", "create", "--base", base, "--title", title, "--body", body}
-	out, err := exec.Command("gh", args...).Output()
+// Client wraps the go-gh REST client with repo context.
+type Client struct {
+	rest  *api.RESTClient
+	owner string
+	repo  string
+}
+
+// NewClient creates a new GitHub client for the current repository.
+func NewClient() (*Client, error) {
+	rest, err := api.DefaultRESTClient()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return 0, fmt.Errorf("gh pr create failed: %s", string(exitErr.Stderr))
-		}
-		return 0, fmt.Errorf("gh pr create failed: %w", err)
+		return nil, fmt.Errorf("failed to create REST client: %w", err)
 	}
 
-	// Output is the PR URL, extract the number
-	url := strings.TrimSpace(string(out))
-	parts := strings.Split(url, "/")
-	if len(parts) == 0 {
-		return 0, fmt.Errorf("unexpected output: %s", url)
+	repo, err := repository.Current()
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect repository: %w", err)
 	}
-	return strconv.Atoi(parts[len(parts)-1])
+
+	return &Client{
+		rest:  rest,
+		owner: repo.Owner,
+		repo:  repo.Name,
+	}, nil
+}
+
+// CreatePR creates a new pull request and returns the PR number.
+func (c *Client) CreatePR(head, base, title, body string) (int, error) {
+	path := fmt.Sprintf("repos/%s/%s/pulls", c.owner, c.repo)
+
+	request := struct {
+		Head  string `json:"head"`
+		Base  string `json:"base"`
+		Title string `json:"title"`
+		Body  string `json:"body"`
+	}{
+		Head:  head,
+		Base:  base,
+		Title: title,
+		Body:  body,
+	}
+
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	var response PR
+	err = c.rest.Post(path, bytes.NewReader(reqBody), &response)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create PR: %w", err)
+	}
+
+	return response.Number, nil
 }
 
 // GetPR fetches PR details by number.
-func GetPR(number int) (*PR, error) {
-	out, err := exec.Command("gh", "pr", "view", strconv.Itoa(number), "--json", "number,state,merged").Output()
-	if err != nil {
-		return nil, err
-	}
+func (c *Client) GetPR(number int) (*PR, error) {
+	path := fmt.Sprintf("repos/%s/%s/pulls/%d", c.owner, c.repo, number)
 
 	var pr PR
-	if err := json.Unmarshal(out, &pr); err != nil {
-		return nil, err
+	err := c.rest.Get(path, &pr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get PR #%d: %w", number, err)
 	}
+
 	return &pr, nil
 }
 
 // UpdatePRBase updates the base branch of a PR.
+func (c *Client) UpdatePRBase(number int, base string) error {
+	path := fmt.Sprintf("repos/%s/%s/pulls/%d", c.owner, c.repo, number)
+
+	request := struct {
+		Base string `json:"base"`
+	}{
+		Base: base,
+	}
+
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	err = c.rest.Patch(path, bytes.NewReader(reqBody), nil)
+	if err != nil {
+		return fmt.Errorf("failed to update PR #%d base: %w", number, err)
+	}
+
+	return nil
+}
+
+// --- Convenience functions for backward compatibility ---
+
+// defaultClient is a lazily-initialized client for convenience functions.
+var defaultClient *Client
+
+func getDefaultClient() (*Client, error) {
+	if defaultClient == nil {
+		var err error
+		defaultClient, err = NewClient()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return defaultClient, nil
+}
+
+// CreatePR creates a new pull request using the default client.
+// Deprecated: Use NewClient() and call methods directly for better error handling.
+func CreatePR(head, base, title, body string) (int, error) {
+	client, err := getDefaultClient()
+	if err != nil {
+		return 0, err
+	}
+	return client.CreatePR(head, base, title, body)
+}
+
+// GetPR fetches PR details using the default client.
+func GetPR(number int) (*PR, error) {
+	client, err := getDefaultClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.GetPR(number)
+}
+
+// UpdatePRBase updates the base branch using the default client.
 func UpdatePRBase(number int, base string) error {
-	return exec.Command("gh", "pr", "edit", strconv.Itoa(number), "--base", base).Run()
+	client, err := getDefaultClient()
+	if err != nil {
+		return err
+	}
+	return client.UpdatePRBase(number, base)
 }

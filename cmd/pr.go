@@ -66,7 +66,7 @@ func runPR(cmd *cobra.Command, args []string) error {
 
 	// Create new PR
 	fmt.Printf("Creating PR for %q targeting %q...\n", branch, base)
-	prNumber, err := github.CreatePR(base, branch, "")
+	prNumber, err := github.CreatePR(branch, base, branch, "")
 	if err != nil {
 		return err
 	}
