@@ -139,6 +139,40 @@ func (c *Client) CreateComment(prNumber int, body string) (int, error) {
 	return response.ID, nil
 }
 
+// ListComments retrieves all comments on a PR.
+func (c *Client) ListComments(prNumber int) ([]Comment, error) {
+	path := fmt.Sprintf("repos/%s/%s/issues/%d/comments", c.owner, c.repo, prNumber)
+
+	var comments []Comment
+	if err := c.rest.Get(path, &comments); err != nil {
+		return nil, fmt.Errorf("list comments on PR #%d: %w", prNumber, err)
+	}
+
+	return comments, nil
+}
+
+// UpdateComment updates an existing comment by ID.
+func (c *Client) UpdateComment(commentID int, body string) error {
+	path := fmt.Sprintf("repos/%s/%s/issues/comments/%d", c.owner, c.repo, commentID)
+
+	request := struct {
+		Body string `json:"body"`
+	}{
+		Body: body,
+	}
+
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("marshal comment body: %w", err)
+	}
+
+	if err := c.rest.Patch(path, bytes.NewReader(reqBody), nil); err != nil {
+		return fmt.Errorf("update comment %d: %w", commentID, err)
+	}
+
+	return nil
+}
+
 // --- Convenience functions for backward compatibility ---
 
 // defaultClient is a lazily-initialized client for convenience functions.
