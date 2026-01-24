@@ -17,6 +17,12 @@ type PR struct {
 	Merged bool   `json:"merged"`
 }
 
+// Comment represents a GitHub issue/PR comment.
+type Comment struct {
+	ID   int    `json:"id"`
+	Body string `json:"body"`
+}
+
 // Client wraps the go-gh REST client with repo context.
 type Client struct {
 	rest  *api.RESTClient
@@ -107,6 +113,30 @@ func (c *Client) UpdatePRBase(number int, base string) error {
 	}
 
 	return nil
+}
+
+// CreateComment adds a comment to a PR (PRs are issues in GitHub's API).
+func (c *Client) CreateComment(prNumber int, body string) (int, error) {
+	path := fmt.Sprintf("repos/%s/%s/issues/%d/comments", c.owner, c.repo, prNumber)
+
+	request := struct {
+		Body string `json:"body"`
+	}{
+		Body: body,
+	}
+
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal comment body: %w", err)
+	}
+
+	var response Comment
+	err = c.rest.Post(path, bytes.NewReader(reqBody), &response)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create comment on PR #%d: %w", prNumber, err)
+	}
+
+	return response.ID, nil
 }
 
 // --- Convenience functions for backward compatibility ---
