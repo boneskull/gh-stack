@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md: gh-stack
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) and other agents when working with code in this repository.
 
 ## Build and Test Commands
 
@@ -14,6 +14,7 @@ make gh-install     # Install as gh extension locally
 ```
 
 Run a single test:
+
 ```bash
 go test -v -run TestFunctionName ./cmd
 go test -v -run TestFunctionName ./internal/config
@@ -25,7 +26,7 @@ gh-stack is a GitHub CLI extension for managing stacked pull requests. It stores
 
 ### Package Structure
 
-```
+```text
 cmd/           CLI commands (Cobra)
 internal/
   config/      Stack metadata in git config (trunk, parent, PR associations)
@@ -38,6 +39,7 @@ internal/
 ### Key Concepts
 
 **Stack Metadata Storage**: All stack relationships are stored in `.git/config`:
+
 - `stack.trunk` - The base branch (usually `main`)
 - `branch.<name>.stackParent` - Parent branch for `<name>`
 - `branch.<name>.stackPR` - Associated PR number
@@ -56,6 +58,7 @@ internal/
 ### GitHub Integration
 
 Uses `go-gh` library (not subprocess calls to `gh`):
+
 - `api.DefaultRESTClient()` - Authenticated REST client using gh's credentials
 - `repository.Current()` - Detect repo from git remotes
 
