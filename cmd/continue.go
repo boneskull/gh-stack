@@ -40,7 +40,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 	// Complete the in-progress rebase
 	if g.IsRebaseInProgress() {
 		fmt.Println("Continuing rebase...")
-		if err := g.RebaseContinue(); err != nil {
+		if rebaseErr := g.RebaseContinue(); rebaseErr != nil {
 			return fmt.Errorf("rebase --continue failed; resolve conflicts first")
 		}
 	}
@@ -49,7 +49,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 
 	// Continue with remaining branches
 	if len(st.Pending) == 0 {
-		_ = state.Remove(g.GetGitDir()) // Cleanup
+		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 		fmt.Println("Cascade complete!")
 		return nil
 	}
@@ -73,7 +73,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 	}
 
 	// Remove state file before continuing (will be recreated if conflict)
-	_ = state.Remove(g.GetGitDir())
+	_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
 	return doCascade(g, cfg, branches, false)
 }

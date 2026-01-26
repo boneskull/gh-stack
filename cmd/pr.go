@@ -67,23 +67,23 @@ func runPR(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if PR already exists
-	existingPR, _ := cfg.GetPR(branch)
+	existingPR, _ := cfg.GetPR(branch) //nolint:errcheck // 0 is fine if no PR
 	if existingPR > 0 {
 		// Update existing PR's base if needed
 		fmt.Printf("PR #%d already exists, updating base to %q\n", existingPR, base)
-		if err := gh.UpdatePRBase(existingPR, base); err != nil {
-			return fmt.Errorf("failed to update PR base: %w", err)
+		if updateErr := gh.UpdatePRBase(existingPR, base); updateErr != nil {
+			return fmt.Errorf("failed to update PR base: %w", updateErr)
 		}
 
 		// Update stack comment
-		root, err := tree.Build(cfg)
-		if err != nil {
-			return fmt.Errorf("build tree: %w", err)
+		root, buildErr := tree.Build(cfg)
+		if buildErr != nil {
+			return fmt.Errorf("build tree: %w", buildErr)
 		}
 		comment := github.GenerateStackComment(root, branch, trunk)
 		if comment != "" {
-			if err := gh.CreateOrUpdateStackComment(existingPR, comment); err != nil {
-				fmt.Printf("Warning: failed to update stack comment: %v\n", err)
+			if commentErr := gh.CreateOrUpdateStackComment(existingPR, comment); commentErr != nil {
+				fmt.Printf("Warning: failed to update stack comment: %v\n", commentErr)
 			}
 		}
 		return nil
@@ -109,14 +109,14 @@ func runPR(cmd *cobra.Command, args []string) error {
 	}
 
 	// Store PR number
-	if err := cfg.SetPR(branch, prNumber); err != nil {
-		return err
+	if setPRErr := cfg.SetPR(branch, prNumber); setPRErr != nil {
+		return setPRErr
 	}
 
 	// Post stack navigation comment
-	root, err := tree.Build(cfg)
-	if err != nil {
-		return fmt.Errorf("build tree: %w", err)
+	root, buildErr := tree.Build(cfg)
+	if buildErr != nil {
+		return fmt.Errorf("build tree: %w", buildErr)
 	}
 
 	comment := github.GenerateStackComment(root, branch, trunk)

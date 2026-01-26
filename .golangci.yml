@@ -12,6 +12,13 @@ linters:
     - ineffassign
     - misspell
     # gosec disabled - false positives for CLI tools that shell out to git
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    govet:
+      enable:
+        - shadow
   exclusions:
     rules:
       # Test files can have unchecked errors - tests use t.Fatal patterns
@@ -23,14 +30,6 @@ formatters:
   enable:
     - gofmt
     - goimports
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-  govet:
-    enable:
-      - shadow
 
 issues:
   max-issues-per-linter: 0

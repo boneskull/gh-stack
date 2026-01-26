@@ -68,7 +68,7 @@ func (c *Config) SetParent(branch, parent string) error {
 func (c *Config) RemoveParent(branch string) error {
 	key := "branch." + branch + ".stackParent"
 	// --unset returns error if key doesn't exist, which is fine
-	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run()
+	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run() //nolint:errcheck // unset returns error if key missing
 	return nil
 }
 
@@ -92,7 +92,7 @@ func (c *Config) SetPR(branch string, pr int) error {
 func (c *Config) RemovePR(branch string) error {
 	key := "branch." + branch + ".stackPR"
 	// --unset returns error if key doesn't exist, which is fine
-	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run()
+	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run() //nolint:errcheck // unset returns error if key missing
 	return nil
 }
 

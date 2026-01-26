@@ -57,7 +57,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	if currentBranch != trunk {
-		if _, err := cfg.GetParent(currentBranch); err != nil {
+		if _, parentErr := cfg.GetParent(currentBranch); parentErr != nil {
 			return fmt.Errorf("current branch %q is not tracked; use 'gh stack adopt' first", currentBranch)
 		}
 	}

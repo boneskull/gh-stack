@@ -70,15 +70,15 @@ func runOrphan(cmd *cobra.Command, args []string) error {
 	if orphanForceFlag {
 		descendants := tree.GetDescendants(node)
 		for _, desc := range descendants {
-			_ = cfg.RemoveParent(desc.Name) // Best effort cleanup
-			_ = cfg.RemovePR(desc.Name)
+			_ = cfg.RemoveParent(desc.Name) //nolint:errcheck // best effort cleanup
+			_ = cfg.RemovePR(desc.Name)     //nolint:errcheck // best effort cleanup
 			fmt.Printf("Orphaned %q\n", desc.Name)
 		}
 	}
 
 	// Orphan the branch
-	_ = cfg.RemoveParent(branchName) // Best effort cleanup
-	_ = cfg.RemovePR(branchName)
+	_ = cfg.RemoveParent(branchName) //nolint:errcheck // best effort cleanup
+	_ = cfg.RemovePR(branchName)     //nolint:errcheck // best effort cleanup
 	fmt.Printf("Orphaned %q\n", branchName)
 
 	return nil

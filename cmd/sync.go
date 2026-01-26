@@ -93,20 +93,20 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Fetch
 	fmt.Println("Fetching from origin...")
 	if !syncDryRunFlag {
-		if err := g.Fetch(); err != nil {
-			return fmt.Errorf("fetch failed: %w", err)
+		if fetchErr := g.Fetch(); fetchErr != nil {
+			return fmt.Errorf("fetch failed: %w", fetchErr)
 		}
 	}
 
 	// Fast-forward trunk
-	currentBranch, _ := g.CurrentBranch()
+	currentBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine
 	fmt.Printf("Fast-forwarding %s...\n", trunk)
 	if !syncDryRunFlag {
-		if err := g.FastForward(trunk); err != nil {
-			fmt.Printf("Warning: could not fast-forward %s: %v\n", trunk, err)
+		if ffErr := g.FastForward(trunk); ffErr != nil {
+			fmt.Printf("Warning: could not fast-forward %s: %v\n", trunk, ffErr)
 		}
 		// Return to original branch
-		_ = g.Checkout(currentBranch) // Best effort
+		_ = g.Checkout(currentBranch) //nolint:errcheck // best effort
 	}
 
 	// Check for merged PRs
@@ -117,14 +117,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	var merged []string
 	for _, branch := range branches {
-		prNum, err := cfg.GetPR(branch)
-		if err != nil || prNum == 0 {
+		prNum, prErr := cfg.GetPR(branch)
+		if prErr != nil || prNum == 0 {
 			continue
 		}
 
-		pr, err := gh.GetPR(prNum)
-		if err != nil {
-			fmt.Printf("Warning: could not fetch PR #%d: %v\n", prNum, err)
+		pr, getPRErr := gh.GetPR(prNum)
+		if getPRErr != nil {
+			fmt.Printf("Warning: could not fetch PR #%d: %v\n", prNum, getPRErr)
 			continue
 		}
 
@@ -134,7 +134,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	// Handle merged branches
-	root, _ := tree.Build(cfg)
+	root, _ := tree.Build(cfg) //nolint:errcheck // nil root is fine, FindNode handles it
 	for _, branch := range merged {
 		node := tree.FindNode(root, branch)
 		if node == nil {
@@ -147,26 +147,26 @@ func runSync(cmd *cobra.Command, args []string) error {
 				fmt.Printf("Would retarget %s from %s to %s\n", child.Name, branch, trunk)
 			} else {
 				fmt.Printf("Retargeting %s from %s to %s\n", child.Name, branch, trunk)
-				_ = cfg.SetParent(child.Name, trunk)
+				_ = cfg.SetParent(child.Name, trunk) //nolint:errcheck // best effort
 
 				// Update PR base on GitHub
-				childPR, _ := cfg.GetPR(child.Name)
+				childPR, _ := cfg.GetPR(child.Name) //nolint:errcheck // 0 is fine
 				if childPR > 0 {
-					if err := gh.UpdatePRBase(childPR, trunk); err != nil {
-						fmt.Printf("Warning: failed to update PR #%d base: %v\n", childPR, err)
+					if updateErr := gh.UpdatePRBase(childPR, trunk); updateErr != nil {
+						fmt.Printf("Warning: failed to update PR #%d base: %v\n", childPR, updateErr)
 					}
 
 					// Check if this was a draft and now targets trunk
-					pr, err := gh.GetPR(childPR)
-					if err == nil && pr.Draft {
+					pr, getPRErr := gh.GetPR(childPR)
+					if getPRErr == nil && pr.Draft {
 						fmt.Printf("PR #%d (%s) now targets %s.\n", childPR, child.Name, trunk)
 						fmt.Print("Mark as ready for review? [y/N]: ")
 
 						var response string
 						if _, scanErr := fmt.Scanln(&response); scanErr == nil {
 							if strings.ToLower(strings.TrimSpace(response)) == "y" {
-								if err := gh.MarkPRReady(childPR); err != nil {
-									fmt.Printf("Warning: failed to mark PR ready: %v\n", err)
+								if readyErr := gh.MarkPRReady(childPR); readyErr != nil {
+									fmt.Printf("Warning: failed to mark PR ready: %v\n", readyErr)
 								} else {
 									fmt.Printf("PR #%d marked as ready for review.\n", childPR)
 								}
@@ -182,9 +182,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Would delete merged branch %s\n", branch)
 		} else {
 			fmt.Printf("Deleting merged branch %s (PR was merged)\n", branch)
-			_ = cfg.RemoveParent(branch) // Best effort cleanup
-			_ = cfg.RemovePR(branch)
-			_ = g.DeleteBranch(branch)
+			_ = cfg.RemoveParent(branch) //nolint:errcheck // best effort cleanup
+			_ = cfg.RemovePR(branch)     //nolint:errcheck // best effort cleanup
+			_ = g.DeleteBranch(branch)   //nolint:errcheck // best effort cleanup
 		}
 	}
 

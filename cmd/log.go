@@ -46,7 +46,7 @@ func runLog(cmd *cobra.Command, args []string) error {
 	}
 
 	g := git.New(cwd)
-	currentBranch, _ := g.CurrentBranch()
+	currentBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine for display
 
 	if logPorcelainFlag {
 		printPorcelain(root, currentBranch)

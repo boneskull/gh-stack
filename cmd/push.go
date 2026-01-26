@@ -58,7 +58,10 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	// Get downstack (ancestors from current to trunk, reversed)
 	ancestors := tree.GetAncestors(node)
-	trunk, _ := cfg.GetTrunk()
+	trunk, err := cfg.GetTrunk()
+	if err != nil {
+		return err
+	}
 
 	// Build list: current + ancestors (excluding trunk)
 	var branches []*tree.Node
@@ -76,7 +79,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	// Update PR bases and push
 	for _, b := range branches {
-		parent, _ := cfg.GetParent(b.Name)
+		parent, _ := cfg.GetParent(b.Name) //nolint:errcheck // empty string is fine
 
 		// Update PR base if needed
 		if b.PR > 0 {

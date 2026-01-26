@@ -15,7 +15,7 @@ func TestSmokeInitAndCreate(t *testing.T) {
 	}
 
 	// Test create
-	result = env.MustRun("create", "feature-1")
+	_ = env.MustRun("create", "feature-1")
 	env.AssertBranch("feature-1")
 
 	// Make a commit

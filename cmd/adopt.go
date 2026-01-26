@@ -56,7 +56,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check if already tracked
-	if _, err := cfg.GetParent(branchName); err == nil {
+	if _, getParentErr := cfg.GetParent(branchName); getParentErr == nil {
 		return fmt.Errorf("branch %q is already tracked", branchName)
 	}
 
@@ -73,7 +73,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	}
 
 	if parent != trunk {
-		if _, err := cfg.GetParent(parent); err != nil {
+		if _, parentErr := cfg.GetParent(parent); parentErr != nil {
 			return fmt.Errorf("parent %q is not tracked", parent)
 		}
 	}

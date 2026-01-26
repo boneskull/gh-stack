@@ -34,7 +34,7 @@ func Build(cfg *config.Config) (*Node, error) {
 
 	// Create nodes for all branches
 	for _, branch := range branches {
-		pr, _ := cfg.GetPR(branch) // ignore error, 0 is fine
+		pr, _ := cfg.GetPR(branch) //nolint:errcheck // 0 is fine if no PR
 		nodes[branch] = &Node{Name: branch, PR: pr}
 	}
 

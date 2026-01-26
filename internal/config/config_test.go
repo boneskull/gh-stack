@@ -49,8 +49,8 @@ func TestSetTrunk(t *testing.T) {
 		t.Fatalf("Load failed: %v", err)
 	}
 
-	if err := cfg.SetTrunk("main"); err != nil {
-		t.Fatalf("SetTrunk failed: %v", err)
+	if setErr := cfg.SetTrunk("main"); setErr != nil {
+		t.Fatalf("SetTrunk failed: %v", setErr)
 	}
 
 	trunk, err := cfg.GetTrunk()
@@ -104,22 +104,22 @@ func TestPRNumber(t *testing.T) {
 	}
 
 	// Set PR
-	if err := cfg.SetPR("feature-a", 1234); err != nil {
-		t.Fatalf("SetPR failed: %v", err)
+	if setErr := cfg.SetPR("feature-a", 1234); setErr != nil {
+		t.Fatalf("SetPR failed: %v", setErr)
 	}
 
 	// Get PR
-	pr, err := cfg.GetPR("feature-a")
-	if err != nil {
-		t.Fatalf("GetPR failed: %v", err)
+	pr, getErr := cfg.GetPR("feature-a")
+	if getErr != nil {
+		t.Fatalf("GetPR failed: %v", getErr)
 	}
 	if pr != 1234 {
 		t.Errorf("expected PR 1234, got %d", pr)
 	}
 
 	// Remove PR
-	if err := cfg.RemovePR("feature-a"); err != nil {
-		t.Fatalf("RemovePR failed: %v", err)
+	if removeErr := cfg.RemovePR("feature-a"); removeErr != nil {
+		t.Fatalf("RemovePR failed: %v", removeErr)
 	}
 
 	_, err = cfg.GetPR("feature-a")

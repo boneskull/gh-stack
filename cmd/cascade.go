@@ -88,8 +88,14 @@ func runCascade(cmd *cobra.Command, args []string) error {
 }
 
 func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool) error {
-	originalBranch, _ := g.CurrentBranch()
-	originalHead, _ := g.GetTip(originalBranch)
+	originalBranch, err := g.CurrentBranch()
+	if err != nil {
+		return err
+	}
+	originalHead, err := g.GetTip(originalBranch)
+	if err != nil {
+		return err
+	}
 
 	for i, b := range branches {
 		parent, err := cfg.GetParent(b.Name)
@@ -132,7 +138,7 @@ func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun boo
 				Pending:      remaining,
 				OriginalHead: originalHead,
 			}
-			_ = state.Save(g.GetGitDir(), st) // Best effort - user can recover manually
+			_ = state.Save(g.GetGitDir(), st) //nolint:errcheck // best effort - user can recover manually
 
 			fmt.Printf("\nCONFLICT: Resolve conflicts and run 'gh stack continue', or 'gh stack abort' to cancel.\n")
 			fmt.Printf("Remaining branches: %v\n", remaining)
@@ -144,7 +150,7 @@ func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun boo
 
 	// Return to original branch
 	if !dryRun {
-		_ = g.Checkout(originalBranch) // Best effort - cascade succeeded
+		_ = g.Checkout(originalBranch) //nolint:errcheck // best effort - cascade succeeded
 	}
 
 	return nil
