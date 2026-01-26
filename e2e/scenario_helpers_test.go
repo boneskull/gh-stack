@@ -85,7 +85,7 @@ func (e *TestEnv) SimulateSomeoneElsePushed(branch string) string {
 	otherDir := e.t.TempDir()
 
 	cmd := exec.Command("git", "clone", e.RemoteDir, otherDir)
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 	if err := cmd.Run(); err != nil {
 		e.t.Fatalf("clone failed: %v", err)
 	}
@@ -93,7 +93,7 @@ func (e *TestEnv) SimulateSomeoneElsePushed(branch string) string {
 	runIn := func(args ...string) {
 		gitCmd := exec.Command("git", args...)
 		gitCmd.Dir = otherDir
-		gitCmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+		gitCmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 		if err := gitCmd.Run(); err != nil {
 			e.t.Fatalf("git %v failed: %v", args, err)
 		}
@@ -114,7 +114,7 @@ func (e *TestEnv) SimulateSomeoneElsePushed(branch string) string {
 
 	cmd = exec.Command("git", "rev-parse", "HEAD")
 	cmd.Dir = otherDir
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 	out, _ := cmd.Output()
 	return string(out)
 }
@@ -143,7 +143,7 @@ func (e *TestEnv) GetStackConfig(key string) string {
 	e.t.Helper()
 	cmd := exec.Command("git", "config", "--get", key)
 	cmd.Dir = e.WorkDir
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 	out, _ := cmd.Output()
 	return strings.TrimSpace(string(out))
 }

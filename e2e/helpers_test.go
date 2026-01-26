@@ -72,7 +72,7 @@ func NewTestEnvWithRemote(t *testing.T) *TestEnv {
 	env.RemoteDir = remoteDir
 
 	cmd := exec.Command("git", "clone", "--bare", env.WorkDir, remoteDir)
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("failed to create bare remote: %v", err)
 	}
@@ -133,7 +133,7 @@ func (e *TestEnv) Git(args ...string) string {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	// Prevent git from opening an editor (for commits, rebases, etc.)
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 
 	if err := cmd.Run(); err != nil {
 		e.t.Fatalf("git %s failed: %v\nstderr: %s", strings.Join(args, " "), err, stderr.String())
@@ -155,7 +155,7 @@ func (e *TestEnv) GitRemote(args ...string) string {
 	cmd.Dir = e.RemoteDir
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 
 	if err := cmd.Run(); err != nil {
 		e.t.Fatalf("git (remote) %s failed: %v\nstderr: %s", strings.Join(args, " "), err, stderr.String())
@@ -224,7 +224,7 @@ func (e *TestEnv) AssertBranchExists(branch string) {
 	e.t.Helper()
 	cmd := exec.Command("git", "rev-parse", "--verify", "refs/heads/"+branch)
 	cmd.Dir = e.WorkDir
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 	if err := cmd.Run(); err != nil {
 		e.t.Errorf("expected branch %q to exist", branch)
 	}
@@ -272,7 +272,7 @@ func (e *TestEnv) AssertAncestor(ancestor, descendant string) {
 	e.t.Helper()
 	cmd := exec.Command("git", "merge-base", "--is-ancestor", ancestor, descendant)
 	cmd.Dir = e.WorkDir
-	cmd.Env = append(os.Environ(), "GIT_EDITOR=true")
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 	if err := cmd.Run(); err != nil {
 		e.t.Errorf("expected %q to be ancestor of %q", ancestor, descendant)
 	}
