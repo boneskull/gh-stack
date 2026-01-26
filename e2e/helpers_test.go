@@ -55,6 +55,10 @@ func NewTestEnv(t *testing.T) *TestEnv {
 	env.Git("init")
 	env.Git("config", "user.email", "test@example.com")
 	env.Git("config", "user.name", "Test User")
+	// Prevent git from opening an editor (for commits, rebases, etc.)
+	// This is set in git config so it applies to all git subprocesses,
+	// including those spawned by gh-stack commands.
+	env.Git("config", "core.editor", "cat")
 
 	env.WriteFile("README.md", "# Test Repository\n")
 	env.Git("add", ".")
@@ -92,6 +96,8 @@ func (e *TestEnv) Run(args ...string) *Result {
 	cmd.Dir = e.WorkDir
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	// Ensure git subprocesses spawned by gh-stack don't open an editor
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
 
 	err := cmd.Run()
 
