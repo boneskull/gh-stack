@@ -40,6 +40,12 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Configure git for E2E tests
+        run: |
+          git config --global user.email "ci@github.com"
+          git config --global user.name "CI"
+          git config --global init.defaultBranch main
+
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out ./...
 

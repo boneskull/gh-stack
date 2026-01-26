@@ -1,4 +1,4 @@
-.PHONY: build test lint install clean
+.PHONY: build test test-unit e2e lint install clean
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X github.com/boneskull/gh-stack/cmd.version=$(VERSION)"
@@ -6,8 +6,14 @@ LDFLAGS := -ldflags "-X github.com/boneskull/gh-stack/cmd.version=$(VERSION)"
 build:
 	go build $(LDFLAGS) -o gh-stack .
 
-test:
+test: ## Run all tests (unit + E2E)
 	go test ./... -v
+
+test-unit: ## Run unit tests only (faster)
+	go test ./cmd/... ./internal/... -v
+
+e2e: ## Run E2E tests only
+	go test ./e2e/... -v
 
 lint:
 	golangci-lint run ./...

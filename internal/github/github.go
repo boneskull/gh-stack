@@ -5,10 +5,19 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	"github.com/cli/go-gh/v2/pkg/api"
 	"github.com/cli/go-gh/v2/pkg/repository"
 )
+
+// RESTClient defines the interface for GitHub REST API operations.
+// The *api.RESTClient from go-gh satisfies this interface.
+type RESTClient interface {
+	Get(path string, response any) error
+	Post(path string, body io.Reader, response any) error
+	Patch(path string, body io.Reader, response any) error
+}
 
 // PR represents a GitHub pull request.
 type PR struct {
@@ -27,9 +36,9 @@ type Comment struct {
 	Body string `json:"body"`
 }
 
-// Client wraps the go-gh REST client with repo context.
+// Client wraps a REST client with repo context.
 type Client struct {
-	rest  *api.RESTClient
+	rest  RESTClient
 	owner string
 	repo  string
 }
@@ -51,6 +60,16 @@ func NewClient() (*Client, error) {
 		owner: repo.Owner,
 		repo:  repo.Name,
 	}, nil
+}
+
+// NewClientWithREST creates a client with a custom REST implementation.
+// This is primarily useful for testing.
+func NewClientWithREST(rest RESTClient, owner, repo string) *Client {
+	return &Client{
+		rest:  rest,
+		owner: owner,
+		repo:  repo,
+	}
 }
 
 // CreatePR creates a new pull request and returns the PR number.

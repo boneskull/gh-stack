@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -11,6 +12,9 @@ import (
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
+
+// ErrConflict indicates a rebase conflict occurred during cascade.
+var ErrConflict = errors.New("rebase conflict: resolve and run 'gh stack continue', or 'gh stack abort'")
 
 var cascadeCmd = &cobra.Command{
 	Use:   "cascade",
@@ -132,7 +136,7 @@ func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun boo
 
 			fmt.Printf("\nCONFLICT: Resolve conflicts and run 'gh stack continue', or 'gh stack abort' to cancel.\n")
 			fmt.Printf("Remaining branches: %v\n", remaining)
-			return nil
+			return ErrConflict
 		}
 
 		fmt.Printf("Cascading %s... ok\n", b.Name)
