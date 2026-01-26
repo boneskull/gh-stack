@@ -2,6 +2,25 @@
 
 A GitHub CLI extension for managing stacked pull requests.
 
+## What Are Stacked PRs?
+
+Large pull requests are hard to review. They're intimidating, take forever, and often get rubber-stamped instead of actually reviewed. The obvious fix is to break your work into smaller PRs—but what if PR #2 depends on PR #1? Do you just... wait?
+
+**Stacked PRs** let you keep working. Instead of waiting for your first PR to merge before starting the next, you branch off your in-flight work:
+
+```text
+main
+└── add-auth          ← PR #1: adds authentication
+    └── add-auth-ui   ← PR #2: adds the login form (depends on #1)
+        └── add-tests ← PR #3: tests for all of it (depends on #2)
+```
+
+Each branch gets its own focused PR. Reviewers see small, digestible changes. You keep your flow.
+
+The catch? Managing these stacks by hand is tedious. When `main` updates, you need to rebase the whole chain in order. When PR #1 merges, you need to retarget PR #2 to point at `main`. Miss a step and you've got a mess.
+
+**gh-stack automates all of that.**
+
 ## Features
 
 - **Local-first** — Stack metadata lives in `.git/config`, not a remote service
@@ -9,24 +28,15 @@ A GitHub CLI extension for managing stacked pull requests.
 - **Conflict-aware** — Cascade rebases with continue/abort recovery
 - **Automatic sync** — Detects merged PRs, retargets orphaned branches, cascades all
 
-## Quick Start
+## Installation
 
-### Prerequisites
-
-- Go 1.22+
-- [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated
-
-### Installation
+Requires [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated.
 
 ```bash
-# Build from source
-git clone https://github.com/boneskull/gh-stack.git
-cd gh-stack
-make build
-
-# Install as gh extension
-make gh-install
+gh extension install boneskull/gh-stack
 ```
+
+That's it. Precompiled binaries are available for macOS, Linux, and Windows.
 
 ## Usage
 
@@ -158,6 +168,19 @@ gh-stack focuses exclusively on stacked PRs. If you want a comprehensive Git wor
 [git-branchless](https://github.com/arxanas/git-branchless) is a powerful suite that enhances Git with undo functionality, interactive commit graph editing, and patch-stack workflows. It's designed for power users and optimized for massive repositories.
 
 gh-stack is narrower in scope: it tracks parent-child relationships between branches and helps you manage the resulting PRs. It doesn't modify how Git works—it just adds stack awareness on top.
+
+## Development
+
+To build from source, you'll need Go 1.22+.
+
+```bash
+git clone https://github.com/boneskull/gh-stack.git
+cd gh-stack
+make build        # Build binary to ./gh-stack
+make test         # Run tests
+make lint         # Run linter
+make gh-install   # Install as gh extension locally
+```
 
 ## Acknowledgements
 
