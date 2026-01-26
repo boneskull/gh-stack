@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.0-rc.1](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.0...v0.1.0-rc.1) (2026-01-26)
+
+
+### Bug Fixes
+
+* **ci:** try to fix release workflow ([bf86c42](https://github.com/boneskull/gh-stack/commit/bf86c427b05edc790941b86126a884e91a67d625))
+* **release:** release 0.1.0-rc.1 ([108baac](https://github.com/boneskull/gh-stack/commit/108baaca44bc426de08c2176088843fbb42b142d))
+
 ## 0.1.0-rc.0 (2026-01-26)
 
 
