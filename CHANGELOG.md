@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0-rc.2](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.1...v0.1.0-rc.2) (2026-01-27)
+
+
+### Miscellaneous Chores
+
+* **ci:** disable attestation ([6069681](https://github.com/boneskull/gh-stack/commit/6069681fa9a8324a280eecf127bf48525f0e4eed))
+
 ## [0.1.0-rc.1](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.0...v0.1.0-rc.1) (2026-01-26)
 
 
