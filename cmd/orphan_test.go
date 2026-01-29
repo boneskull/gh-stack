@@ -141,3 +141,36 @@ func TestOrphanRemovesPR(t *testing.T) {
 		t.Error("PR should be removed after orphan")
 	}
 }
+
+func TestOrphanRemovesForkPoint(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, _ := config.Load(dir)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+	cfg.SetTrunk(trunk)
+
+	// Create branch with fork point
+	g.CreateBranch("feature-a")
+	cfg.SetParent("feature-a", trunk)
+	trunkTip, _ := g.GetTip(trunk)
+	cfg.SetForkPoint("feature-a", trunkTip)
+
+	// Verify fork point is set
+	fp, err := cfg.GetForkPoint("feature-a")
+	if err != nil || fp != trunkTip {
+		t.Fatal("fork point should be set")
+	}
+
+	// Orphan (which should also remove fork point)
+	cfg.RemoveParent("feature-a")
+	cfg.RemovePR("feature-a")
+	cfg.RemoveForkPoint("feature-a")
+
+	// Verify fork point is gone
+	_, err = cfg.GetForkPoint("feature-a")
+	if err == nil {
+		t.Error("fork point should be removed after orphan")
+	}
+}

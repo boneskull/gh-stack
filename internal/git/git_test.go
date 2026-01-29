@@ -350,3 +350,85 @@ func TestGetCommitsSingleCommit(t *testing.T) {
 		t.Errorf("expected body 'This fixes the bug.', got %q", commits[0].Body)
 	}
 }
+
+func TestCommitExists(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// Create a commit
+	os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "test commit").Run()
+	sha, _ := g.GetTip("HEAD")
+
+	// Valid SHA should exist
+	if !g.CommitExists(sha) {
+		t.Errorf("CommitExists(%s) = false, want true", sha)
+	}
+
+	// Invalid SHA should not exist
+	if g.CommitExists("0000000000000000000000000000000000000000") {
+		t.Error("CommitExists(invalid) = true, want false")
+	}
+
+	// Garbage input should not exist
+	if g.CommitExists("not-a-sha") {
+		t.Error("CommitExists(garbage) = true, want false")
+	}
+}
+
+func TestRebaseOnto(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// Create initial commit on main
+	os.WriteFile(filepath.Join(dir, "file.txt"), []byte("initial"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "initial").Run()
+
+	// Create parent branch with a commit
+	exec.Command("git", "-C", dir, "checkout", "-b", "parent").Run()
+	os.WriteFile(filepath.Join(dir, "parent.txt"), []byte("parent content"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "parent commit").Run()
+	parentTip, _ := g.GetTip("parent")
+
+	// Create child branch with a commit
+	exec.Command("git", "-C", dir, "checkout", "-b", "child").Run()
+	os.WriteFile(filepath.Join(dir, "child.txt"), []byte("child content"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "child commit").Run()
+
+	// Go back to main and add a new commit (simulating trunk moving forward)
+	exec.Command("git", "-C", dir, "checkout", "main").Run()
+	os.WriteFile(filepath.Join(dir, "main2.txt"), []byte("main moved forward"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "main moved forward").Run()
+
+	// Now rebase child onto main, using parent tip as the fork point
+	// This should only replay "child commit", not "parent commit"
+	err := g.RebaseOnto("main", parentTip, "child")
+	if err != nil {
+		t.Fatalf("RebaseOnto failed: %v", err)
+	}
+
+	// Verify child is now based on main
+	exec.Command("git", "-C", dir, "checkout", "child").Run()
+	mergeBase, _ := g.GetMergeBase("child", "main")
+	mainTip, _ := g.GetTip("main")
+	if mergeBase != mainTip {
+		t.Errorf("child should be based on main tip, got merge-base %s, main tip %s", mergeBase, mainTip)
+	}
+
+	// Verify child.txt exists (child's commit was replayed)
+	if _, err := os.Stat(filepath.Join(dir, "child.txt")); err != nil {
+		t.Error("child.txt should exist after rebase")
+	}
+
+	// Verify parent.txt does NOT exist (parent's commit was not replayed)
+	if _, err := os.Stat(filepath.Join(dir, "parent.txt")); os.IsNotExist(err) {
+		// This is expected - parent.txt should not be on child after --onto rebase
+	} else {
+		t.Error("parent.txt should NOT exist - only child's commits should be replayed")
+	}
+}

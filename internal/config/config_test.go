@@ -154,3 +154,40 @@ func TestListTrackedBranches(t *testing.T) {
 		t.Errorf("missing expected branches, got %v", branches)
 	}
 }
+
+func TestForkPoint(t *testing.T) {
+	dir := setupTestRepo(t)
+	cfg, _ := config.Load(dir)
+
+	// Initially no fork point
+	_, err := cfg.GetForkPoint("feature")
+	if !errors.Is(err, config.ErrNoForkPoint) {
+		t.Errorf("GetForkPoint = %v, want ErrNoForkPoint", err)
+	}
+
+	// Set fork point
+	sha := "abc123def456"
+	if setErr := cfg.SetForkPoint("feature", sha); setErr != nil {
+		t.Fatalf("SetForkPoint failed: %v", setErr)
+	}
+
+	// Get fork point
+	got, err := cfg.GetForkPoint("feature")
+	if err != nil {
+		t.Fatalf("GetForkPoint failed: %v", err)
+	}
+	if got != sha {
+		t.Errorf("GetForkPoint = %q, want %q", got, sha)
+	}
+
+	// Remove fork point
+	if removeErr := cfg.RemoveForkPoint("feature"); removeErr != nil {
+		t.Fatalf("RemoveForkPoint failed: %v", removeErr)
+	}
+
+	// Verify removed
+	_, err = cfg.GetForkPoint("feature")
+	if !errors.Is(err, config.ErrNoForkPoint) {
+		t.Errorf("after remove, GetForkPoint = %v, want ErrNoForkPoint", err)
+	}
+}

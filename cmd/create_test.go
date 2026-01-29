@@ -193,3 +193,36 @@ func TestBranchAlreadyExists(t *testing.T) {
 		t.Error("BranchExists should return true")
 	}
 }
+
+func TestCreateStoresForkPoint(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, _ := config.Load(dir)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+	cfg.SetTrunk(trunk)
+
+	// Get the tip of trunk before creating branch
+	trunkTip, _ := g.GetTip(trunk)
+
+	// Simulate create command: create branch and set parent + fork point
+	g.CreateAndCheckout("feature")
+	cfg.SetParent("feature", trunk)
+
+	// Store fork point (what create command should now do)
+	forkPoint, fpErr := g.GetMergeBase("feature", trunk)
+	if fpErr != nil {
+		t.Fatalf("GetMergeBase failed: %v", fpErr)
+	}
+	cfg.SetForkPoint("feature", forkPoint)
+
+	// Verify fork point was stored and equals trunk tip
+	storedFP, err := cfg.GetForkPoint("feature")
+	if err != nil {
+		t.Fatalf("GetForkPoint failed: %v", err)
+	}
+	if storedFP != trunkTip {
+		t.Errorf("fork point = %s, want %s (trunk tip at creation)", storedFP, trunkTip)
+	}
+}

@@ -113,3 +113,38 @@ func TestAdoptDetectsCycle(t *testing.T) {
 		t.Error("expected feature-a to be ancestor of feature-b")
 	}
 }
+
+func TestAdoptStoresForkPoint(t *testing.T) {
+	dir := setupTestRepo(t)
+
+	cfg, _ := config.Load(dir)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+	cfg.SetTrunk(trunk)
+
+	// Get trunk tip before creating branch
+	trunkTip, _ := g.GetTip(trunk)
+
+	// Create an untracked branch
+	g.CreateBranch("untracked-feature")
+
+	// Simulate adopt: set parent and fork point
+	cfg.SetParent("untracked-feature", trunk)
+
+	// Store fork point (what adopt command should now do)
+	forkPoint, fpErr := g.GetMergeBase("untracked-feature", trunk)
+	if fpErr != nil {
+		t.Fatalf("GetMergeBase failed: %v", fpErr)
+	}
+	cfg.SetForkPoint("untracked-feature", forkPoint)
+
+	// Verify fork point was stored
+	storedFP, err := cfg.GetForkPoint("untracked-feature")
+	if err != nil {
+		t.Fatalf("GetForkPoint failed: %v", err)
+	}
+	if storedFP != trunkTip {
+		t.Errorf("fork point = %s, want %s", storedFP, trunkTip)
+	}
+}

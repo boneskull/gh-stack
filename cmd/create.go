@@ -97,6 +97,12 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Store fork point (where this branch diverges from parent)
+	forkPoint, fpErr := g.GetMergeBase(branchName, currentBranch)
+	if fpErr == nil {
+		_ = cfg.SetForkPoint(branchName, forkPoint) //nolint:errcheck // best effort
+	}
+
 	fmt.Printf("Created branch %q stacked on %q\n", branchName, currentBranch)
 	return nil
 }
