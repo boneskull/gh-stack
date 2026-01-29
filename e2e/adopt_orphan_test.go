@@ -11,8 +11,8 @@ func TestAdoptExistingBranch(t *testing.T) {
 	env.Git("checkout", "-b", "external-branch")
 	env.CreateCommit("external work")
 
-	// Adopt it with explicit parent
-	env.MustRun("adopt", "external-branch", "--parent", "main")
+	// Adopt it (current branch with main as parent)
+	env.MustRun("adopt", "main")
 
 	env.AssertStackParent("external-branch", "main")
 }
