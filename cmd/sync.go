@@ -43,13 +43,21 @@ func updateStackComments(cfg *config.Config, gh *github.Client) error {
 		return err
 	}
 
+	// Fetch all PR titles in a single request
+	prNumbers := github.CollectPRNumbers(root)
+	prInfo, err := gh.GetPRTitles(prNumbers)
+	if err != nil {
+		// Non-fatal: we can still render without titles
+		prInfo = make(map[int]github.PRInfo)
+	}
+
 	// Walk tree and update each PR's comment
-	return walkTreeAndUpdateComments(root, root, trunk, gh)
+	return walkTreeAndUpdateComments(root, root, trunk, gh, prInfo)
 }
 
-func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.Client) error {
+func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.Client, prInfo map[int]github.PRInfo) error {
 	if node.PR > 0 {
-		comment := github.GenerateStackComment(root, node.Name, trunk)
+		comment := github.GenerateStackComment(root, node.Name, trunk, gh.RepoURL(), prInfo)
 		if comment != "" {
 			if err := gh.CreateOrUpdateStackComment(node.PR, comment); err != nil {
 				fmt.Printf("Warning: failed to update comment on PR #%d: %v\n", node.PR, err)
@@ -59,7 +67,7 @@ func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.C
 	}
 
 	for _, child := range node.Children {
-		if err := walkTreeAndUpdateComments(child, root, trunk, gh); err != nil {
+		if err := walkTreeAndUpdateComments(child, root, trunk, gh, prInfo); err != nil {
 			return err
 		}
 	}
