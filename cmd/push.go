@@ -77,6 +77,22 @@ func runPush(cmd *cobra.Command, args []string) error {
 		branches[i], branches[j] = branches[j], branches[i]
 	}
 
+	// Validate all branches are properly rebased onto their parents
+	for _, b := range branches {
+		parent, _ := cfg.GetParent(b.Name) //nolint:errcheck // empty string is fine
+		if parent == "" {
+			continue
+		}
+
+		needsRebase, err := g.NeedsRebase(b.Name, parent)
+		if err != nil {
+			return fmt.Errorf("failed to check rebase status for %s: %w", b.Name, err)
+		}
+		if needsRebase {
+			return fmt.Errorf("branch %q is not rebased onto %q; run 'gh stack cascade' first", b.Name, parent)
+		}
+	}
+
 	// Update PR bases and push
 	for _, b := range branches {
 		parent, _ := cfg.GetParent(b.Name) //nolint:errcheck // empty string is fine
