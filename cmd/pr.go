@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	gh "github.com/cli/go-gh/v2"
 	"github.com/spf13/cobra"
@@ -92,6 +93,17 @@ func runPR(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Creating draft PR (base %q is not trunk %q)\n", base, trunk)
 	}
 
+	// Generate PR body from commits if user hasn't specified --body or --fill
+	if !hasBodyFlag(args) {
+		body, bodyErr := generatePRBody(g, base, branch)
+		if bodyErr != nil {
+			// Non-fatal: just skip auto-body and let user fill it in
+			fmt.Printf("Warning: could not generate PR body: %v\n", bodyErr)
+		} else if body != "" {
+			ghArgs = append(ghArgs, "--body", body)
+		}
+	}
+
 	// Pass through any additional args from user
 	ghArgs = append(ghArgs, args...)
 
@@ -151,4 +163,68 @@ func updateExistingPR(ghClient *github.Client, cfg *config.Config, prNumber int,
 
 	fmt.Println(ghClient.PRURL(prNumber))
 	return nil
+}
+
+// hasBodyFlag checks if the user has provided --body, -b, or --fill flags.
+func hasBodyFlag(args []string) bool {
+	for _, arg := range args {
+		// Check for --body or -b (with or without = syntax)
+		if arg == "--body" || arg == "-b" || strings.HasPrefix(arg, "--body=") {
+			return true
+		}
+		// Check for --fill or -f
+		if arg == "--fill" || arg == "-f" {
+			return true
+		}
+		// Check for --fill-first
+		if arg == "--fill-first" {
+			return true
+		}
+		// Check for combined short flags like -bf
+		if len(arg) > 1 && arg[0] == '-' && arg[1] != '-' {
+			for _, c := range arg[1:] {
+				if c == 'b' || c == 'f' {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// generatePRBody creates a PR description from the commits between base and head.
+// For a single commit: returns the commit body.
+// For multiple commits: returns each commit as a markdown section.
+func generatePRBody(g *git.Git, base, head string) (string, error) {
+	commits, err := g.GetCommits(base, head)
+	if err != nil {
+		return "", err
+	}
+
+	if len(commits) == 0 {
+		return "", nil
+	}
+
+	if len(commits) == 1 {
+		// Single commit: just use the body
+		return commits[0].Body, nil
+	}
+
+	// Multiple commits: format as markdown sections
+	var sb strings.Builder
+	for i, commit := range commits {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("### ")
+		sb.WriteString(commit.Subject)
+		sb.WriteString("\n")
+		if commit.Body != "" {
+			sb.WriteString("\n")
+			sb.WriteString(commit.Body)
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String(), nil
 }
