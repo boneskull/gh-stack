@@ -37,11 +37,11 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 		parentPR := currentNode.Parent.PR
 		if parentPR > 0 {
 			parentURL := fmt.Sprintf("%s/pull/%d", repoURL, parentPR)
-			parentTitle := fmt.Sprintf("PR #%d", parentPR) // fallback
+			linkText := fmt.Sprintf("#%d", parentPR)
 			if info, ok := prInfo[parentPR]; ok && info.Title != "" {
-				parentTitle = info.Title
+				linkText = fmt.Sprintf("%s #%d", info.Title, parentPR)
 			}
-			sb.WriteString(fmt.Sprintf("> **DO NOT MERGE** until [%s #%d](%s) is merged into `%s`.\n\n", parentTitle, parentPR, parentURL, trunk))
+			sb.WriteString(fmt.Sprintf("> **DO NOT MERGE** until [%s](%s) is merged into `%s`.\n\n", linkText, parentURL, trunk))
 		} else {
 			sb.WriteString(fmt.Sprintf("> **DO NOT MERGE** until the parent branch is merged into `%s`.\n\n", trunk))
 		}
@@ -85,16 +85,16 @@ func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL str
 	// Format: "[Title #N](url) - branch: `name`" or just branch name if no PR
 	if node.PR > 0 {
 		prURL := fmt.Sprintf("%s/pull/%d", repoURL, node.PR)
-		title := fmt.Sprintf("PR #%d", node.PR) // fallback if title not available
+		linkText := fmt.Sprintf("#%d", node.PR)
 		if info, ok := prInfo[node.PR]; ok && info.Title != "" {
-			title = info.Title
+			linkText = fmt.Sprintf("%s #%d", info.Title, node.PR)
 		}
 
 		if isCurrent {
 			// Bold the link for current PR
-			fmt.Fprintf(sb, "%s**[%s #%d](%s)** - branch: `%s` *(this PR)*", prefix, title, node.PR, prURL, node.Name)
+			fmt.Fprintf(sb, "%s**[%s](%s)** - branch: `%s` *(this PR)*", prefix, linkText, prURL, node.Name)
 		} else {
-			fmt.Fprintf(sb, "%s[%s #%d](%s) - branch: `%s`", prefix, title, node.PR, prURL, node.Name)
+			fmt.Fprintf(sb, "%s[%s](%s) - branch: `%s`", prefix, linkText, prURL, node.Name)
 		}
 	} else {
 		// No PR - just show branch name (e.g., trunk)

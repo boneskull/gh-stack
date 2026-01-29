@@ -136,9 +136,9 @@ func TestGenerateStackComment(t *testing.T) {
 		// No PR info provided
 		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, nil)
 
-		// Should fallback to "PR #N" format
-		if !strings.Contains(comment, "[PR #1 #1]") {
-			t.Error("should fallback to 'PR #N' when title not available")
+		// Should fallback to just "#N" format (no title)
+		if !strings.Contains(comment, "[#1](https://github.com/test/repo/pull/1)") {
+			t.Error("should fallback to '#N' when title not available")
 		}
 	})
 }

@@ -70,6 +70,16 @@ func (c *Client) GetPRTitles(prNumbers []int) (map[int]PRInfo, error) {
 		return nil, fmt.Errorf("GraphQL request failed: %w", err)
 	}
 
+	// Check for GraphQL errors (can occur even with HTTP 200)
+	if errorsRaw, hasErrors := rawResponse["errors"]; hasErrors {
+		var gqlErrors []struct {
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(errorsRaw, &gqlErrors); err == nil && len(gqlErrors) > 0 {
+			return nil, fmt.Errorf("GraphQL error: %s", gqlErrors[0].Message)
+		}
+	}
+
 	// Parse the response
 	result := make(map[int]PRInfo)
 
