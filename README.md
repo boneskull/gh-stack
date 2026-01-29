@@ -1,6 +1,6 @@
 # gh-stack
 
-A GitHub CLI extension for managing stacked pull requests.
+A [GitHub CLI][] extension for managing stacked pull requests.
 
 ## What Are Stacked PRs?
 
@@ -21,22 +21,13 @@ The catch? Managing these stacks by hand is tedious. When `main` updates, you ne
 
 **gh-stack automates all of that.**
 
-## Features
-
-- **Local-first** — Stack metadata lives in `.git/config`, not a remote service
-- **GitHub-native** — Works with the `gh` CLI you already use
-- **Conflict-aware** — Cascade rebases with continue/abort recovery
-- **Automatic sync** — Detects merged PRs, retargets orphaned branches, cascades all
-
 ## Installation
 
-Requires [GitHub CLI](https://cli.github.com/) (`gh`) installed and authenticated.
+Requires [GitHub CLI][] (`gh`) installed and authenticated.
 
 ```bash
 gh extension install boneskull/gh-stack
 ```
-
-That's it. Precompiled binaries are available for macOS, Linux, and Windows.
 
 ## Usage
 
@@ -55,6 +46,15 @@ gh stack create feature-auth
 ```
 
 Creates `feature-auth` branched from your current position and tracks it as a child.
+
+> ![TIP]
+>
+> `gh stack create` is sugar for this:
+>
+> ```bash
+> git checkout -b feature-auth
+> gh stack adopt feature-auth
+> ```
 
 ### View Your Stack
 
@@ -128,7 +128,7 @@ Fetches from origin, fast-forwards trunk, detects merged PRs, cleans up merged b
 
 ## How It Works
 
-gh-stack stores metadata in your local `.git/config`:
+**gh-stack** stores metadata in your local `.git/config`:
 
 ```ini
 [stack]
@@ -149,32 +149,32 @@ No remote service required. Your stack relationships stay with your repository.
 
 ### vs. Graphite
 
-[Graphite](https://graphite.dev/) is a SaaS product with a polished CLI and web dashboard. It requires an account and stores stack metadata on their servers. gh-stack stores everything locally in `.git/config`—no account, no remote dependency.
+[Graphite](https://graphite.dev/) is a SaaS product with a polished CLI and web dashboard. It requires an account and stores stack metadata on their servers. **gh-stack** stores everything locally in `.git/config`—no account, no remote dependency.
 
 ### vs. spr
 
 [spr](https://github.com/ejoffe/spr) enforces a strict "one commit = one PR" model. You work on a single branch, and each commit automatically becomes a separate PR. You cannot merge PRs through GitHub's UI—you must use `spr merge`.
 
-gh-stack uses a traditional "one branch = one PR" model. You control what goes into each PR, create PRs when you're ready, and merge through GitHub normally. More flexibility, less automation.
+**gh-stack** uses a traditional "one branch = one PR" model. You control what goes into each PR, create PRs when you're ready, and merge through GitHub normally. More flexibility, less automation.
 
 ### vs. git-town
 
 [git-town](https://github.com/git-town/git-town) is a general-purpose Git workflow tool that automates branch creation, synchronization, and cleanup across many workflows (Git Flow, GitHub Flow, trunk-based development). Stacked changes are one feature among many.
 
-gh-stack focuses exclusively on stacked PRs. If you want a comprehensive Git workflow tool, use git-town. If you want a lightweight tool just for managing PR stacks on GitHub, use gh-stack.
+**gh-stack** focuses exclusively on stacked PRs. If you want a comprehensive Git workflow tool, use git-town. If you want a lightweight tool just for managing PR stacks on GitHub, use **gh-stack**.
 
 ### vs. git-branchless
 
 [git-branchless](https://github.com/arxanas/git-branchless) is a powerful suite that enhances Git with undo functionality, interactive commit graph editing, and patch-stack workflows. It's designed for power users and optimized for massive repositories.
 
-gh-stack is narrower in scope: it tracks parent-child relationships between branches and helps you manage the resulting PRs. It doesn't modify how Git works—it just adds stack awareness on top.
+**gh-stack** is narrower in scope: it tracks parent-child relationships between branches and helps you manage the resulting PRs. It doesn't modify how Git works—it just adds stack awareness on top.
 
 ## Development
 
 To build from source, you'll need Go 1.22+.
 
 ```bash
-git clone https://github.com/boneskull/gh-stack.git
+gh repo clone boneskull/gh-stack
 cd gh-stack
 make build        # Build binary to ./gh-stack
 make test         # Run tests
@@ -184,8 +184,12 @@ make gh-install   # Install as gh extension locally
 
 ## Acknowledgements
 
-Inspired by [Graphite](https://graphite.dev/).
+- Inspired by [Graphite][].
 
 ## License
 
-Copyright © 2026 [Christopher "boneskull" Hiller](https://github.com/boneskull). Licensed under [Apache-2.0](LICENSE).
+Copyright © 2026 [Christopher "boneskull" Hiller][boneskull]. Licensed under [Apache-2.0](LICENSE).
+
+[GitHub CLI]: https://cli.github.com/
+[boneskull]: https://github.com/boneskull
+[graphite]: https://graphite.dev/
