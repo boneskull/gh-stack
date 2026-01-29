@@ -494,3 +494,71 @@ func TestClient_FindPRByHead_Error(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestClient_CreateSubmitPR(t *testing.T) {
+	var capturedBody map[string]interface{}
+	mock := &mockREST{
+		postFn: func(path string, body io.Reader, response any) error {
+			if path != "repos/owner/repo/pulls" {
+				t.Errorf("expected path %q, got %q", "repos/owner/repo/pulls", path)
+			}
+
+			if err := json.NewDecoder(body).Decode(&capturedBody); err != nil {
+				t.Fatalf("failed to decode request body: %v", err)
+			}
+
+			if pr, ok := response.(*PR); ok {
+				pr.Number = 42
+				pr.Title = capturedBody["title"].(string)
+			}
+			return nil
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	pr, err := client.CreateSubmitPR("feature-branch", "main", false)
+
+	if err != nil {
+		t.Fatalf("CreateSubmitPR failed: %v", err)
+	}
+	if pr.Number != 42 {
+		t.Errorf("expected PR number 42, got %d", pr.Number)
+	}
+	if capturedBody["draft"] != false {
+		t.Errorf("expected draft=false, got %v", capturedBody["draft"])
+	}
+	// Title should be auto-generated from branch name
+	if capturedBody["title"] == "" {
+		t.Error("expected non-empty title")
+	}
+}
+
+func TestClient_CreateSubmitPR_Draft(t *testing.T) {
+	var capturedBody map[string]interface{}
+	mock := &mockREST{
+		postFn: func(path string, body io.Reader, response any) error {
+			if err := json.NewDecoder(body).Decode(&capturedBody); err != nil {
+				t.Fatalf("failed to decode request body: %v", err)
+			}
+
+			if pr, ok := response.(*PR); ok {
+				pr.Number = 43
+				pr.Draft = true
+			}
+			return nil
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	pr, err := client.CreateSubmitPR("wip-feature", "develop", true)
+
+	if err != nil {
+		t.Fatalf("CreateSubmitPR failed: %v", err)
+	}
+	if pr.Number != 43 {
+		t.Errorf("expected PR number 43, got %d", pr.Number)
+	}
+	if capturedBody["draft"] != true {
+		t.Errorf("expected draft=true, got %v", capturedBody["draft"])
+	}
+}

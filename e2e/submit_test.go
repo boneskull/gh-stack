@@ -1,0 +1,187 @@
+// e2e/submit_test.go
+package e2e_test
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestSubmitDryRun(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	result := env.MustRun("submit", "--dry-run")
+
+	// Should show all three phases
+	if !strings.Contains(result.Stdout, "Phase 1: Cascade") {
+		t.Error("expected cascade phase output")
+	}
+	if !strings.Contains(result.Stdout, "Phase 2: Push") {
+		t.Error("expected push phase output")
+	}
+	if !strings.Contains(result.Stdout, "Phase 3: PRs") {
+		t.Error("expected PR phase output")
+	}
+
+	// Should show "Would" for actions
+	if !strings.Contains(result.Stdout, "Would") {
+		t.Error("expected dry-run output with 'Would'")
+	}
+
+	// Branch should NOT be on remote in dry-run
+	remoteBranches := env.GitRemote("branch")
+	if strings.Contains(remoteBranches, "feature-1") {
+		t.Error("feature-1 should not be on remote in dry-run")
+	}
+}
+
+func TestSubmitDryRunStack(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create stack: main -> feat-a -> feat-b
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("b work")
+
+	// Go back to feat-a
+	env.Git("checkout", "feat-a")
+
+	// Submit from feat-a (should include feat-a and feat-b)
+	result := env.MustRun("submit", "--dry-run")
+
+	// Should mention both branches
+	if !strings.Contains(result.Stdout, "feat-a") {
+		t.Error("expected feat-a in output")
+	}
+	if !strings.Contains(result.Stdout, "feat-b") {
+		t.Error("expected feat-b in output")
+	}
+}
+
+func TestSubmitCurrentOnlyDryRun(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("b work")
+
+	env.Git("checkout", "feat-a")
+
+	// Submit --current-only should NOT cascade feat-b
+	result := env.MustRun("submit", "--dry-run", "--current-only")
+
+	// Should mention feat-a but not feat-b in push phase
+	output := result.Stdout
+	if !strings.Contains(output, "Would push feat-a") {
+		t.Error("expected feat-a push in output")
+	}
+	if strings.Contains(output, "Would push feat-b") {
+		t.Error("feat-b should not be pushed with --current-only")
+	}
+}
+
+func TestSubmitWithCascadeNeeded(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create stack
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("b work")
+
+	// Go back to feat-a and add commit (feat-b now needs rebase)
+	env.Git("checkout", "feat-a")
+	env.CreateCommit("more a work")
+
+	// Submit dry-run should show rebase needed
+	result := env.MustRun("submit", "--dry-run")
+
+	// Should show rebase would happen
+	if !strings.Contains(result.Stdout, "Would rebase feat-b onto feat-a") {
+		t.Error("expected cascade of feat-b onto feat-a")
+	}
+}
+
+func TestSubmitAlreadyUpToDate(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	// Branch is already up to date with main (just created)
+	result := env.MustRun("submit", "--dry-run")
+
+	// Should indicate already up to date
+	if !strings.Contains(result.Stdout, "already up to date") {
+		t.Error("expected 'already up to date' for branch that doesn't need cascade")
+	}
+}
+
+func TestSubmitUpdateOnlyDryRun(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	// With --update-only, should skip PR creation for branches without PRs
+	result := env.MustRun("submit", "--dry-run", "--update-only")
+
+	// Should not show "Would create PR" since update-only skips creation
+	// (In dry-run, it should show the skip message)
+	if strings.Contains(result.Stdout, "Would create PR") {
+		t.Error("should not create PR with --update-only")
+	}
+}
+
+func TestSubmitRequiresCleanWorkTree(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-1")
+
+	// Create uncommitted changes
+	env.WriteFile("dirty.txt", "uncommitted")
+	env.Git("add", "dirty.txt")
+
+	// Submit should fail
+	result := env.Run("submit")
+
+	if result.Success() {
+		t.Error("expected submit to fail with dirty working tree")
+	}
+	if !strings.Contains(result.Stderr, "uncommitted changes") {
+		t.Errorf("expected error about uncommitted changes, got: %s", result.Stderr)
+	}
+}
+
+func TestSubmitRejectsUntrackedBranch(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create an untracked branch
+	env.Git("checkout", "-b", "untracked-branch")
+	env.CreateCommit("work")
+
+	// Submit should fail
+	result := env.Run("submit", "--dry-run")
+
+	if result.Success() {
+		t.Error("expected submit to fail on untracked branch")
+	}
+	if !strings.Contains(result.Stderr, "not tracked") {
+		t.Errorf("expected error about untracked branch, got: %s", result.Stderr)
+	}
+}

@@ -100,6 +100,50 @@ gh stack continue
 gh stack abort
 ```
 
+### Submit Your Stack
+
+```bash
+gh stack submit
+```
+
+The all-in-one command for getting your work onto GitHub. Submit:
+
+1. **Cascades** the current branch and its descendants onto their parents
+2. **Pushes** all affected branches with `--force-with-lease`
+3. **Creates/updates PRs** for each branch (creates as draft if mid-stack)
+
+This is typically what you run after making changes:
+
+```bash
+# Make some changes
+git add . && git commit -m "fix: address review feedback"
+
+# Ship it
+gh stack submit
+```
+
+#### Flags
+
+| Flag             | Description                                      |
+| ---------------- | ------------------------------------------------ |
+| `--dry-run`      | Show what would happen without doing it          |
+| `--current-only` | Only submit the current branch, not descendants  |
+| `--update-only`  | Only update existing PRs, don't create new ones  |
+
+#### Conflict Resolution
+
+If a rebase conflict occurs during submit:
+
+```bash
+# Resolve the conflicts, then:
+gh stack continue
+
+# Or abort:
+gh stack abort
+```
+
+After continuing, submit resumes with push and PR phases.
+
 ### Sync Everything
 
 ```bash
@@ -121,9 +165,10 @@ Fetches from origin, fast-forwards trunk, detects merged PRs, cleans up merged b
 | `unlink`   | Remove PR association                                 |
 | `pr`       | Create or update PR targeting parent                  |
 | `push`     | Force-push stack with `--force-with-lease`            |
+| `submit`   | Cascade, push, and create/update PRs in one command   |
 | `cascade`  | Rebase branch and descendants onto parents            |
-| `continue` | Resume cascade after conflict resolution              |
-| `abort`    | Cancel cascade operation                              |
+| `continue` | Resume operation after conflict resolution            |
+| `abort`    | Cancel in-progress operation                          |
 | `sync`     | Full sync: fetch, cleanup merged PRs, cascade all     |
 
 ## How It Works

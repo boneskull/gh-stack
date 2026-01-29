@@ -10,14 +10,24 @@ import (
 
 const stateFile = "STACK_CASCADE_STATE"
 
+// Operation types for cascade state.
+const (
+	OperationCascade = "cascade"
+	OperationSubmit  = "submit"
+)
+
 // ErrNoState is returned when no cascade state exists.
 var ErrNoState = errors.New("no cascade in progress")
 
-// CascadeState represents the state of an in-progress cascade operation.
+// CascadeState represents the state of an in-progress cascade or submit operation.
 type CascadeState struct {
 	Current      string   `json:"current"`
 	Pending      []string `json:"pending"`
 	OriginalHead string   `json:"original_head"`
+	// Operation is "cascade" or "submit" - determines what happens after cascade completes
+	Operation string `json:"operation,omitempty"`
+	// UpdateOnly (submit only) - if true, don't create new PRs, only update existing
+	UpdateOnly bool `json:"update_only,omitempty"`
 }
 
 // Save persists cascade state to .git/STACK_CASCADE_STATE.

@@ -14,8 +14,8 @@ import (
 
 var continueCmd = &cobra.Command{
 	Use:   "continue",
-	Short: "Continue a cascade after resolving conflicts",
-	Long:  `Continue a cascade operation after resolving rebase conflicts.`,
+	Short: "Continue an operation after resolving conflicts",
+	Long:  `Continue a cascade or submit operation after resolving rebase conflicts.`,
 	RunE:  runContinue,
 }
 
@@ -31,10 +31,10 @@ func runContinue(cmd *cobra.Command, args []string) error {
 
 	g := git.New(cwd)
 
-	// Check if cascade in progress
+	// Check if operation in progress
 	st, err := state.Load(g.GetGitDir())
 	if err != nil {
-		return fmt.Errorf("no cascade in progress")
+		return fmt.Errorf("no operation in progress")
 	}
 
 	// Complete the in-progress rebase
@@ -47,13 +47,6 @@ func runContinue(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Completed %s\n", st.Current)
 
-	// Continue with remaining branches
-	if len(st.Pending) == 0 {
-		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
-		fmt.Println("Cascade complete!")
-		return nil
-	}
-
 	cfg, err := config.Load(cwd)
 	if err != nil {
 		return err
@@ -65,15 +58,45 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var branches []*tree.Node
-	for _, name := range st.Pending {
-		if node := tree.FindNode(root, name); node != nil {
-			branches = append(branches, node)
+	// If there are more branches to cascade, continue cascading
+	if len(st.Pending) > 0 {
+		var branches []*tree.Node
+		for _, name := range st.Pending {
+			if node := tree.FindNode(root, name); node != nil {
+				branches = append(branches, node)
+			}
 		}
+
+		// Remove state file before continuing (will be recreated if conflict)
+		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
+
+		if err := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly); err != nil {
+			return err // Another conflict - state saved
+		}
+	} else {
+		// No more branches to cascade - cleanup state
+		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 	}
 
-	// Remove state file before continuing (will be recreated if conflict)
-	_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
+	// If this was a submit operation, continue with push + PR phases
+	if st.Operation == state.OperationSubmit {
+		// Rebuild branches list: current + all that were pending (now completed)
+		currentNode := tree.FindNode(root, st.Current)
+		if currentNode == nil {
+			return fmt.Errorf("branch %q not found in tree", st.Current)
+		}
 
-	return doCascade(g, cfg, branches, false)
+		var allBranches []*tree.Node
+		allBranches = append(allBranches, currentNode)
+		for _, name := range st.Pending {
+			if node := tree.FindNode(root, name); node != nil {
+				allBranches = append(allBranches, node)
+			}
+		}
+
+		return doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly)
+	}
+
+	fmt.Println("Cascade complete!")
+	return nil
 }
