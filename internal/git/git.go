@@ -215,3 +215,47 @@ func (g *Git) FastForward(branch string) error {
 func (g *Git) DeleteBranch(branch string) error {
 	return g.runSilent("branch", "-D", branch)
 }
+
+// Commit represents a git commit with its subject and body.
+type Commit struct {
+	Subject string // First line of the commit message
+	Body    string // Everything after the first line (may be empty)
+}
+
+// GetCommits returns the commits from base..head (commits in head not in base).
+// Returns commits in reverse chronological order (newest first).
+func (g *Git) GetCommits(base, head string) ([]Commit, error) {
+	// Use null byte separators for reliable parsing
+	// Format: subject\x00body\x00\x00 (double null between commits)
+	format := "%s%x00%b%x00%x00"
+	out, err := g.run("log", "--format="+format, base+".."+head)
+	if err != nil {
+		return nil, err
+	}
+
+	if out == "" {
+		return nil, nil
+	}
+
+	var commits []Commit
+	// Split by double null (between commits)
+	entries := strings.Split(out, "\x00\x00")
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		// Split by single null (between subject and body)
+		parts := strings.SplitN(entry, "\x00", 2)
+		subject := strings.TrimSpace(parts[0])
+		var body string
+		if len(parts) > 1 {
+			body = strings.TrimSpace(parts[1])
+		}
+		if subject != "" {
+			commits = append(commits, Commit{Subject: subject, Body: body})
+		}
+	}
+
+	return commits, nil
+}

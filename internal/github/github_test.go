@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -293,5 +294,203 @@ func TestClient_UpdatePRBase(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestClient_GetPRTitles(t *testing.T) {
+	t.Run("success with multiple PRs", func(t *testing.T) {
+		mock := &mockREST{
+			postFn: func(path string, body io.Reader, response any) error {
+				if path != "graphql" {
+					t.Errorf("expected path %q, got %q", "graphql", path)
+				}
+
+				// Return mock GraphQL response
+				if raw, ok := response.(*map[string]json.RawMessage); ok {
+					*raw = map[string]json.RawMessage{
+						"data": json.RawMessage(`{
+							"repository": {
+								"pr1": {"number": 1, "title": "First PR"},
+								"pr2": {"number": 2, "title": "Second PR"}
+							}
+						}`),
+					}
+				}
+				return nil
+			},
+		}
+
+		client := NewClientWithREST(mock, "owner", "repo")
+		result, err := client.GetPRTitles([]int{1, 2})
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 2 {
+			t.Errorf("expected 2 results, got %d", len(result))
+		}
+		if result[1].Title != "First PR" {
+			t.Errorf("expected title %q, got %q", "First PR", result[1].Title)
+		}
+		if result[2].Title != "Second PR" {
+			t.Errorf("expected title %q, got %q", "Second PR", result[2].Title)
+		}
+	})
+
+	t.Run("empty input", func(t *testing.T) {
+		mock := &mockREST{
+			postFn: func(path string, body io.Reader, response any) error {
+				t.Error("should not make API call for empty input")
+				return nil
+			},
+		}
+
+		client := NewClientWithREST(mock, "owner", "repo")
+		result, err := client.GetPRTitles([]int{})
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("expected empty result, got %d items", len(result))
+		}
+	})
+
+	t.Run("GraphQL error in response", func(t *testing.T) {
+		mock := &mockREST{
+			postFn: func(path string, body io.Reader, response any) error {
+				if raw, ok := response.(*map[string]json.RawMessage); ok {
+					*raw = map[string]json.RawMessage{
+						"errors": json.RawMessage(`[{"message": "Repository not found"}]`),
+					}
+				}
+				return nil
+			},
+		}
+
+		client := NewClientWithREST(mock, "owner", "repo")
+		_, err := client.GetPRTitles([]int{1})
+
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "Repository not found") {
+			t.Errorf("expected error to contain 'Repository not found', got %q", err.Error())
+		}
+	})
+
+	t.Run("API error", func(t *testing.T) {
+		mock := &mockREST{
+			postFn: func(path string, body io.Reader, response any) error {
+				return errors.New("network error")
+			},
+		}
+
+		client := NewClientWithREST(mock, "owner", "repo")
+		_, err := client.GetPRTitles([]int{1})
+
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("some PRs not found", func(t *testing.T) {
+		mock := &mockREST{
+			postFn: func(path string, body io.Reader, response any) error {
+				// PR 2 doesn't exist (null in response)
+				if raw, ok := response.(*map[string]json.RawMessage); ok {
+					*raw = map[string]json.RawMessage{
+						"data": json.RawMessage(`{
+							"repository": {
+								"pr1": {"number": 1, "title": "First PR"},
+								"pr2": null
+							}
+						}`),
+					}
+				}
+				return nil
+			},
+		}
+
+		client := NewClientWithREST(mock, "owner", "repo")
+		result, err := client.GetPRTitles([]int{1, 2})
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 1 {
+			t.Errorf("expected 1 result (PR 2 not found), got %d", len(result))
+		}
+		if _, ok := result[1]; !ok {
+			t.Error("expected PR 1 to be in result")
+		}
+	})
+}
+
+func TestClient_FindPRByHead(t *testing.T) {
+	mock := &mockREST{
+		getFn: func(path string, response any) error {
+			expectedPath := "repos/owner/repo/pulls?head=owner:feature-branch&state=open"
+			if path != expectedPath {
+				t.Errorf("expected path %q, got %q", expectedPath, path)
+			}
+
+			if prs, ok := response.(*[]PR); ok {
+				*prs = []PR{
+					{Number: 42, State: "open", Draft: false},
+				}
+			}
+			return nil
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	pr, err := client.FindPRByHead("feature-branch")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr == nil {
+		t.Fatal("expected PR, got nil")
+	}
+	if pr.Number != 42 {
+		t.Errorf("expected PR number 42, got %d", pr.Number)
+	}
+}
+
+func TestClient_FindPRByHead_NotFound(t *testing.T) {
+	mock := &mockREST{
+		getFn: func(path string, response any) error {
+			// Return empty slice (no PRs)
+			if prs, ok := response.(*[]PR); ok {
+				*prs = []PR{}
+			}
+			return nil
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	pr, err := client.FindPRByHead("nonexistent-branch")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr != nil {
+		t.Errorf("expected nil PR, got %+v", pr)
+	}
+}
+
+func TestClient_FindPRByHead_Error(t *testing.T) {
+	mock := &mockREST{
+		getFn: func(path string, response any) error {
+			return errors.New("API error")
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	_, err := client.FindPRByHead("feature")
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

@@ -256,3 +256,97 @@ func TestNeedsRebase(t *testing.T) {
 		t.Error("feature should need rebase after main moved forward")
 	}
 }
+
+func TestGetCommits(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	current, _ := g.CurrentBranch()
+
+	// Create feature branch and add commits
+	g.CreateAndCheckout("feature")
+
+	// Commit 1: subject only
+	os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("content1"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "feat: first commit").Run()
+
+	// Commit 2: subject and body
+	os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("content2"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "feat: second commit\n\nThis is the body of the commit.\nIt has multiple lines.").Run()
+
+	// Get commits between main and feature
+	commits, err := g.GetCommits(current, "feature")
+	if err != nil {
+		t.Fatalf("GetCommits failed: %v", err)
+	}
+
+	if len(commits) != 2 {
+		t.Fatalf("expected 2 commits, got %d", len(commits))
+	}
+
+	// Commits are in reverse chronological order (newest first)
+	if commits[0].Subject != "feat: second commit" {
+		t.Errorf("expected first commit subject 'feat: second commit', got %q", commits[0].Subject)
+	}
+	if commits[0].Body == "" {
+		t.Error("expected first commit to have a body")
+	}
+
+	if commits[1].Subject != "feat: first commit" {
+		t.Errorf("expected second commit subject 'feat: first commit', got %q", commits[1].Subject)
+	}
+	if commits[1].Body != "" {
+		t.Errorf("expected second commit to have no body, got %q", commits[1].Body)
+	}
+}
+
+func TestGetCommitsNoCommits(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	current, _ := g.CurrentBranch()
+
+	// Create feature branch at same commit (no new commits)
+	g.CreateBranch("feature")
+
+	// Should return empty slice
+	commits, err := g.GetCommits(current, "feature")
+	if err != nil {
+		t.Fatalf("GetCommits failed: %v", err)
+	}
+
+	if len(commits) != 0 {
+		t.Errorf("expected 0 commits, got %d", len(commits))
+	}
+}
+
+func TestGetCommitsSingleCommit(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	current, _ := g.CurrentBranch()
+
+	// Create feature branch with one commit
+	g.CreateAndCheckout("feature")
+	os.WriteFile(filepath.Join(dir, "single.txt"), []byte("single"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "fix: single commit\n\nThis fixes the bug.").Run()
+
+	commits, err := g.GetCommits(current, "feature")
+	if err != nil {
+		t.Fatalf("GetCommits failed: %v", err)
+	}
+
+	if len(commits) != 1 {
+		t.Fatalf("expected 1 commit, got %d", len(commits))
+	}
+
+	if commits[0].Subject != "fix: single commit" {
+		t.Errorf("expected subject 'fix: single commit', got %q", commits[0].Subject)
+	}
+	if commits[0].Body != "This fixes the bug." {
+		t.Errorf("expected body 'This fixes the bug.', got %q", commits[0].Body)
+	}
+}
