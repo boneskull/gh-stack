@@ -176,8 +176,8 @@ func hasBodyFlag(args []string) bool {
 		if arg == "--fill" || arg == "-f" {
 			return true
 		}
-		// Check for --fill-first
-		if arg == "--fill-first" {
+		// Check for --fill-first or --fill-verbose
+		if arg == "--fill-first" || arg == "--fill-verbose" {
 			return true
 		}
 		// Check for combined short flags like -bf

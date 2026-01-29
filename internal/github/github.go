@@ -40,6 +40,10 @@ type PRInfo struct {
 
 // GetPRTitles fetches titles for multiple PRs in a single GraphQL request.
 // Returns a map of PR number to PRInfo. PRs that don't exist are omitted.
+//
+// Note: This builds a single GraphQL query with all PR requests. For extremely
+// large stacks (100+ PRs), this could potentially hit query size limits. In
+// practice, stacks rarely exceed 10-20 PRs, so batching is not implemented.
 func (c *Client) GetPRTitles(prNumbers []int) (map[int]PRInfo, error) {
 	if len(prNumbers) == 0 {
 		return make(map[int]PRInfo), nil

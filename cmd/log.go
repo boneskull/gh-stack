@@ -104,6 +104,15 @@ func printTree(node *tree.Node, prefix string, isLast bool, current string, gh *
 	}
 }
 
+// printPorcelain outputs machine-readable tab-separated format:
+// BRANCH<tab>PARENT<tab>PR_NUMBER<tab>IS_CURRENT<tab>PR_URL
+//
+// Fields:
+//   - BRANCH: branch name
+//   - PARENT: parent branch name (empty for trunk)
+//   - PR_NUMBER: associated PR number (0 if none)
+//   - IS_CURRENT: "1" if current branch, "0" otherwise
+//   - PR_URL: full PR URL (empty if no PR or GitHub client unavailable)
 func printPorcelain(node *tree.Node, current string, gh *github.Client) {
 	var printNode func(*tree.Node, int)
 	printNode = func(n *tree.Node, depth int) {
