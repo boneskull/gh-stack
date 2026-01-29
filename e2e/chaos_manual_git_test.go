@@ -38,8 +38,8 @@ func TestManualBranchCreate(t *testing.T) {
 		t.Errorf("manual branch should not be tracked, got parent %q", parent)
 	}
 
-	// Can adopt it into the stack
-	env.MustRun("adopt", "manual-branch", "--parent", "main")
+	// Can adopt it into the stack (current branch with main as parent)
+	env.MustRun("adopt", "main")
 	env.AssertStackParent("manual-branch", "main")
 
 	// Now it shows in log

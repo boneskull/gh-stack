@@ -12,17 +12,19 @@ import (
 )
 
 var adoptCmd = &cobra.Command{
-	Use:   "adopt [branch]",
+	Use:   "adopt <parent>",
 	Short: "Start tracking an existing branch",
-	Long:  `Start tracking an existing branch by setting its parent.`,
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runAdopt,
+	Long: `Start tracking an existing branch by setting its parent.
+
+By default, adopts the current branch. Use --branch to specify a different branch.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runAdopt,
 }
 
-var adoptParentFlag string
+var adoptBranchFlag string
 
 func init() {
-	adoptCmd.Flags().StringVar(&adoptParentFlag, "parent", "", "parent branch")
+	adoptCmd.Flags().StringVar(&adoptBranchFlag, "branch", "", "branch to adopt (default: current branch)")
 	rootCmd.AddCommand(adoptCmd)
 }
 
@@ -39,10 +41,13 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 
 	g := git.New(cwd)
 
-	// Determine branch to adopt
+	// Parent is the required positional argument
+	parent := args[0]
+
+	// Determine branch to adopt (from flag or current branch)
 	var branchName string
-	if len(args) > 0 {
-		branchName = args[0]
+	if adoptBranchFlag != "" {
+		branchName = adoptBranchFlag
 	} else {
 		branchName, err = g.CurrentBranch()
 		if err != nil {
@@ -58,12 +63,6 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	// Check if already tracked
 	if _, getParentErr := cfg.GetParent(branchName); getParentErr == nil {
 		return fmt.Errorf("branch %q is already tracked", branchName)
-	}
-
-	// Determine parent
-	parent := adoptParentFlag
-	if parent == "" {
-		return fmt.Errorf("--parent is required")
 	}
 
 	// Validate parent is trunk or tracked
