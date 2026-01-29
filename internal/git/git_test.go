@@ -256,3 +256,4 @@ func TestNeedsRebase(t *testing.T) {
 		t.Error("feature should need rebase after main moved forward")
 	}
 }
+

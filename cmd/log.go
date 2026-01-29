@@ -7,6 +7,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
@@ -48,16 +49,19 @@ func runLog(cmd *cobra.Command, args []string) error {
 	g := git.New(cwd)
 	currentBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine for display
 
+	// Try to get GitHub client for PR URLs (optional - may fail if not in a GitHub repo)
+	gh, _ := github.NewClient() //nolint:errcheck // nil is fine, URLs won't be shown
+
 	if logPorcelainFlag {
-		printPorcelain(root, currentBranch)
+		printPorcelain(root, currentBranch, gh)
 	} else {
-		printTree(root, "", true, currentBranch)
+		printTree(root, "", true, currentBranch, gh)
 	}
 
 	return nil
 }
 
-func printTree(node *tree.Node, prefix string, isLast bool, current string) {
+func printTree(node *tree.Node, prefix string, isLast bool, current string, gh *github.Client) {
 	// Determine the branch indicator
 	connector := "├── "
 	if isLast {
@@ -75,7 +79,11 @@ func printTree(node *tree.Node, prefix string, isLast bool, current string) {
 
 	prInfo := ""
 	if node.PR > 0 {
-		prInfo = fmt.Sprintf(" (#%d)", node.PR)
+		if gh != nil {
+			prInfo = fmt.Sprintf(" (#%d) %s", node.PR, gh.PRURL(node.PR))
+		} else {
+			prInfo = fmt.Sprintf(" (#%d)", node.PR)
+		}
 	}
 
 	fmt.Printf("%s%s%s%s%s\n", prefix, connector, marker, node.Name, prInfo)
@@ -92,11 +100,11 @@ func printTree(node *tree.Node, prefix string, isLast bool, current string) {
 
 	for i, child := range node.Children {
 		isLastChild := i == len(node.Children)-1
-		printTree(child, childPrefix, isLastChild, current)
+		printTree(child, childPrefix, isLastChild, current, gh)
 	}
 }
 
-func printPorcelain(node *tree.Node, current string) {
+func printPorcelain(node *tree.Node, current string, gh *github.Client) {
 	var printNode func(*tree.Node, int)
 	printNode = func(n *tree.Node, depth int) {
 		isCurrent := "0"
@@ -107,7 +115,11 @@ func printPorcelain(node *tree.Node, current string) {
 		if n.Parent != nil {
 			parent = n.Parent.Name
 		}
-		fmt.Printf("%s\t%s\t%d\t%s\n", n.Name, parent, n.PR, isCurrent)
+		prURL := ""
+		if n.PR > 0 && gh != nil {
+			prURL = gh.PRURL(n.PR)
+		}
+		fmt.Printf("%s\t%s\t%d\t%s\t%s\n", n.Name, parent, n.PR, isCurrent, prURL)
 		for _, child := range n.Children {
 			printNode(child, depth+1)
 		}

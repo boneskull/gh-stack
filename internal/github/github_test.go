@@ -295,3 +295,71 @@ func TestClient_UpdatePRBase(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestClient_FindPRByHead(t *testing.T) {
+	mock := &mockREST{
+		getFn: func(path string, response any) error {
+			expectedPath := "repos/owner/repo/pulls?head=owner:feature-branch&state=open"
+			if path != expectedPath {
+				t.Errorf("expected path %q, got %q", expectedPath, path)
+			}
+
+			if prs, ok := response.(*[]PR); ok {
+				*prs = []PR{
+					{Number: 42, State: "open", Draft: false},
+				}
+			}
+			return nil
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	pr, err := client.FindPRByHead("feature-branch")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr == nil {
+		t.Fatal("expected PR, got nil")
+	}
+	if pr.Number != 42 {
+		t.Errorf("expected PR number 42, got %d", pr.Number)
+	}
+}
+
+func TestClient_FindPRByHead_NotFound(t *testing.T) {
+	mock := &mockREST{
+		getFn: func(path string, response any) error {
+			// Return empty slice (no PRs)
+			if prs, ok := response.(*[]PR); ok {
+				*prs = []PR{}
+			}
+			return nil
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	pr, err := client.FindPRByHead("nonexistent-branch")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pr != nil {
+		t.Errorf("expected nil PR, got %+v", pr)
+	}
+}
+
+func TestClient_FindPRByHead_Error(t *testing.T) {
+	mock := &mockREST{
+		getFn: func(path string, response any) error {
+			return errors.New("API error")
+		},
+	}
+
+	client := NewClientWithREST(mock, "owner", "repo")
+	_, err := client.FindPRByHead("feature")
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
