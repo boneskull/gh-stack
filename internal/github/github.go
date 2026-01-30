@@ -361,7 +361,8 @@ func (c *Client) UpdateComment(commentID int, body string) error {
 
 // CreateSubmitPR creates a new pull request with an auto-generated title from the branch name.
 // This is a convenience method for the submit workflow. If draft is true, creates a draft PR.
-func (c *Client) CreateSubmitPR(head, base string, draft bool) (*PR, error) {
+// The body parameter is used as the PR description; pass an empty string for no description.
+func (c *Client) CreateSubmitPR(head, base, body string, draft bool) (*PR, error) {
 	// Generate title from branch name (replace - and _ with spaces, title case)
 	title := strings.ReplaceAll(head, "-", " ")
 	title = strings.ReplaceAll(title, "_", " ")
@@ -373,11 +374,13 @@ func (c *Client) CreateSubmitPR(head, base string, draft bool) (*PR, error) {
 		Head  string `json:"head"`
 		Base  string `json:"base"`
 		Title string `json:"title"`
+		Body  string `json:"body,omitempty"`
 		Draft bool   `json:"draft"`
 	}{
 		Head:  head,
 		Base:  base,
 		Title: title,
+		Body:  body,
 		Draft: draft,
 	}
 

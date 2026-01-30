@@ -516,7 +516,7 @@ func TestClient_CreateSubmitPR(t *testing.T) {
 	}
 
 	client := NewClientWithREST(mock, "owner", "repo")
-	pr, err := client.CreateSubmitPR("feature-branch", "main", false)
+	pr, err := client.CreateSubmitPR("feature-branch", "main", "PR body from commits", false)
 
 	if err != nil {
 		t.Fatalf("CreateSubmitPR failed: %v", err)
@@ -530,6 +530,10 @@ func TestClient_CreateSubmitPR(t *testing.T) {
 	// Title should be auto-generated from branch name
 	if capturedBody["title"] == "" {
 		t.Error("expected non-empty title")
+	}
+	// Body should be passed through
+	if capturedBody["body"] != "PR body from commits" {
+		t.Errorf("expected body='PR body from commits', got %v", capturedBody["body"])
 	}
 }
 
@@ -550,7 +554,7 @@ func TestClient_CreateSubmitPR_Draft(t *testing.T) {
 	}
 
 	client := NewClientWithREST(mock, "owner", "repo")
-	pr, err := client.CreateSubmitPR("wip-feature", "develop", true)
+	pr, err := client.CreateSubmitPR("wip-feature", "develop", "", true)
 
 	if err != nil {
 		t.Fatalf("CreateSubmitPR failed: %v", err)

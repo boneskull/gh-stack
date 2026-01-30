@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
@@ -126,11 +127,11 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 	}
 
 	// Phase 3: Create/update PRs
-	return doSubmitPRs(cfg, root, branches, dryRun, updateOnly)
+	return doSubmitPRs(g, cfg, root, branches, dryRun, updateOnly)
 }
 
 // doSubmitPRs handles PR creation/update for all branches.
-func doSubmitPRs(cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly bool) error {
+func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly bool) error {
 	fmt.Println("\n=== Phase 3: PRs ===")
 
 	trunk, err := cfg.GetTrunk()
@@ -178,7 +179,7 @@ func doSubmitPRs(cfg *config.Config, root *tree.Node, branches []*tree.Node, dry
 			if dryRun {
 				fmt.Printf("Would create PR for %s (base: %s)\n", b.Name, parent)
 			} else {
-				prNum, err := createPRForBranch(ghClient, cfg, root, b.Name, parent, trunk)
+				prNum, err := createPRForBranch(g, ghClient, cfg, root, b.Name, parent, trunk)
 				if err != nil {
 					fmt.Printf("Warning: failed to create PR for %s: %v\n", b.Name, err)
 				} else {
@@ -194,11 +195,19 @@ func doSubmitPRs(cfg *config.Config, root *tree.Node, branches []*tree.Node, dry
 }
 
 // createPRForBranch creates a PR for the given branch and stores the PR number.
-func createPRForBranch(ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string) (int, error) {
+func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string) (int, error) {
 	// Determine if draft (not targeting trunk = middle of stack)
 	draft := base != trunk
 
-	pr, err := ghClient.CreateSubmitPR(branch, base, draft)
+	// Generate PR body from commits
+	body, bodyErr := generatePRBody(g, base, branch)
+	if bodyErr != nil {
+		// Non-fatal: just skip auto-body
+		fmt.Printf("Warning: could not generate PR body: %v\n", bodyErr)
+		body = ""
+	}
+
+	pr, err := ghClient.CreateSubmitPR(branch, base, body, draft)
 	if err != nil {
 		return 0, err
 	}
@@ -219,4 +228,41 @@ func createPRForBranch(ghClient *github.Client, cfg *config.Config, root *tree.N
 	}
 
 	return pr.Number, nil
+}
+
+// generatePRBody creates a PR description from the commits between base and head.
+// For a single commit: returns the commit body.
+// For multiple commits: returns each commit as a markdown section.
+func generatePRBody(g *git.Git, base, head string) (string, error) {
+	commits, err := g.GetCommits(base, head)
+	if err != nil {
+		return "", err
+	}
+
+	if len(commits) == 0 {
+		return "", nil
+	}
+
+	if len(commits) == 1 {
+		// Single commit: just use the body
+		return commits[0].Body, nil
+	}
+
+	// Multiple commits: format as markdown sections
+	var sb strings.Builder
+	for i, commit := range commits {
+		if i > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString("### ")
+		sb.WriteString(commit.Subject)
+		sb.WriteString("\n")
+		if commit.Body != "" {
+			sb.WriteString("\n")
+			sb.WriteString(commit.Body)
+			sb.WriteString("\n")
+		}
+	}
+
+	return sb.String(), nil
 }
