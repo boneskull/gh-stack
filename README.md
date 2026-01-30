@@ -68,22 +68,6 @@ main
     └── feature-auth-tests
 ```
 
-### Create PRs for Your Stack
-
-```bash
-gh stack pr
-```
-
-Creates a PR targeting the parent branch. If a PR already exists, updates its base.
-
-### Push Your Stack
-
-```bash
-gh stack push
-```
-
-Force-pushes (with lease) all branches from trunk to your current branch, updating PR bases as needed.
-
 ### Rebase After Parent Changes
 
 ```bash
@@ -163,8 +147,6 @@ Fetches from origin, fast-forwards trunk, detects merged PRs, cleans up merged b
 | `orphan`   | Stop tracking a branch                                |
 | `link`     | Associate PR number with branch                       |
 | `unlink`   | Remove PR association                                 |
-| `pr`       | Create or update PR targeting parent                  |
-| `push`     | Force-push stack with `--force-with-lease`            |
 | `submit`   | Cascade, push, and create/update PRs in one command   |
 | `cascade`  | Rebase branch and descendants onto parents            |
 | `continue` | Resume operation after conflict resolution            |
