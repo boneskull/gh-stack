@@ -70,7 +70,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		// Remove state file before continuing (will be recreated if conflict)
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
-		if err := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly); err != nil {
+		if err := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Branches); err != nil {
 			return err // Another conflict - state saved
 		}
 	} else {
@@ -80,18 +80,28 @@ func runContinue(cmd *cobra.Command, args []string) error {
 
 	// If this was a submit operation, continue with push + PR phases
 	if st.Operation == state.OperationSubmit {
-		// Rebuild branches list: current + all that were pending (now completed)
-		currentNode := tree.FindNode(root, st.Current)
-		if currentNode == nil {
-			return fmt.Errorf("branch %q not found in tree", st.Current)
+		// Rebuild branches list from the original set of submit branches if available.
+		// Fall back to the current + pending branches for backward compatibility.
+		var branchNames []string
+		if len(st.Branches) > 0 {
+			branchNames = st.Branches
+		} else {
+			branchNames = append(branchNames, st.Current)
+			branchNames = append(branchNames, st.Pending...)
 		}
 
 		var allBranches []*tree.Node
-		allBranches = append(allBranches, currentNode)
-		for _, name := range st.Pending {
-			if node := tree.FindNode(root, name); node != nil {
-				allBranches = append(allBranches, node)
+		for _, name := range branchNames {
+			node := tree.FindNode(root, name)
+			if node == nil {
+				// Preserve existing behaviour: fail fast if a branch from state
+				// cannot be found in the current tree.
+				if name == st.Current {
+					return fmt.Errorf("branch %q not found in tree", st.Current)
+				}
+				continue
 			}
+			allBranches = append(allBranches, node)
 		}
 
 		return doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly)

@@ -28,6 +28,9 @@ type CascadeState struct {
 	Operation string `json:"operation,omitempty"`
 	// UpdateOnly (submit only) - if true, don't create new PRs, only update existing
 	UpdateOnly bool `json:"update_only,omitempty"`
+	// Branches (submit only) - the complete list of branches being submitted.
+	// Used to rebuild the full set for push/PR phases after cascade completes.
+	Branches []string `json:"branches,omitempty"`
 }
 
 // Save persists cascade state to .git/STACK_CASCADE_STATE.

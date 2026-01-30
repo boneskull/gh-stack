@@ -91,9 +91,15 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		branches = append(branches, tree.GetDescendants(node)...)
 	}
 
+	// Build the complete branch name list for state persistence
+	branchNames := make([]string, len(branches))
+	for i, b := range branches {
+		branchNames[i] = b.Name
+	}
+
 	// Phase 1: Cascade
 	fmt.Println("=== Phase 1: Cascade ===")
-	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag); err != nil {
+	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, branchNames); err != nil {
 		return err // Conflict or error - state saved, user can continue
 	}
 

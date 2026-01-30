@@ -62,6 +62,7 @@ func TestSubmitState(t *testing.T) {
 		OriginalHead: "abc123",
 		Operation:    state.OperationSubmit,
 		UpdateOnly:   true,
+		Branches:     []string{"feature-a", "feature-b", "feature-c"},
 	}
 
 	if err := state.Save(gitDir, s); err != nil {
@@ -78,5 +79,11 @@ func TestSubmitState(t *testing.T) {
 	}
 	if !loaded.UpdateOnly {
 		t.Error("expected UpdateOnly to be true")
+	}
+	if len(loaded.Branches) != 3 {
+		t.Errorf("expected 3 branches, got %d", len(loaded.Branches))
+	}
+	if loaded.Branches[0] != "feature-a" {
+		t.Errorf("expected first branch %q, got %q", "feature-a", loaded.Branches[0])
 	}
 }
