@@ -97,6 +97,12 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Store fork point
+	forkPoint, fpErr := g.GetMergeBase(branchName, parent)
+	if fpErr == nil {
+		_ = cfg.SetForkPoint(branchName, forkPoint) //nolint:errcheck // best effort
+	}
+
 	fmt.Printf("Adopted branch %q with parent %q\n", branchName, parent)
 	return nil
 }

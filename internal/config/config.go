@@ -20,6 +20,9 @@ var ErrBranchNotTracked = errors.New("branch not tracked")
 // ErrNoPR is returned when a branch has no associated PR.
 var ErrNoPR = errors.New("no PR associated with branch")
 
+// ErrNoForkPoint is returned when a branch has no stored fork point.
+var ErrNoForkPoint = errors.New("no fork point stored for branch")
+
 // Config provides access to stack metadata stored in .git/config.
 type Config struct {
 	repoPath string
@@ -92,6 +95,30 @@ func (c *Config) SetPR(branch string, pr int) error {
 func (c *Config) RemovePR(branch string) error {
 	key := "branch." + branch + ".stackPR"
 	// --unset returns error if key doesn't exist, which is fine
+	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run() //nolint:errcheck // unset returns error if key missing
+	return nil
+}
+
+// GetForkPoint returns the stored fork point SHA for a branch.
+// The fork point is where the branch originally diverged from its parent.
+func (c *Config) GetForkPoint(branch string) (string, error) {
+	key := "branch." + branch + ".stackForkPoint"
+	out, err := exec.Command("git", "-C", c.repoPath, "config", "--get", key).Output()
+	if err != nil {
+		return "", ErrNoForkPoint
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SetForkPoint stores the fork point SHA for a branch.
+func (c *Config) SetForkPoint(branch, sha string) error {
+	key := "branch." + branch + ".stackForkPoint"
+	return exec.Command("git", "-C", c.repoPath, "config", key, sha).Run()
+}
+
+// RemoveForkPoint removes the stored fork point for a branch.
+func (c *Config) RemoveForkPoint(branch string) error {
+	key := "branch." + branch + ".stackForkPoint"
 	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run() //nolint:errcheck // unset returns error if key missing
 	return nil
 }

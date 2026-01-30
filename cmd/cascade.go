@@ -119,14 +119,39 @@ func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun boo
 			continue
 		}
 
-		fmt.Printf("Cascading %s onto %s...\n", b.Name, parent)
+		// Check if we should use --onto rebase
+		// This is needed when parent has been rebased/amended since child was created
+		storedForkPoint, fpErr := cfg.GetForkPoint(b.Name)
+		useOnto := false
+
+		if fpErr == nil && g.CommitExists(storedForkPoint) {
+			// We have a valid stored fork point
+			// Use --onto if the stored fork point differs from merge-base
+			currentMergeBase, mbErr := g.GetMergeBase(b.Name, parent)
+			if mbErr == nil && currentMergeBase != storedForkPoint {
+				useOnto = true
+			}
+		}
+
+		if useOnto {
+			fmt.Printf("Cascading %s onto %s (using fork point)...\n", b.Name, parent)
+		} else {
+			fmt.Printf("Cascading %s onto %s...\n", b.Name, parent)
+		}
 
 		// Checkout and rebase
 		if err := g.Checkout(b.Name); err != nil {
 			return err
 		}
 
-		if err := g.Rebase(parent); err != nil {
+		var rebaseErr error
+		if useOnto {
+			rebaseErr = g.RebaseOnto(parent, storedForkPoint, b.Name)
+		} else {
+			rebaseErr = g.Rebase(parent)
+		}
+
+		if rebaseErr != nil {
 			// Rebase conflict - save state
 			remaining := make([]string, 0, len(branches)-i-1)
 			for _, r := range branches[i+1:] {
@@ -146,6 +171,12 @@ func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun boo
 		}
 
 		fmt.Printf("Cascading %s... ok\n", b.Name)
+
+		// Update fork point to current parent tip
+		parentTip, tipErr := g.GetTip(parent)
+		if tipErr == nil {
+			_ = cfg.SetForkPoint(b.Name, parentTip) //nolint:errcheck // best effort
+		}
 	}
 
 	// Return to original branch

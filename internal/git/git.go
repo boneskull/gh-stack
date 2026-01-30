@@ -172,6 +172,24 @@ func (g *Git) Rebase(onto string) error {
 	return g.runInteractive("rebase", onto)
 }
 
+// CommitExists checks if a commit SHA exists in the repository.
+func (g *Git) CommitExists(sha string) bool {
+	err := g.runSilent("cat-file", "-e", sha+"^{commit}")
+	return err == nil
+}
+
+// RebaseOnto rebases a branch onto a new base, replaying only commits after oldBase.
+// Checks out the branch first, then runs: git rebase --onto <newBase> <oldBase>
+// Useful when a parent branch was squash-merged and we need to replay only
+// the commits unique to the child branch.
+func (g *Git) RebaseOnto(newBase, oldBase, branch string) error {
+	// Checkout the branch to rebase (git rebase operates on HEAD)
+	if err := g.Checkout(branch); err != nil {
+		return err
+	}
+	return g.runInteractive("rebase", "--onto", newBase, oldBase)
+}
+
 // RebaseContinue continues an in-progress rebase.
 func (g *Git) RebaseContinue() error {
 	return g.runInteractive("rebase", "--continue")
