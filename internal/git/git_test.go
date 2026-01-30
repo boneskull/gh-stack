@@ -381,7 +381,13 @@ func TestRebaseOnto(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
 
-	// Create initial commit on main
+	// Determine the trunk branch name (may be "main" or "master" depending on system)
+	trunk, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch failed: %v", err)
+	}
+
+	// Create initial commit on trunk
 	os.WriteFile(filepath.Join(dir, "file.txt"), []byte("initial"), 0644)
 	exec.Command("git", "-C", dir, "add", ".").Run()
 	exec.Command("git", "-C", dir, "commit", "-m", "initial").Run()
@@ -399,25 +405,25 @@ func TestRebaseOnto(t *testing.T) {
 	exec.Command("git", "-C", dir, "add", ".").Run()
 	exec.Command("git", "-C", dir, "commit", "-m", "child commit").Run()
 
-	// Go back to main and add a new commit (simulating trunk moving forward)
-	exec.Command("git", "-C", dir, "checkout", "main").Run()
-	os.WriteFile(filepath.Join(dir, "main2.txt"), []byte("main moved forward"), 0644)
+	// Go back to trunk and add a new commit (simulating trunk moving forward)
+	exec.Command("git", "-C", dir, "checkout", trunk).Run()
+	os.WriteFile(filepath.Join(dir, "trunk2.txt"), []byte("trunk moved forward"), 0644)
 	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "main moved forward").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "trunk moved forward").Run()
 
-	// Now rebase child onto main, using parent tip as the fork point
+	// Now rebase child onto trunk, using parent tip as the fork point
 	// This should only replay "child commit", not "parent commit"
-	err := g.RebaseOnto("main", parentTip, "child")
+	err = g.RebaseOnto(trunk, parentTip, "child")
 	if err != nil {
 		t.Fatalf("RebaseOnto failed: %v", err)
 	}
 
-	// Verify child is now based on main
+	// Verify child is now based on trunk
 	exec.Command("git", "-C", dir, "checkout", "child").Run()
-	mergeBase, _ := g.GetMergeBase("child", "main")
-	mainTip, _ := g.GetTip("main")
-	if mergeBase != mainTip {
-		t.Errorf("child should be based on main tip, got merge-base %s, main tip %s", mergeBase, mainTip)
+	mergeBase, _ := g.GetMergeBase("child", trunk)
+	trunkTip, _ := g.GetTip(trunk)
+	if mergeBase != trunkTip {
+		t.Errorf("child should be based on trunk tip, got merge-base %s, trunk tip %s", mergeBase, trunkTip)
 	}
 
 	// Verify child.txt exists (child's commit was replayed)

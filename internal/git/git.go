@@ -179,11 +179,11 @@ func (g *Git) CommitExists(sha string) bool {
 }
 
 // RebaseOnto rebases a branch onto a new base, replaying only commits after oldBase.
-// This is equivalent to: git rebase --onto <newBase> <oldBase> <branch>
+// Checks out the branch first, then runs: git rebase --onto <newBase> <oldBase>
 // Useful when a parent branch was squash-merged and we need to replay only
 // the commits unique to the child branch.
 func (g *Git) RebaseOnto(newBase, oldBase, branch string) error {
-	// First checkout the branch to rebase
+	// Checkout the branch to rebase (git rebase operates on HEAD)
 	if err := g.Checkout(branch); err != nil {
 		return err
 	}

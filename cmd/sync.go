@@ -226,14 +226,29 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 		// Rebase using --onto if we have a fork point
 		if rt.forkPoint != "" && g.CommitExists(rt.forkPoint) {
-			fmt.Printf("Rebasing %s onto %s (from fork point %s)...\n", rt.childName, trunk, rt.forkPoint[:8])
+			displayForkPoint := rt.forkPoint
+			if len(displayForkPoint) > 8 {
+				displayForkPoint = displayForkPoint[:8]
+			}
+			fmt.Printf("Rebasing %s onto %s (from fork point %s)...\n", rt.childName, trunk, displayForkPoint)
 			if rebaseErr := g.RebaseOnto(trunk, rt.forkPoint, rt.childName); rebaseErr != nil {
 				fmt.Printf("Warning: --onto rebase failed, will try normal cascade: %v\n", rebaseErr)
 				// Don't return error - let cascade try
 			} else {
 				fmt.Printf("Rebased %s successfully\n", rt.childName)
+
+				// Update fork point to new parent tip after successful rebase
+				trunkTip, tipErr := g.GetTip(trunk)
+				if tipErr == nil {
+					_ = cfg.SetForkPoint(rt.childName, trunkTip) //nolint:errcheck // best effort
+				}
 			}
 		}
+	}
+
+	// Return to original branch after retargeting
+	if !syncDryRunFlag && currentBranch != "" {
+		_ = g.Checkout(currentBranch) //nolint:errcheck // best effort
 	}
 
 	// Cascade all (if not disabled)
