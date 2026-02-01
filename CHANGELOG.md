@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.1.0-rc.3](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-02-01)
+
+
+### Features
+
+* **cmd:** add submit command for unified cascade, push, and PR workflow ([#11](https://github.com/boneskull/gh-stack/issues/11)) ([5d18fad](https://github.com/boneskull/gh-stack/commit/5d18fad87bfc77d7172c28111f8d16ebe7d89539))
+* **cmd:** improve adopt command ergonomics ([#8](https://github.com/boneskull/gh-stack/issues/8)) ([10a604e](https://github.com/boneskull/gh-stack/commit/10a604e48b49af37fd11afd8a3ac13c6e06e8f79))
+* handle squash-merged parent PRs with --onto rebase ([#10](https://github.com/boneskull/gh-stack/issues/10)) ([85a9cc5](https://github.com/boneskull/gh-stack/commit/85a9cc5ad18c13d578dd0183fb7bee4c2c4e8f28))
+
+
+### Bug Fixes
+
+* log display for first-level children ([c7cba03](https://github.com/boneskull/gh-stack/commit/c7cba03f62fed1949642989185687bbc85460a42))
+
+
+### Miscellaneous Chores
+
+* set next release to 0.1.0-rc.3 ([4ddf92d](https://github.com/boneskull/gh-stack/commit/4ddf92d2b52661c2d1d316db73936cce9b9ed895))
+
 ## [0.1.0-rc.2](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.1...v0.1.0-rc.2) (2026-01-27)
 
 
