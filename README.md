@@ -73,29 +73,29 @@ main
 
 #### Scenario 1: Changes in a local stacked branch
 
-Say we've made changes in `feature-auth`.  To keep the stack in sync, we will need to rebase `feature-auth-tests` onto `feature-auth`.  From branch `feature-auth`, execute:
+Say we've made changes in `feature-auth`. To keep the stack in sync, we will need to rebase `feature-auth-tests` onto `feature-auth`. From branch `feature-auth`, execute:
 
 ```bash
 gh stack cascade
 ```
 
-If you run into conflicts, resolve them and run `gh stack continue` to resume the cascade (or `gh stack abort` to cancel).  Once complete, your local stacks will be in sync. _They won't yet be pushed to the remote repository._
+If you run into conflicts, resolve them and run `gh stack continue` to resume the cascade (or `gh stack abort` to cancel). Once complete, your local stacks will be in sync. _They won't yet be pushed to the remote repository._
 
 #### Scenario 2: Changes in the local trunk
 
-Maybe we pulled down `main` and it has new commits.  We'll use the same strategy as above, but this time from the `main` branch:
+Maybe we pulled down `main` and it has new commits. We'll use the same strategy as above, but this time from the `main` branch:
 
 ```bash
 gh stack cascade
 ```
 
-> ![NOTE]
+> [!NOTE]
 >
 > Since `main` (the trunk) is the parent of every stack, `gh stack cascade` will naturally cascade _all_ stacks.
 
 #### Scenario 3: Upstream changes
 
-Say `feature-auth` has been merged into the remote `main`.  We now need to cascade the changes, but also retarget `feature-auth-tests` to `main` from `feature-auth`.  You'll want to run:
+Say `feature-auth` has been merged into the remote `main`. We now need to cascade the changes, but also retarget `feature-auth-tests` to `main` from `feature-auth`. You'll want to run:
 
 ```bash
 gh stack sync
@@ -122,26 +122,26 @@ gh stack submit
 
 Whenever you need to push these branches again, or update the PRs, you can run `gh stack submit` again.
 
-> ![TIP]
+> [!TIP]
 >
-> `gh stack submit` does everything `gh stack cascade` does, and then some.  Generally, if you want to make local mid-stack changes _without_ pushing to the remote, you'll want `gh stack cascade`; otherwise just use `gh stack submit`.
+> `gh stack submit` does everything `gh stack cascade` does, and then some. Generally, if you want to make local mid-stack changes _without_ pushing to the remote, you'll want `gh stack cascade`; otherwise just use `gh stack submit`.
 
 ## Commands
 
-| Command    | Description                                           |
-| ---------- | ----------------------------------------------------- |
-| `init`     | Initialize stack tracking with trunk branch           |
-| `log`      | Display branch tree                                   |
-| `create`   | Create new branch stacked on current                  |
-| `adopt`    | Start tracking an existing branch                     |
-| `orphan`   | Stop tracking a branch                                |
-| `link`     | Associate PR number with branch                       |
-| `unlink`   | Remove PR association                                 |
-| `submit`   | Cascade, push, and create/update PRs in one command   |
-| `cascade`  | Rebase branch and descendants onto parents            |
-| `continue` | Resume operation after conflict resolution            |
-| `abort`    | Cancel in-progress operation                          |
-| `sync`     | Full sync: fetch, cleanup merged PRs, cascade all     |
+| Command    | Description                                         |
+| ---------- | --------------------------------------------------- |
+| `init`     | Initialize stack tracking with trunk branch         |
+| `log`      | Display branch tree                                 |
+| `create`   | Create new branch stacked on current                |
+| `adopt`    | Start tracking an existing branch                   |
+| `orphan`   | Stop tracking a branch                              |
+| `link`     | Associate PR number with branch                     |
+| `unlink`   | Remove PR association                               |
+| `submit`   | Cascade, push, and create/update PRs in one command |
+| `cascade`  | Rebase branch and descendants onto parents          |
+| `continue` | Resume operation after conflict resolution          |
+| `abort`    | Cancel in-progress operation                        |
+| `sync`     | Full sync: fetch, cleanup merged PRs, cascade all   |
 
 ## Command Reference
 
@@ -153,8 +153,8 @@ By default, `init` auto-detects the trunk branch (`main` or `master`). If neithe
 
 #### init Flags
 
-| Flag      | Description                                        |
-| --------- | -------------------------------------------------- |
+| Flag      | Description                                          |
+| --------- | ---------------------------------------------------- |
 | `--trunk` | Trunk branch name (default: auto-detect main/master) |
 
 ### log
@@ -163,10 +163,10 @@ Display the branch tree showing the stack hierarchy, current branch, and associa
 
 #### log Flags
 
-| Flag          | Description                                         |
-| ------------- | --------------------------------------------------- |
-| `--all`       | Show all branches                                   |
-| `--porcelain` | Machine-readable tab-separated output               |
+| Flag          | Description                           |
+| ------------- | ------------------------------------- |
+| `--all`       | Show all branches                     |
+| `--porcelain` | Machine-readable tab-separated output |
 
 #### Porcelain Format
 
@@ -190,10 +190,10 @@ gh stack create <name>
 
 #### create Flags
 
-| Flag             | Description                                    |
-| ---------------- | ---------------------------------------------- |
-| `-m, --message`  | Commit message for staged changes              |
-| `--empty`        | Create branch without committing staged changes |
+| Flag            | Description                                     |
+| --------------- | ----------------------------------------------- |
+| `-m, --message` | Commit message for staged changes               |
+| `--empty`       | Create branch without committing staged changes |
 
 ### adopt
 
@@ -209,8 +209,8 @@ gh stack adopt <parent>
 
 #### adopt Flags
 
-| Flag       | Description                              |
-| ---------- | ---------------------------------------- |
+| Flag       | Description                               |
+| ---------- | ----------------------------------------- |
 | `--branch` | Branch to adopt (default: current branch) |
 
 ### orphan
@@ -229,9 +229,9 @@ If no branch is specified, orphans the current branch.
 
 #### orphan Flags
 
-| Flag      | Description                  |
-| --------- | ---------------------------- |
-| `--force` | Also orphan all descendants  |
+| Flag      | Description                 |
+| --------- | --------------------------- |
+| `--force` | Also orphan all descendants |
 
 ### link
 
@@ -267,11 +267,11 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### submit Flags
 
-| Flag             | Description                                      |
-| ---------------- | ------------------------------------------------ |
-| `--dry-run`      | Show what would happen without doing it          |
-| `--current-only` | Only submit the current branch, not descendants  |
-| `--update-only`  | Only update existing PRs, don't create new ones  |
+| Flag             | Description                                     |
+| ---------------- | ----------------------------------------------- |
+| `--dry-run`      | Show what would happen without doing it         |
+| `--current-only` | Only submit the current branch, not descendants |
+| `--update-only`  | Only update existing PRs, don't create new ones |
 
 ### cascade
 
@@ -283,10 +283,10 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### cascade Flags
 
-| Flag        | Description                                      |
-| ----------- | ------------------------------------------------ |
-| `--only`    | Only cascade current branch, not descendants     |
-| `--dry-run` | Show what would be done                          |
+| Flag        | Description                                  |
+| ----------- | -------------------------------------------- |
+| `--only`    | Only cascade current branch, not descendants |
+| `--dry-run` | Show what would be done                      |
 
 ### continue
 
@@ -308,10 +308,10 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 
 #### sync Flags
 
-| Flag           | Description                 |
-| -------------- | --------------------------- |
-| `--no-cascade` | Skip cascading branches     |
-| `--dry-run`    | Show what would be done     |
+| Flag           | Description             |
+| -------------- | ----------------------- |
+| `--no-cascade` | Skip cascading branches |
+| `--dry-run`    | Show what would be done |
 
 ## How It Works
 
