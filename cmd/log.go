@@ -55,53 +55,16 @@ func runLog(cmd *cobra.Command, args []string) error {
 	if logPorcelainFlag {
 		printPorcelain(root, currentBranch, gh)
 	} else {
-		printTree(root, "", true, currentBranch, gh)
+		opts := tree.FormatOptions{
+			CurrentBranch: currentBranch,
+		}
+		if gh != nil {
+			opts.PRURLFunc = gh.PRURL
+		}
+		fmt.Print(tree.FormatTree(root, opts))
 	}
 
 	return nil
-}
-
-func printTree(node *tree.Node, prefix string, isLast bool, current string, gh *github.Client) {
-	// Determine the branch indicator
-	connector := "├── "
-	if isLast {
-		connector = "└── "
-	}
-	if prefix == "" {
-		connector = ""
-	}
-
-	// Build the line
-	marker := ""
-	if node.Name == current {
-		marker = "* "
-	}
-
-	prInfo := ""
-	if node.PR > 0 {
-		if gh != nil {
-			prInfo = fmt.Sprintf(" (#%d) %s", node.PR, gh.PRURL(node.PR))
-		} else {
-			prInfo = fmt.Sprintf(" (#%d)", node.PR)
-		}
-	}
-
-	fmt.Printf("%s%s%s%s%s\n", prefix, connector, marker, node.Name, prInfo)
-
-	// Prepare prefix for children
-	childPrefix := prefix
-	if prefix != "" {
-		if isLast {
-			childPrefix += "    "
-		} else {
-			childPrefix += "│   "
-		}
-	}
-
-	for i, child := range node.Children {
-		isLastChild := i == len(node.Children)-1
-		printTree(child, childPrefix, isLastChild, current, gh)
-	}
 }
 
 // printPorcelain outputs machine-readable tab-separated format:

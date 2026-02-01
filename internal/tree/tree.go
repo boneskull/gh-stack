@@ -2,7 +2,9 @@
 package tree
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/boneskull/gh-stack/internal/config"
 )
@@ -101,4 +103,70 @@ func GetDescendants(node *Node) []*Node {
 		descendants = append(descendants, GetDescendants(child)...)
 	}
 	return descendants
+}
+
+// FormatOptions configures tree formatting.
+type FormatOptions struct {
+	// CurrentBranch is marked with "* " prefix
+	CurrentBranch string
+	// PRURLFunc returns the URL for a PR number (optional)
+	PRURLFunc func(pr int) string
+}
+
+// FormatTree returns a string representation of the tree with box-drawing characters.
+func FormatTree(root *Node, opts FormatOptions) string {
+	var sb strings.Builder
+	formatNode(&sb, root, "", true, opts)
+	return sb.String()
+}
+
+func formatNode(sb *strings.Builder, node *Node, prefix string, isLast bool, opts FormatOptions) {
+	// Determine the branch connector
+	connector := "├── "
+	if isLast {
+		connector = "└── "
+	}
+	// Root node (no parent) gets no connector
+	if node.Parent == nil {
+		connector = ""
+	}
+
+	// Current branch marker
+	marker := ""
+	if node.Name == opts.CurrentBranch {
+		marker = "* "
+	}
+
+	// PR info
+	prInfo := ""
+	if node.PR > 0 {
+		if opts.PRURLFunc != nil {
+			prInfo = fmt.Sprintf(" (#%d) %s", node.PR, opts.PRURLFunc(node.PR))
+		} else {
+			prInfo = fmt.Sprintf(" (#%d)", node.PR)
+		}
+	}
+
+	sb.WriteString(prefix)
+	sb.WriteString(connector)
+	sb.WriteString(marker)
+	sb.WriteString(node.Name)
+	sb.WriteString(prInfo)
+	sb.WriteString("\n")
+
+	// Prepare prefix for children
+	childPrefix := prefix
+	// Only add indentation if we're not at the root
+	if node.Parent != nil {
+		if isLast {
+			childPrefix += "    "
+		} else {
+			childPrefix += "│   "
+		}
+	}
+
+	for i, child := range node.Children {
+		isLastChild := i == len(node.Children)-1
+		formatNode(sb, child, childPrefix, isLastChild, opts)
+	}
 }

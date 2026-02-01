@@ -134,3 +134,139 @@ func TestGetDescendantsEmpty(t *testing.T) {
 		t.Errorf("expected 0 descendants for leaf node, got %d", len(descendants))
 	}
 }
+
+func TestFormatTree(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(*config.Config)
+		current  string
+		prURL    func(int) string
+		expected string
+	}{
+		{
+			name: "single branch",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+			},
+			expected: "main\n└── feature-a\n",
+		},
+		{
+			name: "linear stack",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+				cfg.SetParent("feature-b", "feature-a")
+			},
+			expected: "main\n└── feature-a\n    └── feature-b\n",
+		},
+		{
+			name: "branching stack",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+				cfg.SetParent("feature-b", "main")
+			},
+			expected: "main\n├── feature-a\n└── feature-b\n",
+		},
+		{
+			name: "complex tree",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+				cfg.SetParent("feature-b", "main")
+				cfg.SetParent("feature-a-sub", "feature-a")
+			},
+			expected: "main\n├── feature-a\n│   └── feature-a-sub\n└── feature-b\n",
+		},
+		{
+			name: "current branch marker",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+			},
+			current:  "feature-a",
+			expected: "main\n└── * feature-a\n",
+		},
+		{
+			name: "current branch is trunk",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+			},
+			current:  "main",
+			expected: "* main\n└── feature-a\n",
+		},
+		{
+			name: "with PR number",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+				cfg.SetPR("feature-a", 42)
+			},
+			expected: "main\n└── feature-a (#42)\n",
+		},
+		{
+			name: "with PR URL",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+				cfg.SetPR("feature-a", 42)
+			},
+			prURL: func(pr int) string {
+				return "https://github.com/owner/repo/pull/42"
+			},
+			expected: "main\n└── feature-a (#42) https://github.com/owner/repo/pull/42\n",
+		},
+		{
+			name: "trunk only",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+			},
+			expected: "main\n",
+		},
+		{
+			name: "deep nesting",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("a", "main")
+				cfg.SetParent("b", "a")
+				cfg.SetParent("c", "b")
+			},
+			expected: "main\n└── a\n    └── b\n        └── c\n",
+		},
+		{
+			name: "mixed siblings and children",
+			setup: func(cfg *config.Config) {
+				cfg.SetTrunk("main")
+				cfg.SetParent("feature-a", "main")
+				cfg.SetParent("feature-b", "main")
+				cfg.SetParent("feature-a1", "feature-a")
+				cfg.SetParent("feature-a2", "feature-a")
+			},
+			expected: "main\n├── feature-a\n│   ├── feature-a1\n│   └── feature-a2\n└── feature-b\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, _ := setupTestRepo(t)
+			tt.setup(cfg)
+
+			root, err := tree.Build(cfg)
+			if err != nil {
+				t.Fatalf("Build failed: %v", err)
+			}
+
+			opts := tree.FormatOptions{
+				CurrentBranch: tt.current,
+				PRURLFunc:     tt.prURL,
+			}
+
+			got := tree.FormatTree(root, opts)
+			if got != tt.expected {
+				t.Errorf("FormatTree mismatch:\ngot:\n%s\nexpected:\n%s", got, tt.expected)
+			}
+		})
+	}
+}
