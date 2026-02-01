@@ -29,34 +29,35 @@ Requires [GitHub CLI][] (`gh`) installed and authenticated.
 gh extension install boneskull/gh-stack
 ```
 
-## Usage
+## Quick Start
 
-### Initialize a Repository
+### Initialize Your Repository
+
+Check out your "trunk" branch (typically `main` or `master`), then initialize stack tracking:
 
 ```bash
 gh stack init
 ```
 
-This sets your current branch (typically `main`) as the trunk.
-
 ### Create a Stacked Branch
+
+Create a new stacked branch named `feature-auth`:
 
 ```bash
 gh stack create feature-auth
 ```
 
-Creates `feature-auth` branched from your current position and tracks it as a child.
+### Create Another Stacked Branch
 
-> ![TIP]
->
-> `gh stack create` is sugar for this:
->
-> ```bash
-> git checkout -b feature-auth
-> gh stack adopt feature-auth
-> ```
+From the `feature-auth` branch, create a new stacked branch named `feature-auth-tests`:
+
+```bash
+gh stack create feature-auth-tests
+```
 
 ### View Your Stack
+
+From the `feature-auth-tests` branch, let's see an overview of the stack:
 
 ```bash
 gh stack log
@@ -65,76 +66,65 @@ gh stack log
 ```text
 main
 └── feature-auth
-    └── feature-auth-tests
+    └── * feature-auth-tests
 ```
 
-### Rebase After Parent Changes
+### Keep a Local Stack In Sync
+
+#### Scenario 1: Changes in a local stacked branch
+
+Say we've made changes in `feature-auth`.  To keep the stack in sync, we will need to rebase `feature-auth-tests` onto `feature-auth`.  From branch `feature-auth`, execute:
 
 ```bash
 gh stack cascade
 ```
 
-Rebases the current branch onto its parent, then cascades to all descendants. If conflicts occur:
+If you run into conflicts, resolve them and run `gh stack continue` to resume the cascade (or `gh stack abort` to cancel).  Once complete, your local stacks will be in sync. _They won't yet be pushed to the remote repository._
+
+#### Scenario 2: Changes in the local trunk
+
+Maybe we pulled down `main` and it has new commits.  We'll use the same strategy as above, but this time from the `main` branch:
 
 ```bash
-# Resolve conflicts, then:
-gh stack continue
-
-# Or abort:
-gh stack abort
+gh stack cascade
 ```
 
-### Submit Your Stack
+> ![NOTE]
+>
+> Since `main` (the trunk) is the parent of every stack, `gh stack cascade` will naturally cascade _all_ stacks.
 
-```bash
-gh stack submit
-```
+#### Scenario 3: Upstream changes
 
-The all-in-one command for getting your work onto GitHub. Submit:
-
-1. **Cascades** the current branch and its descendants onto their parents
-2. **Pushes** all affected branches with `--force-with-lease`
-3. **Creates/updates PRs** for each branch (creates as draft if mid-stack)
-
-This is typically what you run after making changes:
-
-```bash
-# Make some changes
-git add . && git commit -m "fix: address review feedback"
-
-# Ship it
-gh stack submit
-```
-
-#### Flags
-
-| Flag             | Description                                      |
-| ---------------- | ------------------------------------------------ |
-| `--dry-run`      | Show what would happen without doing it          |
-| `--current-only` | Only submit the current branch, not descendants  |
-| `--update-only`  | Only update existing PRs, don't create new ones  |
-
-#### Conflict Resolution
-
-If a rebase conflict occurs during submit:
-
-```bash
-# Resolve the conflicts, then:
-gh stack continue
-
-# Or abort:
-gh stack abort
-```
-
-After continuing, submit resumes with push and PR phases.
-
-### Sync Everything
+Say `feature-auth` has been merged into the remote `main`.  We now need to cascade the changes, but also retarget `feature-auth-tests` to `main` from `feature-auth`.  You'll want to run:
 
 ```bash
 gh stack sync
 ```
 
-Fetches from origin, fast-forwards trunk, detects merged PRs, cleans up merged branches, retargets orphaned children to trunk, and cascades all branches.
+This will:
+
+1. Fetch from origin
+2. Fast-forward the trunk
+3. Detect merged PRs
+4. Clean up merged branches
+5. Retarget orphaned children to trunk
+6. Cascade all branches
+
+What it _won't_ do is push back up to the remote; see the [next section](#creating--updating-prs) for that.
+
+### Creating & Updating PRs
+
+To create PRs for the `feature-auth` and `feature-auth-tests` branches, execute this from the `feature-auth` branch:
+
+```bash
+gh stack submit
+```
+
+Whenever you need to push these branches again, or update the PRs, you can run `gh stack submit` again.
+
+> ![TIP]
+>
+> `gh stack submit` does everything `gh stack cascade` does, and then some.  Generally, if you want to make local mid-stack changes _without_ pushing to the remote, you'll want `gh stack cascade`; otherwise just use `gh stack submit`.
 
 ## Commands
 
@@ -152,6 +142,176 @@ Fetches from origin, fast-forwards trunk, detects merged PRs, cleans up merged b
 | `continue` | Resume operation after conflict resolution            |
 | `abort`    | Cancel in-progress operation                          |
 | `sync`     | Full sync: fetch, cleanup merged PRs, cascade all     |
+
+## Command Reference
+
+### init
+
+Initialize stack tracking in the repository. This must be run once before using other commands.
+
+By default, `init` auto-detects the trunk branch (`main` or `master`). If neither exists, you must specify one with `--trunk`.
+
+#### init Flags
+
+| Flag      | Description                                        |
+| --------- | -------------------------------------------------- |
+| `--trunk` | Trunk branch name (default: auto-detect main/master) |
+
+### log
+
+Display the branch tree showing the stack hierarchy, current branch, and associated PR numbers.
+
+#### log Flags
+
+| Flag          | Description                                         |
+| ------------- | --------------------------------------------------- |
+| `--all`       | Show all branches                                   |
+| `--porcelain` | Machine-readable tab-separated output               |
+
+#### Porcelain Format
+
+When using `--porcelain`, output is tab-separated with fields:
+
+```text
+BRANCH    PARENT    PR_NUMBER    IS_CURRENT    PR_URL
+```
+
+### create
+
+Create a new branch stacked on the current branch.
+
+If you have staged changes, you can commit them as part of creating the new branch by providing a commit message with `-m`. To create the branch without committing staged changes, use `--empty`.
+
+#### create Usage
+
+```bash
+gh stack create <name>
+```
+
+#### create Flags
+
+| Flag             | Description                                    |
+| ---------------- | ---------------------------------------------- |
+| `-m, --message`  | Commit message for staged changes              |
+| `--empty`        | Create branch without committing staged changes |
+
+### adopt
+
+Start tracking an existing branch by setting its parent.
+
+By default, adopts the current branch. The parent must be either the trunk or another tracked branch.
+
+#### adopt Usage
+
+```bash
+gh stack adopt <parent>
+```
+
+#### adopt Flags
+
+| Flag       | Description                              |
+| ---------- | ---------------------------------------- |
+| `--branch` | Branch to adopt (default: current branch) |
+
+### orphan
+
+Stop tracking a branch by removing it from the stack tree.
+
+If the branch has children, you must use `--force` to orphan both the branch and all its descendants.
+
+#### orphan Usage
+
+```bash
+gh stack orphan [branch]
+```
+
+If no branch is specified, orphans the current branch.
+
+#### orphan Flags
+
+| Flag      | Description                  |
+| --------- | ---------------------------- |
+| `--force` | Also orphan all descendants  |
+
+### link
+
+Associate an existing GitHub PR number with the current branch.
+
+This is useful when you've created a PR manually (outside of `gh stack submit`) and want gh-stack to track it.
+
+#### link Usage
+
+```bash
+gh stack link <pr-number>
+```
+
+### unlink
+
+Remove the PR association from the current branch.
+
+The PR itself is not affected; this only removes the local tracking.
+
+### submit
+
+Cascade, push, and create/update PRs for current branch and descendants.
+
+This is the primary workflow command. It performs three phases:
+
+1. **Cascade**: Rebase current branch and descendants onto their parents
+2. **Push**: Force-push all affected branches (using `--force-with-lease`)
+3. **PR**: Create PRs for branches without them; update PR bases for existing PRs
+
+PRs targeting non-trunk branches are created as drafts. When a PR's base changes to trunk (after its parent merges), you'll be prompted to mark it ready for review.
+
+If a rebase conflict occurs, resolve it and run `gh stack continue`.
+
+#### submit Flags
+
+| Flag             | Description                                      |
+| ---------------- | ------------------------------------------------ |
+| `--dry-run`      | Show what would happen without doing it          |
+| `--current-only` | Only submit the current branch, not descendants  |
+| `--update-only`  | Only update existing PRs, don't create new ones  |
+
+### cascade
+
+Rebase the current branch and its descendants onto their parents.
+
+Use this when you've made local changes and want to keep your stack in sync without pushing or creating PRs. For a full submit workflow, use `gh stack submit` instead.
+
+If a rebase conflict occurs, resolve it and run `gh stack continue`.
+
+#### cascade Flags
+
+| Flag        | Description                                      |
+| ----------- | ------------------------------------------------ |
+| `--only`    | Only cascade current branch, not descendants     |
+| `--dry-run` | Show what would be done                          |
+
+### continue
+
+Continue a cascade or submit operation after resolving rebase conflicts.
+
+After resolving conflicts and staging the changes, run this command to resume the operation.
+
+### abort
+
+Abort a cascade or submit operation in progress.
+
+This aborts any in-progress rebase and cleans up the operation state. Your branches will be left in their pre-operation state.
+
+### sync
+
+Full sync: fetch from origin, detect merged PRs, clean up merged branches, retarget orphaned children, and cascade all branches.
+
+This is the command to run when upstream changes have occurred (e.g., a PR in your stack was merged). It handles the bookkeeping of updating your local stack to match remote state.
+
+#### sync Flags
+
+| Flag           | Description                 |
+| -------------- | --------------------------- |
+| `--no-cascade` | Skip cascading branches     |
+| `--dry-run`    | Show what would be done     |
 
 ## How It Works
 
