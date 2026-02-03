@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/boneskull/gh-stack/compare/v0.1.1...v0.1.2) (2026-02-03)
+
+
+### Miscellaneous Chores
+
+* re-enable attestations; disable release immutability ([532a906](https://github.com/boneskull/gh-stack/commit/532a9066c3a51b04eeb1443d3d5214af41c40aa6))
+
 ## [0.1.1](https://github.com/boneskull/gh-stack/compare/v0.1.0...v0.1.1) (2026-02-03)
 
 
