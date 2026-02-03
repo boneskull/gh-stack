@@ -8,13 +8,22 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/cli/go-gh/v2/pkg/term"
 	"github.com/cli/safeexec"
-	"github.com/mattn/go-isatty"
 )
 
-// IsInteractive returns true if stdin is connected to a terminal.
+// termState caches terminal state for the session.
+var termState term.Term
+
+func init() {
+	termState = term.FromEnv()
+}
+
+// IsInteractive returns true if stdout is connected to a terminal.
+// Respects GH_FORCE_TTY, NO_COLOR, CLICOLOR, and CLICOLOR_FORCE environment variables
+// for consistency with the gh CLI.
 func IsInteractive() bool {
-	return isatty.IsTerminal(os.Stdin.Fd()) || isatty.IsCygwinTerminal(os.Stdin.Fd())
+	return termState.IsTerminalOutput()
 }
 
 // Input prompts the user for a single line of input with a default value.
