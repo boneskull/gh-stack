@@ -142,13 +142,26 @@ func EditInEditor(text string) (string, error) {
 		return "", fmt.Errorf("failed to read edited file: %w", err)
 	}
 
-	return string(edited), nil
+	// Normalize line endings and trim trailing whitespace
+	result := strings.ReplaceAll(string(edited), "\r\n", "\n")
+	result = strings.TrimRight(result, "\n\t ")
+
+	return result, nil
 }
 
 // Select prompts the user to choose from a list of options.
 // Returns the index of the selected option (0-based).
 // If stdin is not a TTY, returns the defaultIndex.
 func Select(prompt string, options []string, defaultIndex int) (int, error) {
+	if len(options) == 0 {
+		return 0, fmt.Errorf("no options provided")
+	}
+
+	// Clamp defaultIndex to valid range
+	if defaultIndex < 0 || defaultIndex >= len(options) {
+		defaultIndex = 0
+	}
+
 	if !IsInteractive() {
 		return defaultIndex, nil
 	}
