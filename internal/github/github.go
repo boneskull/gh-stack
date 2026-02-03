@@ -359,15 +359,10 @@ func (c *Client) UpdateComment(commentID int, body string) error {
 	return nil
 }
 
-// CreateSubmitPR creates a new pull request with an auto-generated title from the branch name.
-// This is a convenience method for the submit workflow. If draft is true, creates a draft PR.
+// CreateSubmitPR creates a new pull request.
+// This is the primary method for the submit workflow. If draft is true, creates a draft PR.
 // The body parameter is used as the PR description; pass an empty string for no description.
-func (c *Client) CreateSubmitPR(head, base, body string, draft bool) (*PR, error) {
-	// Generate title from branch name (replace - and _ with spaces, title case)
-	title := strings.ReplaceAll(head, "-", " ")
-	title = strings.ReplaceAll(title, "_", " ")
-	title = toTitleCase(title)
-
+func (c *Client) CreateSubmitPR(head, base, title, body string, draft bool) (*PR, error) {
 	path := fmt.Sprintf("repos/%s/%s/pulls", c.owner, c.repo)
 
 	request := struct {
@@ -396,17 +391,6 @@ func (c *Client) CreateSubmitPR(head, base, body string, draft bool) (*PR, error
 	}
 
 	return &response, nil
-}
-
-// toTitleCase converts a string to title case (first letter of each word capitalized).
-func toTitleCase(s string) string {
-	words := strings.Fields(s)
-	for i, word := range words {
-		if len(word) > 0 {
-			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
-		}
-	}
-	return strings.Join(words, " ")
 }
 
 // FindPRByHead finds an open PR with the given head branch.
