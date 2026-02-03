@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/boneskull/gh-stack/compare/v0.1.0...v0.1.1) (2026-02-03)
+
+
+### Miscellaneous Chores
+
+* give up on attestations ([1c8320a](https://github.com/boneskull/gh-stack/commit/1c8320a793c30c059250d42427e77e7592a0efc3))
+
 ## [0.1.0](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.4...v0.1.0) (2026-02-03)
 
 
