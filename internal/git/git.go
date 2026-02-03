@@ -178,6 +178,47 @@ func (g *Git) CommitExists(sha string) bool {
 	return err == nil
 }
 
+// HasUnmergedCommits returns true if the branch has commits not yet in upstream.
+// Uses git cherry to detect by diff content, which works for cherry-picks
+// where the commit SHAs differ but the content is the same.
+// Note: This does NOT detect squash merges where multiple commits are combined.
+// Use IsContentMerged for squash merge detection.
+func (g *Git) HasUnmergedCommits(branch, upstream string) (bool, error) {
+	// git cherry -v upstream branch
+	// Returns lines prefixed with + (unmerged) or - (merged/equivalent)
+	out, err := g.run("cherry", "-v", upstream, branch)
+	if err != nil {
+		return false, err
+	}
+
+	// Empty output means no commits unique to branch
+	if out == "" {
+		return false, nil
+	}
+
+	// If any line starts with +, there are unmerged commits
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "+ ") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// IsContentMerged returns true if the branch has no content differences from upstream.
+// This detects squash merges where the tree content is identical even though
+// the commit history differs. Returns true if `git diff upstream branch` is empty.
+func (g *Git) IsContentMerged(branch, upstream string) (bool, error) {
+	// git diff upstream branch --quiet exits 0 if no diff, 1 if diff exists
+	err := g.runSilent("diff", "--quiet", upstream, branch)
+	if err != nil {
+		// Exit code 1 means there are differences
+		return false, nil
+	}
+	// Exit code 0 means no differences - content is merged
+	return true, nil
+}
+
 // RebaseOnto rebases a branch onto a new base, replaying only commits after oldBase.
 // Checks out the branch first, then runs: git rebase --onto <newBase> <oldBase>
 // Useful when a parent branch was squash-merged and we need to replay only
@@ -257,8 +298,7 @@ func (g *Git) GetCommits(base, head string) ([]Commit, error) {
 
 	var commits []Commit
 	// Split by double null (between commits)
-	entries := strings.Split(out, "\x00\x00")
-	for _, entry := range entries {
+	for entry := range strings.SplitSeq(out, "\x00\x00") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue
