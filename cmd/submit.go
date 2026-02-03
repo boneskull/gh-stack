@@ -41,7 +41,7 @@ func init() {
 	submitCmd.Flags().BoolVar(&submitDryRunFlag, "dry-run", false, "show what would be done without doing it")
 	submitCmd.Flags().BoolVar(&submitCurrentOnlyFlag, "current-only", false, "only submit current branch, not descendants")
 	submitCmd.Flags().BoolVar(&submitUpdateOnlyFlag, "update-only", false, "only update existing PRs, don't create new ones")
-	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts, use generated title/body")
+	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts and use auto-generated title/description for PRs")
 	rootCmd.AddCommand(submitCmd)
 }
 
@@ -187,8 +187,7 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 				if err != nil {
 					fmt.Printf("Warning: failed to create PR for %s: %v\n", b.Name, err)
 				} else if adopted {
-					// adoptExistingPR already printed the message
-					fmt.Printf("  %s\n", ghClient.PRURL(prNum))
+					fmt.Printf("Adopted PR #%d for %s (%s)\n", prNum, b.Name, ghClient.PRURL(prNum))
 				} else {
 					fmt.Printf("Created PR #%d for %s (%s)\n", prNum, b.Name, ghClient.PRURL(prNum))
 				}
@@ -285,12 +284,16 @@ func promptForPRDetails(branch, defaultTitle, defaultBody string) (title, body s
 		return defaultTitle, defaultBody, nil
 	}
 
-	fmt.Printf("\n--- Creating PR for %s ---\n", branch)
+	fmt.Printf("\n--- Creating PR for %s (use --yes to skip prompts) ---\n", branch)
 
 	// Prompt for title
 	title, err = prompt.Input("PR title", defaultTitle)
 	if err != nil {
 		return "", "", err
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return "", "", fmt.Errorf("PR title cannot be empty")
 	}
 
 	// Show the generated body and ask if user wants to edit
@@ -339,8 +342,6 @@ func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Nod
 		return 0, fmt.Errorf("PR creation failed but no existing PR found for branch %q", branch)
 	}
 
-	fmt.Printf("Adopting existing PR #%d for %s... ", existingPR.Number, branch)
-
 	// Store PR number in config
 	if err := cfg.SetPR(branch, existingPR.Number); err != nil {
 		return existingPR.Number, fmt.Errorf("failed to store PR number: %w", err)
@@ -354,16 +355,15 @@ func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Nod
 	// Update PR base to match stack parent
 	if existingPR.Base.Ref != base {
 		if err := ghClient.UpdatePRBase(existingPR.Number, base); err != nil {
-			fmt.Printf("warning: failed to update base: %v\n", err)
+			fmt.Printf("Warning: failed to update base: %v\n", err)
 		}
 	}
 
 	// Add/update stack navigation comment
 	if err := ghClient.GenerateAndPostStackComment(root, branch, trunk, existingPR.Number); err != nil {
-		fmt.Printf("warning: failed to update stack comment: %v\n", err)
+		fmt.Printf("Warning: failed to update stack comment: %v\n", err)
 	}
 
-	fmt.Println("ok")
 	return existingPR.Number, nil
 }
 
