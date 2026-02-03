@@ -2,12 +2,12 @@
 package prompt
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/cli/go-gh/v2/pkg/prompter"
 	"github.com/cli/go-gh/v2/pkg/term"
 	"github.com/cli/safeexec"
 )
@@ -26,66 +26,40 @@ func IsInteractive() bool {
 	return termState.IsTerminalOutput()
 }
 
+// newPrompter creates a prompter instance for interactive input.
+func newPrompter() *prompter.Prompter {
+	return prompter.New(os.Stdin, os.Stdout, os.Stderr)
+}
+
 // Input prompts the user for a single line of input with a default value.
 // If the user enters nothing (just presses Enter), the default is returned.
-// If stdin is not a TTY, the default is returned without prompting.
+// If not in an interactive terminal, the default is returned without prompting.
 func Input(prompt, defaultValue string) (string, error) {
 	if !IsInteractive() {
 		return defaultValue, nil
 	}
 
-	if defaultValue != "" {
-		fmt.Printf("%s [%s]: ", prompt, defaultValue)
-	} else {
-		fmt.Printf("%s: ", prompt)
-	}
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
+	p := newPrompter()
+	result, err := p.Input(prompt, defaultValue)
 	if err != nil {
-		return "", fmt.Errorf("failed to read input: %w", err)
+		return defaultValue, fmt.Errorf("failed to read input: %w", err)
 	}
-
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return defaultValue, nil
-	}
-	return input, nil
+	return result, nil
 }
 
 // Confirm prompts the user for a yes/no confirmation.
-// Returns the defaultValue if stdin is not a TTY.
+// Returns the defaultValue if not in an interactive terminal.
 func Confirm(prompt string, defaultValue bool) (bool, error) {
 	if !IsInteractive() {
 		return defaultValue, nil
 	}
 
-	defaultStr := "y/N"
-	if defaultValue {
-		defaultStr = "Y/n"
-	}
-
-	fmt.Printf("%s [%s]: ", prompt, defaultStr)
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
+	p := newPrompter()
+	result, err := p.Confirm(prompt, defaultValue)
 	if err != nil {
 		return defaultValue, fmt.Errorf("failed to read input: %w", err)
 	}
-
-	input = strings.TrimSpace(strings.ToLower(input))
-	if input == "" {
-		return defaultValue, nil
-	}
-
-	switch input {
-	case "y", "yes":
-		return true, nil
-	case "n", "no":
-		return false, nil
-	default:
-		return defaultValue, nil
-	}
+	return result, nil
 }
 
 // EditInEditor opens the given text in the user's preferred editor and returns
@@ -158,9 +132,9 @@ func EditInEditor(text string) (string, error) {
 	return result, nil
 }
 
-// Select prompts the user to choose from a list of options.
+// Select prompts the user to choose from a list of options using arrow keys.
 // Returns the index of the selected option (0-based).
-// If stdin is not a TTY, returns the defaultIndex.
+// If not in an interactive terminal, returns the defaultIndex.
 func Select(prompt string, options []string, defaultIndex int) (int, error) {
 	if len(options) == 0 {
 		return 0, fmt.Errorf("no options provided")
@@ -175,38 +149,13 @@ func Select(prompt string, options []string, defaultIndex int) (int, error) {
 		return defaultIndex, nil
 	}
 
-	fmt.Println(prompt)
-	for i, opt := range options {
-		marker := "  "
-		if i == defaultIndex {
-			marker = "> "
-		}
-		fmt.Printf("%s%d. %s\n", marker, i+1, opt)
-	}
+	// Convert defaultIndex to default value string for prompter
+	defaultValue := options[defaultIndex]
 
-	fmt.Printf("Choice [%d]: ", defaultIndex+1)
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
+	p := newPrompter()
+	result, err := p.Select(prompt, defaultValue, options)
 	if err != nil {
-		return defaultIndex, fmt.Errorf("failed to read input: %w", err)
+		return defaultIndex, fmt.Errorf("failed to read selection: %w", err)
 	}
-
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return defaultIndex, nil
-	}
-
-	var choice int
-	if _, err := fmt.Sscanf(input, "%d", &choice); err != nil {
-		return defaultIndex, nil
-	}
-
-	// Convert to 0-based index
-	choice--
-	if choice < 0 || choice >= len(options) {
-		return defaultIndex, nil
-	}
-
-	return choice, nil
+	return result, nil
 }
