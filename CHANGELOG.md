@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.0-rc.4](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.3...v0.1.0-rc.4) (2026-02-03)
+
+
+### Features
+
+* **submit:** add interactive PR prompts and adopt existing PRs ([b03322d](https://github.com/boneskull/gh-stack/commit/b03322de694b283727037b37fa04cbcbb109f585))
+* **sync:** detect parent branches missing from remote ([a992648](https://github.com/boneskull/gh-stack/commit/a992648a157e35695a52b66dfbec9a38f2f80495))
+* **sync:** detect squash-merged branches and prompt for cleanup ([93484df](https://github.com/boneskull/gh-stack/commit/93484dfb867e1d7fe97e6e119f35f2e79d90b6bf))
+
+
+### Bug Fixes
+
+* address PR review comments ([2c9ae3f](https://github.com/boneskull/gh-stack/commit/2c9ae3fa4960b7597d43945386798648d373a445))
+* clear macOS extended attributes in gh-install ([99923e8](https://github.com/boneskull/gh-stack/commit/99923e873034c0f4e9d90bc5d1be4f8204f08584))
+* improve error message for untracked branches ([40b00d5](https://github.com/boneskull/gh-stack/commit/40b00d5dddc0c7e1f5623fbaca9c4ece5ef0f575))
+
+
+### Miscellaneous Chores
+
+* set release to v0.1.0-rc.4 ([ee92cc2](https://github.com/boneskull/gh-stack/commit/ee92cc2fe4126c9671e43158c89f6e69e3c8048f))
+
 ## [0.1.0-rc.3](https://github.com/boneskull/gh-stack/compare/v0.1.0-rc.2...v0.1.0-rc.3) (2026-02-01)
 
 
