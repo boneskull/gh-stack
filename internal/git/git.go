@@ -219,6 +219,12 @@ func (g *Git) IsContentMerged(branch, upstream string) (bool, error) {
 	return true, nil
 }
 
+// RemoteBranchExists checks if a branch exists on the remote (origin).
+func (g *Git) RemoteBranchExists(branch string) bool {
+	err := g.runSilent("ls-remote", "--exit-code", "--heads", "origin", branch)
+	return err == nil
+}
+
 // RebaseOnto rebases a branch onto a new base, replaying only commits after oldBase.
 // Checks out the branch first, then runs: git rebase --onto <newBase> <oldBase>
 // Useful when a parent branch was squash-merged and we need to replay only

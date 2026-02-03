@@ -162,6 +162,49 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Check for branches whose parent doesn't exist on the remote
+	// This can happen if a parent branch was deleted without merging, or never pushed
+	for _, branch := range branches {
+		parent, parentErr := cfg.GetParent(branch)
+		if parentErr != nil {
+			continue
+		}
+
+		// Skip if parent is trunk (trunk should always exist on remote)
+		if parent == trunk {
+			continue
+		}
+
+		// Skip if parent is already marked as merged (will be handled)
+		if sliceContains(merged, parent) {
+			continue
+		}
+
+		// Check if parent exists on remote
+		if !g.RemoteBranchExists(parent) {
+			fmt.Printf("\nWarning: parent branch %q of %q does not exist on remote.\n", parent, branch)
+			if prompt.IsInteractive() {
+				retarget, _ := prompt.Confirm(fmt.Sprintf("Retarget %s to %s?", branch, trunk), true) //nolint:errcheck // default is fine
+				if retarget {
+					_ = cfg.SetParent(branch, trunk) //nolint:errcheck // best effort
+					fmt.Printf("Retargeted %s to %s\n", branch, trunk)
+
+					// Update PR base on GitHub if PR exists
+					prNum, _ := cfg.GetPR(branch) //nolint:errcheck // 0 is fine
+					if prNum > 0 {
+						if updateErr := gh.UpdatePRBase(prNum, trunk); updateErr != nil {
+							fmt.Printf("Warning: failed to update PR #%d base: %v\n", prNum, updateErr)
+						} else {
+							fmt.Printf("Updated PR #%d base to %s\n", prNum, trunk)
+						}
+					}
+				}
+			} else {
+				fmt.Printf("Run 'git config branch.%s.stackParent %s' to fix.\n", branch, trunk)
+			}
+		}
+	}
+
 	// Handle merged branches
 	root, _ := tree.Build(cfg) //nolint:errcheck // nil root is fine, FindNode handles it
 
