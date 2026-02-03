@@ -12,6 +12,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/prompt"
 	"github.com/boneskull/gh-stack/internal/state"
 	"github.com/boneskull/gh-stack/internal/tree"
+	"github.com/cli/go-gh/v2/pkg/browser"
 	"github.com/spf13/cobra"
 )
 
@@ -35,6 +36,7 @@ var (
 	submitCurrentOnlyFlag bool
 	submitUpdateOnlyFlag  bool
 	submitYesFlag         bool
+	submitWebFlag         bool
 )
 
 func init() {
@@ -42,6 +44,7 @@ func init() {
 	submitCmd.Flags().BoolVar(&submitCurrentOnlyFlag, "current-only", false, "only submit current branch, not descendants")
 	submitCmd.Flags().BoolVar(&submitUpdateOnlyFlag, "update-only", false, "only update existing PRs, don't create new ones")
 	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts and use auto-generated title/description for PRs")
+	submitCmd.Flags().BoolVarP(&submitWebFlag, "web", "w", false, "open created/updated PRs in web browser")
 	rootCmd.AddCommand(submitCmd)
 }
 
@@ -83,17 +86,33 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	trunk, err := cfg.GetTrunk()
+	if err != nil {
+		return err
+	}
+
 	node := tree.FindNode(root, currentBranch)
 	if node == nil {
-		trunk, _ := cfg.GetTrunk() //nolint:errcheck // empty is fine for error message
 		return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
 	}
 
-	// Collect branches to submit (current + descendants)
+	// Collect branches to submit (current + descendants, but never trunk)
 	var branches []*tree.Node
-	branches = append(branches, node)
-	if !submitCurrentOnlyFlag {
-		branches = append(branches, tree.GetDescendants(node)...)
+	if currentBranch == trunk {
+		// On trunk: only submit descendants, not trunk itself
+		if submitCurrentOnlyFlag {
+			return fmt.Errorf("cannot submit trunk branch %q; switch to a stack branch or remove --current-only", trunk)
+		}
+		branches = tree.GetDescendants(node)
+		if len(branches) == 0 {
+			return fmt.Errorf("no stack branches to submit; trunk %q has no descendants", trunk)
+		}
+	} else {
+		// On a stack branch: submit it and optionally its descendants
+		branches = append(branches, node)
+		if !submitCurrentOnlyFlag {
+			branches = append(branches, tree.GetDescendants(node)...)
+		}
 	}
 
 	// Build the complete branch name list for state persistence
@@ -104,17 +123,17 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Phase 1: Cascade
 	fmt.Println("=== Phase 1: Cascade ===")
-	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, branchNames); err != nil {
+	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames); err != nil {
 		return err // Conflict or error - state saved, user can continue
 	}
 
 	// Phases 2 & 3
-	return doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag)
+	return doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag)
 }
 
 // doSubmitPushAndPR handles push and PR creation/update phases.
 // This is called after cascade succeeds (or from continue after conflict resolution).
-func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly bool) error {
+func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly, openWeb bool) error {
 	// Phase 2: Push all branches
 	fmt.Println("\n=== Phase 2: Push ===")
 	for _, b := range branches {
@@ -131,11 +150,11 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 	}
 
 	// Phase 3: Create/update PRs
-	return doSubmitPRs(g, cfg, root, branches, dryRun, updateOnly)
+	return doSubmitPRs(g, cfg, root, branches, dryRun, updateOnly, openWeb)
 }
 
 // doSubmitPRs handles PR creation/update for all branches.
-func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly bool) error {
+func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly, openWeb bool) error {
 	fmt.Println("\n=== Phase 3: PRs ===")
 
 	trunk, err := cfg.GetTrunk()
@@ -152,6 +171,9 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 			return clientErr
 		}
 	}
+
+	// Collect PR URLs for --web flag
+	var prURLs []string
 
 	for _, b := range branches {
 		parent, _ := cfg.GetParent(b.Name) //nolint:errcheck // empty is fine
@@ -172,6 +194,9 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 					fmt.Printf("Warning: failed to update PR #%d base: %v\n", existingPR, err)
 				} else {
 					fmt.Println("ok")
+					if openWeb {
+						prURLs = append(prURLs, ghClient.PRURL(existingPR))
+					}
 				}
 				// Update stack comment
 				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, existingPR); err != nil {
@@ -188,12 +213,28 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 					fmt.Printf("Warning: failed to create PR for %s: %v\n", b.Name, err)
 				} else if adopted {
 					fmt.Printf("Adopted PR #%d for %s (%s)\n", prNum, b.Name, ghClient.PRURL(prNum))
+					if openWeb {
+						prURLs = append(prURLs, ghClient.PRURL(prNum))
+					}
 				} else {
 					fmt.Printf("Created PR #%d for %s (%s)\n", prNum, b.Name, ghClient.PRURL(prNum))
+					if openWeb {
+						prURLs = append(prURLs, ghClient.PRURL(prNum))
+					}
 				}
 			}
 		} else {
 			fmt.Printf("Skipping %s (no existing PR, --update-only)\n", b.Name)
+		}
+	}
+
+	// Open PRs in browser if requested
+	if openWeb && len(prURLs) > 0 {
+		b := browser.New("", os.Stdout, os.Stderr)
+		for _, url := range prURLs {
+			if err := b.Browse(url); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not open browser for %s: %v\n", url, err)
+			}
 		}
 	}
 

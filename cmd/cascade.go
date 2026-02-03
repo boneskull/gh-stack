@@ -89,12 +89,12 @@ func runCascade(cmd *cobra.Command, args []string) error {
 }
 
 func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool) error {
-	return doCascadeWithState(g, cfg, branches, dryRun, state.OperationCascade, false, nil)
+	return doCascadeWithState(g, cfg, branches, dryRun, state.OperationCascade, false, false, nil)
 }
 
 // doCascadeWithState performs cascade and saves state with the given operation type.
 // allBranches is the complete list of branches for submit operations (used for push/PR after continue).
-func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly bool, allBranches []string) error {
+func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web bool, allBranches []string) error {
 	originalBranch, err := g.CurrentBranch()
 	if err != nil {
 		return err
@@ -171,6 +171,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 				OriginalHead: originalHead,
 				Operation:    operation,
 				UpdateOnly:   updateOnly,
+				Web:          web,
 				Branches:     allBranches,
 			}
 			_ = state.Save(g.GetGitDir(), st) //nolint:errcheck // best effort - user can recover manually

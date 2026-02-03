@@ -185,3 +185,72 @@ func TestSubmitRejectsUntrackedBranch(t *testing.T) {
 		t.Errorf("expected error about untracked branch, got: %s", result.Stderr)
 	}
 }
+
+func TestSubmitFromTrunkWithDescendants(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create a branch off trunk
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	// Go back to trunk
+	env.Git("checkout", "main")
+
+	// Submit from trunk should process only descendants, not trunk itself
+	result := env.MustRun("submit", "--dry-run")
+
+	// Should NOT mention pushing main
+	if strings.Contains(result.Stdout, "Would push main") {
+		t.Error("should not push trunk branch")
+	}
+	// Should NOT mention creating PR for main
+	if strings.Contains(result.Stdout, "Would create PR for main") {
+		t.Error("should not create PR for trunk branch")
+	}
+	// Should mention feature-1
+	if !strings.Contains(result.Stdout, "Would push feature-1") {
+		t.Error("expected feature-1 in push output")
+	}
+	if !strings.Contains(result.Stdout, "Would create PR for feature-1") {
+		t.Error("expected PR creation for feature-1")
+	}
+}
+
+func TestSubmitFromTrunkCurrentOnlyFails(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create a branch so stack is not empty
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	// Go back to trunk
+	env.Git("checkout", "main")
+
+	// Submit --current-only from trunk should fail
+	result := env.Run("submit", "--dry-run", "--current-only")
+
+	if result.Success() {
+		t.Error("expected submit --current-only from trunk to fail")
+	}
+	if !strings.Contains(result.Stderr, "cannot submit trunk") {
+		t.Errorf("expected error about trunk, got: %s", result.Stderr)
+	}
+}
+
+func TestSubmitFromTrunkNoDescendantsFails(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Stay on trunk with no stack branches
+	// Submit should fail - nothing to do
+	result := env.Run("submit", "--dry-run")
+
+	if result.Success() {
+		t.Error("expected submit from trunk with no descendants to fail")
+	}
+	if !strings.Contains(result.Stderr, "no stack branches") {
+		t.Errorf("expected error about no stack branches, got: %s", result.Stderr)
+	}
+}

@@ -70,7 +70,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		// Remove state file before continuing (will be recreated if conflict)
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
-		if err := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Branches); err != nil {
+		if err := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.Branches); err != nil {
 			return err // Another conflict - state saved
 		}
 	} else {
@@ -104,7 +104,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 			allBranches = append(allBranches, node)
 		}
 
-		return doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly)
+		return doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly, st.Web)
 	}
 
 	fmt.Println("Cascade complete!")

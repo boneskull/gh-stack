@@ -4,11 +4,14 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/tree"
+	"github.com/cli/go-gh/v2/pkg/tableprinter"
+	"github.com/cli/go-gh/v2/pkg/term"
 	"github.com/spf13/cobra"
 )
 
@@ -67,34 +70,75 @@ func runLog(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// printPorcelain outputs machine-readable tab-separated format:
-// BRANCH<tab>PARENT<tab>PR_NUMBER<tab>IS_CURRENT<tab>PR_URL
+// printPorcelain outputs stack information in table format.
+// In TTY mode, outputs nicely formatted columns.
+// In non-TTY mode (piped/scripted), outputs tab-separated values.
 //
-// Fields:
-//   - BRANCH: branch name
+// Columns:
+//   - BRANCH: branch name (* prefix for current branch in TTY mode)
 //   - PARENT: parent branch name (empty for trunk)
-//   - PR_NUMBER: associated PR number (0 if none)
-//   - IS_CURRENT: "1" if current branch, "0" otherwise
-//   - PR_URL: full PR URL (empty if no PR or GitHub client unavailable)
+//   - PR: associated PR number (empty if none)
+//   - URL: full PR URL (empty if no PR or GitHub client unavailable)
 func printPorcelain(node *tree.Node, current string, gh *github.Client) {
-	var printNode func(*tree.Node, int)
-	printNode = func(n *tree.Node, depth int) {
-		isCurrent := "0"
-		if n.Name == current {
-			isCurrent = "1"
+	t := term.FromEnv()
+	isTTY := t.IsTerminalOutput()
+
+	var width int
+	if isTTY {
+		w, _, err := t.Size()
+		if err != nil || w <= 0 {
+			width = 80 // reasonable default width for TTY when detection fails
+		} else {
+			width = w
 		}
+	} else {
+		// In non-TTY mode, tableprinter outputs TSV; use a large width to avoid truncation.
+		width = 4096
+	}
+
+	tp := tableprinter.New(os.Stdout, isTTY, width)
+
+	// Add headers in TTY mode
+	if isTTY {
+		tp.AddHeader([]string{"BRANCH", "PARENT", "PR", "URL"})
+	}
+
+	// Collect all nodes in tree order
+	var addNode func(*tree.Node)
+	addNode = func(n *tree.Node) {
+		branchName := n.Name
+		if isTTY && n.Name == current {
+			branchName = "* " + n.Name
+		}
+
 		parent := ""
 		if n.Parent != nil {
 			parent = n.Parent.Name
 		}
+
+		prNum := ""
+		if n.PR > 0 {
+			prNum = strconv.Itoa(n.PR)
+		}
+
 		prURL := ""
 		if n.PR > 0 && gh != nil {
 			prURL = gh.PRURL(n.PR)
 		}
-		fmt.Printf("%s\t%s\t%d\t%s\t%s\n", n.Name, parent, n.PR, isCurrent, prURL)
+
+		tp.AddField(branchName)
+		tp.AddField(parent)
+		tp.AddField(prNum)
+		tp.AddField(prURL)
+		tp.EndRow()
+
 		for _, child := range n.Children {
-			printNode(child, depth+1)
+			addNode(child)
 		}
 	}
-	printNode(node, 0)
+	addNode(node)
+
+	if err := tp.Render(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to render table: %v\n", err)
+	}
 }
