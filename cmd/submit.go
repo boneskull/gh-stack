@@ -86,17 +86,33 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	trunk, err := cfg.GetTrunk()
+	if err != nil {
+		return err
+	}
+
 	node := tree.FindNode(root, currentBranch)
 	if node == nil {
-		trunk, _ := cfg.GetTrunk() //nolint:errcheck // empty is fine for error message
 		return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
 	}
 
-	// Collect branches to submit (current + descendants)
+	// Collect branches to submit (current + descendants, but never trunk)
 	var branches []*tree.Node
-	branches = append(branches, node)
-	if !submitCurrentOnlyFlag {
-		branches = append(branches, tree.GetDescendants(node)...)
+	if currentBranch == trunk {
+		// On trunk: only submit descendants, not trunk itself
+		if submitCurrentOnlyFlag {
+			return fmt.Errorf("cannot submit trunk branch %q; switch to a stack branch or remove --current-only", trunk)
+		}
+		branches = tree.GetDescendants(node)
+		if len(branches) == 0 {
+			return fmt.Errorf("no stack branches to submit; trunk %q has no descendants", trunk)
+		}
+	} else {
+		// On a stack branch: submit it and optionally its descendants
+		branches = append(branches, node)
+		if !submitCurrentOnlyFlag {
+			branches = append(branches, tree.GetDescendants(node)...)
+		}
 	}
 
 	// Build the complete branch name list for state persistence
