@@ -358,7 +358,7 @@ No remote service required. Your stack relationships stay with your repository.
 
 ## Development
 
-To build from source, you'll need Go 1.22+.
+To build from source, you'll need Go 1.25+.
 
 ```bash
 gh repo clone boneskull/gh-stack

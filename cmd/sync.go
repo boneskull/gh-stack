@@ -4,11 +4,11 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/github"
+	"github.com/boneskull/gh-stack/internal/prompt"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
@@ -141,6 +141,27 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Content-based detection for squash merges (fallback when PR detection fails)
+	// Uses git diff to detect when a branch's content is already in trunk
+	for _, branch := range branches {
+		// Skip already detected via PR
+		if sliceContains(merged, branch) {
+			continue
+		}
+
+		// Check if branch content is identical to trunk (squash merge detection)
+		isContentMerged, diffErr := g.IsContentMerged(branch, trunk)
+		if diffErr != nil {
+			// Can't determine, let cascade try
+			continue
+		}
+
+		if isContentMerged {
+			// Tree content is identical - branch was squash-merged
+			merged = append(merged, branch)
+		}
+	}
+
 	// Handle merged branches
 	root, _ := tree.Build(cfg) //nolint:errcheck // nil root is fine, FindNode handles it
 
@@ -156,6 +177,17 @@ func runSync(cmd *cobra.Command, args []string) error {
 		node := tree.FindNode(root, branch)
 		if node == nil {
 			continue
+		}
+
+		// Handle merged branch with interactive prompt
+		if syncDryRunFlag {
+			fmt.Printf("Would handle merged branch %s\n", branch)
+		} else {
+			action := handleMergedBranch(g, cfg, branch, trunk, &currentBranch)
+			if action == mergedActionSkip {
+				// User chose to skip - don't collect fork points or retarget children
+				continue
+			}
 		}
 
 		// For each child, get fork point - prefer stored, fall back to calculated
@@ -177,16 +209,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 				childPR:   childPR,
 			})
 		}
-
-		// Now safe to delete the merged branch
-		if syncDryRunFlag {
-			fmt.Printf("Would delete merged branch %s\n", branch)
-		} else {
-			fmt.Printf("Deleting merged branch %s (PR was merged)\n", branch)
-			_ = cfg.RemoveParent(branch) //nolint:errcheck // best effort cleanup
-			_ = cfg.RemovePR(branch)     //nolint:errcheck // best effort cleanup
-			_ = g.DeleteBranch(branch)   //nolint:errcheck // best effort cleanup
-		}
 	}
 
 	// Retarget children to trunk
@@ -205,20 +227,16 @@ func runSync(cmd *cobra.Command, args []string) error {
 				fmt.Printf("Warning: failed to update PR #%d base: %v\n", rt.childPR, updateErr)
 			}
 
-			// Check if this was a draft and now targets trunk
+			// Check if this was a draft and now targets trunk - offer to publish
 			pr, getPRErr := gh.GetPR(rt.childPR)
 			if getPRErr == nil && pr.Draft {
 				fmt.Printf("PR #%d (%s) now targets %s.\n", rt.childPR, rt.childName, trunk)
-				fmt.Print("Mark as ready for review? [y/N]: ")
-
-				var response string
-				if _, scanErr := fmt.Scanln(&response); scanErr == nil {
-					if strings.ToLower(strings.TrimSpace(response)) == "y" {
-						if readyErr := gh.MarkPRReady(rt.childPR); readyErr != nil {
-							fmt.Printf("Warning: failed to mark PR ready: %v\n", readyErr)
-						} else {
-							fmt.Printf("PR #%d marked as ready for review.\n", rt.childPR)
-						}
+				ready, _ := prompt.Confirm("Mark as ready for review?", true) //nolint:errcheck // default is fine
+				if ready {
+					if readyErr := gh.MarkPRReady(rt.childPR); readyErr != nil {
+						fmt.Printf("Warning: failed to mark PR ready: %v\n", readyErr)
+					} else {
+						fmt.Printf("PR #%d marked as ready for review.\n", rt.childPR)
 					}
 				}
 			}
@@ -280,4 +298,87 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("\nSync complete!")
 	return nil
+}
+
+// sliceContains returns true if slice contains the given string.
+func sliceContains(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// mergedAction represents the user's choice for handling a merged branch.
+type mergedAction int
+
+const (
+	mergedActionDelete mergedAction = iota
+	mergedActionOrphan
+	mergedActionSkip
+)
+
+// handleMergedBranch prompts the user for how to handle a merged branch and executes the choice.
+// Returns the action taken. If the user is on the merged branch, it will checkout trunk first.
+// The currentBranch pointer is updated if a checkout occurs.
+func handleMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string) mergedAction {
+	fmt.Printf("\nBranch %q appears to be merged into %s.\n", branch, trunk)
+
+	// Default to delete in non-interactive mode
+	if !prompt.IsInteractive() {
+		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch)
+	}
+
+	// Interactive mode: prompt for action
+	choice, _ := prompt.Select("What would you like to do?", []string{ //nolint:errcheck // default is fine on error
+		"Delete branch and remove from stack",
+		"Orphan (keep branch, remove from stack)",
+		"Skip (keep in stack, may cause conflicts)",
+	}, 0)
+
+	switch choice {
+	case 0: // Delete
+		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch)
+	case 1: // Orphan
+		return orphanMergedBranch(cfg, branch)
+	case 2: // Skip
+		fmt.Printf("Skipping %s (keeping in stack)\n", branch)
+		return mergedActionSkip
+	default:
+		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch)
+	}
+}
+
+// deleteMergedBranch deletes a merged branch and removes it from stack config.
+// If the user is on the branch, it checks out trunk first.
+func deleteMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string) mergedAction {
+	// If user is on the merged branch, checkout trunk first
+	if *currentBranch == branch {
+		fmt.Printf("Checking out %s (currently on merged branch)...\n", trunk)
+		if err := g.Checkout(trunk); err != nil {
+			fmt.Printf("Warning: could not checkout %s: %v\n", trunk, err)
+			fmt.Printf("Falling back to orphan instead of delete.\n")
+			return orphanMergedBranch(cfg, branch)
+		}
+		*currentBranch = trunk
+	}
+
+	fmt.Printf("Deleting merged branch %s\n", branch)
+	_ = cfg.RemoveParent(branch)    //nolint:errcheck // best effort cleanup
+	_ = cfg.RemovePR(branch)        //nolint:errcheck // best effort cleanup
+	_ = cfg.RemoveForkPoint(branch) //nolint:errcheck // best effort cleanup
+	if err := g.DeleteBranch(branch); err != nil {
+		fmt.Printf("Warning: could not delete branch %s: %v\n", branch, err)
+	}
+	return mergedActionDelete
+}
+
+// orphanMergedBranch removes a branch from stack config but keeps the git branch.
+func orphanMergedBranch(cfg *config.Config, branch string) mergedAction {
+	fmt.Printf("Orphaning %s (branch preserved, removed from stack)\n", branch)
+	_ = cfg.RemoveParent(branch)    //nolint:errcheck // best effort cleanup
+	_ = cfg.RemovePR(branch)        //nolint:errcheck // best effort cleanup
+	_ = cfg.RemoveForkPoint(branch) //nolint:errcheck // best effort cleanup
+	return mergedActionOrphan
 }

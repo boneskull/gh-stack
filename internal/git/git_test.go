@@ -438,3 +438,160 @@ func TestRebaseOnto(t *testing.T) {
 		t.Error("parent.txt should NOT exist - only child's commits should be replayed")
 	}
 }
+
+func TestHasUnmergedCommits(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch with a commit
+	g.CreateAndCheckout("feature")
+	os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("feature content"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "feature commit").Run()
+
+	// Feature should have unmerged commits relative to trunk
+	hasUnmerged, err := g.HasUnmergedCommits("feature", trunk)
+	if err != nil {
+		t.Fatalf("HasUnmergedCommits failed: %v", err)
+	}
+	if !hasUnmerged {
+		t.Error("feature should have unmerged commits")
+	}
+}
+
+func TestHasUnmergedCommitsNone(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch at same commit as trunk (no new commits)
+	g.CreateBranch("feature")
+
+	// Feature should have no unmerged commits
+	hasUnmerged, err := g.HasUnmergedCommits("feature", trunk)
+	if err != nil {
+		t.Fatalf("HasUnmergedCommits failed: %v", err)
+	}
+	if hasUnmerged {
+		t.Error("feature should have no unmerged commits when at same commit as trunk")
+	}
+}
+
+func TestHasUnmergedCommitsSquashMerged(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch with a commit
+	g.CreateAndCheckout("feature")
+	os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("feature content"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "feature commit").Run()
+
+	// Simulate squash merge: go back to trunk and create a commit with the same content
+	g.Checkout(trunk)
+	os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("feature content"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "squash merged: feature commit").Run()
+
+	// Feature should now have no unmerged commits (content is equivalent)
+	hasUnmerged, err := g.HasUnmergedCommits("feature", trunk)
+	if err != nil {
+		t.Fatalf("HasUnmergedCommits failed: %v", err)
+	}
+	if hasUnmerged {
+		t.Error("feature should have no unmerged commits after squash merge (content equivalent)")
+	}
+}
+
+func TestHasUnmergedCommitsPartialMerge(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch with two commits
+	g.CreateAndCheckout("feature")
+
+	os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("content1"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "first commit").Run()
+
+	os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("content2"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "second commit").Run()
+
+	// Simulate partial squash merge: only the first commit's content
+	g.Checkout(trunk)
+	os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("content1"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "squash: first commit").Run()
+
+	// Feature should still have unmerged commits (second commit not merged)
+	hasUnmerged, err := g.HasUnmergedCommits("feature", trunk)
+	if err != nil {
+		t.Fatalf("HasUnmergedCommits failed: %v", err)
+	}
+	if !hasUnmerged {
+		t.Error("feature should have unmerged commits (second commit not merged)")
+	}
+}
+
+func TestIsContentMerged(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch with a commit
+	g.CreateAndCheckout("feature")
+	os.WriteFile(filepath.Join(dir, "feature.txt"), []byte("feature content"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "feature commit").Run()
+
+	// Feature has different content than trunk
+	merged, err := g.IsContentMerged("feature", trunk)
+	if err != nil {
+		t.Fatalf("IsContentMerged failed: %v", err)
+	}
+	if merged {
+		t.Error("feature should not be content-merged (different content)")
+	}
+}
+
+func TestIsContentMergedSquash(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch with multiple commits
+	g.CreateAndCheckout("feature")
+	os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("content1"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "first commit").Run()
+
+	os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("content2"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "second commit").Run()
+
+	// Simulate squash merge: trunk gets all the content in one commit
+	g.Checkout(trunk)
+	os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("content1"), 0644)
+	os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("content2"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "squash: feature").Run()
+
+	// Feature content should now be merged (identical trees)
+	merged, err := g.IsContentMerged("feature", trunk)
+	if err != nil {
+		t.Fatalf("IsContentMerged failed: %v", err)
+	}
+	if !merged {
+		t.Error("feature should be content-merged (identical content after squash)")
+	}
+}
