@@ -85,7 +85,8 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	node := tree.FindNode(root, currentBranch)
 	if node == nil {
-		return fmt.Errorf("branch %q is not tracked", currentBranch)
+		trunk, _ := cfg.GetTrunk() //nolint:errcheck // empty is fine for error message
+		return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
 	}
 
 	// Collect branches to submit (current + descendants)
