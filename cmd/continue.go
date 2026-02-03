@@ -104,7 +104,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 			allBranches = append(allBranches, node)
 		}
 
-		return doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly)
+		return doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly, false)
 	}
 
 	fmt.Println("Cascade complete!")
