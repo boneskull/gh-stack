@@ -595,3 +595,43 @@ func TestIsContentMergedSquash(t *testing.T) {
 		t.Error("feature should be content-merged (identical content after squash)")
 	}
 }
+
+func TestRemoteBranchExists(t *testing.T) {
+	// Create main repo
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create a bare repo as "remote"
+	remoteDir := t.TempDir()
+	exec.Command("git", "clone", "--bare", dir, remoteDir).Run()
+	exec.Command("git", "-C", dir, "remote", "add", "origin", remoteDir).Run()
+	exec.Command("git", "-C", dir, "push", "-u", "origin", trunk).Run()
+
+	// Trunk should exist on remote
+	if !g.RemoteBranchExists(trunk) {
+		t.Errorf("RemoteBranchExists(%s) = false, want true", trunk)
+	}
+
+	// Create a local-only branch (not pushed)
+	g.CreateBranch("local-only")
+
+	// Local-only branch should NOT exist on remote
+	if g.RemoteBranchExists("local-only") {
+		t.Error("RemoteBranchExists(local-only) = true, want false (not pushed)")
+	}
+
+	// Push the branch
+	exec.Command("git", "-C", dir, "push", "origin", "local-only").Run()
+
+	// Now it should exist
+	if !g.RemoteBranchExists("local-only") {
+		t.Error("RemoteBranchExists(local-only) = false, want true (after push)")
+	}
+
+	// Non-existent branch should return false
+	if g.RemoteBranchExists("nonexistent-branch-xyz") {
+		t.Error("RemoteBranchExists(nonexistent) = true, want false")
+	}
+}
