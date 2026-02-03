@@ -11,6 +11,8 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -28,5 +30,6 @@ jobs:
         if: ${{ steps.release.outputs.release_created }}
         uses: cli/gh-extension-precompile@v2
         with:
+          generate_attestations: true
           go_version_file: go.mod
           release_tag: ${{ steps.release.outputs.tag_name }}
