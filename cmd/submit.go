@@ -123,7 +123,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Phase 1: Cascade
 	fmt.Println("=== Phase 1: Cascade ===")
-	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, branchNames); err != nil {
+	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames); err != nil {
 		return err // Conflict or error - state saved, user can continue
 	}
 

@@ -82,9 +82,18 @@ func runLog(cmd *cobra.Command, args []string) error {
 func printPorcelain(node *tree.Node, current string, gh *github.Client) {
 	t := term.FromEnv()
 	isTTY := t.IsTerminalOutput()
-	width, _, err := t.Size()
-	if err != nil || width <= 0 {
-		width = 80 // default width for non-TTY or error
+
+	var width int
+	if isTTY {
+		w, _, err := t.Size()
+		if err != nil || w <= 0 {
+			width = 80 // reasonable default width for TTY when detection fails
+		} else {
+			width = w
+		}
+	} else {
+		// In non-TTY mode, tableprinter outputs TSV; use a large width to avoid truncation.
+		width = 4096
 	}
 
 	tp := tableprinter.New(os.Stdout, isTTY, width)
