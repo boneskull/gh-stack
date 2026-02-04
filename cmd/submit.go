@@ -281,8 +281,8 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 	// Determine if draft (not targeting trunk = middle of stack)
 	draft := base != trunk
 
-	// Generate default title from branch name
-	defaultTitle := generateTitleFromBranch(branch)
+	// Generate default title from first commit message (falls back to branch name)
+	defaultTitle := generateDefaultTitle(g, base, branch)
 
 	// Generate PR body from commits
 	defaultBody, bodyErr := generatePRBody(g, base, branch)
@@ -324,6 +324,18 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 	}
 
 	return pr.Number, false, nil
+}
+
+// generateDefaultTitle creates a PR title from the first commit message.
+// Falls back to branch name if no commits are available.
+func generateDefaultTitle(g *git.Git, base, branch string) string {
+	commits, err := g.GetCommits(base, branch)
+	if err != nil || len(commits) == 0 {
+		// Fall back to branch name
+		return generateTitleFromBranch(branch)
+	}
+	// Use the first commit's subject (oldest commit is last in array since GetCommits returns newest first)
+	return commits[len(commits)-1].Subject
 }
 
 // generateTitleFromBranch creates a PR title from a branch name.
