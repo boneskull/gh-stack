@@ -298,20 +298,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 			if updateErr := gh.UpdatePRBase(rt.childPR, trunk); updateErr != nil {
 				fmt.Printf("Warning: failed to update PR #%d base: %v\n", rt.childPR, updateErr)
 			}
-
-			// Check if this was a draft and now targets trunk - offer to publish
-			pr, getPRErr := gh.GetPR(rt.childPR)
-			if getPRErr == nil && pr.Draft {
-				fmt.Printf("PR #%d (%s) now targets %s.\n", rt.childPR, rt.childName, trunk)
-				ready, _ := prompt.Confirm("Mark as ready for review?", true) //nolint:errcheck // default is fine
-				if ready {
-					if readyErr := gh.MarkPRReady(rt.childPR); readyErr != nil {
-						fmt.Printf("Warning: failed to mark PR ready: %v\n", readyErr)
-					} else {
-						fmt.Printf("PR #%d marked as ready for review.\n", rt.childPR)
-					}
-				}
-			}
 		}
 
 		// Rebase using --onto if we have a fork point
