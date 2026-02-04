@@ -324,7 +324,7 @@ Before any destructive operation, gh-stack automatically captures a snapshot of 
 - Stack configuration (parent, PR number, fork point)
 - Any auto-stashed uncommitted changes
 
-Snapshots are stored in `.git/stack-undo/` and archived to `.git/stack-undo/done/` after successful undo.
+Snapshots are stored in `.git/stack-undo/` and archived to `.git/stack-undo/done/` after successful undo. Snapshots are automatically pruned to keep at most 50 pending and 50 archived, with the oldest removed first. No manual cleanup is required.
 
 > [!NOTE]
 >
