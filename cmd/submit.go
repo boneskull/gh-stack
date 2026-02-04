@@ -334,8 +334,17 @@ func generateDefaultTitle(g *git.Git, base, branch string) string {
 		// Fall back to branch name
 		return generateTitleFromBranch(branch)
 	}
-	// Use the first commit's subject (oldest commit is last in array since GetCommits returns newest first)
-	return commits[len(commits)-1].Subject
+	// Use the first commit's subject.
+	// NOTE: GetCommits is defined to return commits in reverse chronological order (newest first),
+	// so the oldest commit in the range [base..branch] is the last element of the slice.
+	// See internal/git.GetCommits for the documented ordering guarantee.
+	// Trim whitespace to avoid malformed PR titles.
+	subject := strings.TrimSpace(commits[len(commits)-1].Subject)
+	if subject == "" {
+		// If the subject is empty or whitespace-only, fall back to branch name
+		return generateTitleFromBranch(branch)
+	}
+	return subject
 }
 
 // generateTitleFromBranch creates a PR title from a branch name.
