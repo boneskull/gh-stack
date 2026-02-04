@@ -235,6 +235,9 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, existingPR); err != nil {
 					fmt.Printf("Warning: failed to update stack comment for PR #%d: %v\n", existingPR, err)
 				}
+
+				// If PR is a draft and now targets trunk, offer to publish
+				maybeMarkPRReady(ghClient, existingPR, b.Name, parent, trunk)
 			}
 		} else if !updateOnly {
 			// Create new PR
@@ -459,7 +462,50 @@ func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Nod
 		fmt.Printf("Warning: failed to update stack comment: %v\n", err)
 	}
 
+	// If adopted PR is a draft and targets trunk, offer to publish
+	if existingPR.Draft && base == trunk {
+		promptMarkPRReady(ghClient, existingPR.Number, branch, trunk)
+	}
+
 	return existingPR.Number, nil
+}
+
+// maybeMarkPRReady checks if a PR is a draft targeting trunk and offers to publish it.
+// This handles the case where a PR was created as a draft (middle of stack) but now
+// targets trunk because its parent was merged.
+func maybeMarkPRReady(ghClient *github.Client, prNumber int, branch, base, trunk string) {
+	// Only relevant if PR now targets trunk
+	if base != trunk {
+		return
+	}
+
+	// Check if PR is a draft
+	pr, err := ghClient.GetPR(prNumber)
+	if err != nil || !pr.Draft {
+		return
+	}
+
+	promptMarkPRReady(ghClient, prNumber, branch, trunk)
+}
+
+// promptMarkPRReady prompts to publish a draft PR and marks it ready if confirmed.
+// Called when we already know the PR is a draft targeting trunk.
+func promptMarkPRReady(ghClient *github.Client, prNumber int, branch, trunk string) {
+	fmt.Printf("PR #%d (%s) is a draft and now targets %s.\n", prNumber, branch, trunk)
+
+	// Skip prompt if --yes flag is set or non-interactive
+	shouldMarkReady := true
+	if !submitYesFlag && prompt.IsInteractive() {
+		shouldMarkReady, _ = prompt.Confirm("Mark as ready for review?", true) //nolint:errcheck // default is fine
+	}
+
+	if shouldMarkReady {
+		if readyErr := ghClient.MarkPRReady(prNumber); readyErr != nil {
+			fmt.Printf("Warning: failed to mark PR ready: %v\n", readyErr)
+		} else {
+			fmt.Printf("PR #%d marked as ready for review.\n", prNumber)
+		}
+	}
 }
 
 // generatePRBody creates a PR description from the commits between base and head.
