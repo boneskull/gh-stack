@@ -464,7 +464,7 @@ func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Nod
 
 	// If adopted PR is a draft and targets trunk, offer to publish
 	if existingPR.Draft && base == trunk {
-		maybeMarkPRReady(ghClient, existingPR.Number, branch, base, trunk)
+		promptMarkPRReady(ghClient, existingPR.Number, branch, trunk)
 	}
 
 	return existingPR.Number, nil
@@ -485,6 +485,12 @@ func maybeMarkPRReady(ghClient *github.Client, prNumber int, branch, base, trunk
 		return
 	}
 
+	promptMarkPRReady(ghClient, prNumber, branch, trunk)
+}
+
+// promptMarkPRReady prompts to publish a draft PR and marks it ready if confirmed.
+// Called when we already know the PR is a draft targeting trunk.
+func promptMarkPRReady(ghClient *github.Client, prNumber int, branch, trunk string) {
 	fmt.Printf("PR #%d (%s) is a draft and now targets %s.\n", prNumber, branch, trunk)
 
 	// Skip prompt if --yes flag is set or non-interactive
