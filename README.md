@@ -142,6 +142,7 @@ Whenever you need to push these branches again, or update the PRs, you can run `
 | `continue` | Resume operation after conflict resolution          |
 | `abort`    | Cancel in-progress operation                        |
 | `sync`     | Full sync: fetch, cleanup merged PRs, cascade all   |
+| `undo`     | Undo the last destructive operation                 |
 
 ## Command Reference
 
@@ -312,6 +313,29 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 | -------------- | ----------------------- |
 | `--no-cascade` | Skip cascading branches |
 | `--dry-run`    | Show what would be done |
+
+### undo
+
+Undo the last destructive operation (cascade, submit, or sync) by restoring branches to their pre-operation state.
+
+Before any destructive operation, gh-stack automatically captures a snapshot of affected branches. If something goes wrong or you change your mind, `undo` restores:
+
+- Branch refs (SHAs)
+- Stack configuration (parent, PR number, fork point)
+- Any auto-stashed uncommitted changes
+
+Snapshots are stored in `.git/stack-undo/` and archived to `.git/stack-undo/done/` after successful undo.
+
+> [!NOTE]
+>
+> `undo` only affects local state. It cannot undo remote changes like force-pushes. If you've already pushed, you may need to force-push again after undoing.
+
+#### undo Flags
+
+| Flag        | Description                              |
+| ----------- | ---------------------------------------- |
+| `--force`   | Skip confirmation prompt                 |
+| `--dry-run` | Show what would be restored without doing it |
 
 ## How It Works
 
