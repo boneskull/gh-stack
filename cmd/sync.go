@@ -354,7 +354,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		for _, child := range root.Children {
 			allBranches := []*tree.Node{child}
 			allBranches = append(allBranches, tree.GetDescendants(child)...)
-			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, nil, stashRef); err != nil {
+			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef); err != nil {
 				if err == ErrConflict {
 					hitConflict = true
 				}

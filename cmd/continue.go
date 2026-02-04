@@ -70,7 +70,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		// Remove state file before continuing (will be recreated if conflict)
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
-		if cascadeErr := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.Branches, st.StashRef); cascadeErr != nil {
+		if cascadeErr := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.PushOnly, st.Branches, st.StashRef); cascadeErr != nil {
 			// Stash handling is done by doCascadeWithState (conflict saves in state, errors restore)
 			if cascadeErr != ErrConflict && st.StashRef != "" {
 				fmt.Println("Restoring auto-stashed changes...")
@@ -111,7 +111,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 			allBranches = append(allBranches, node)
 		}
 
-		err = doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly, st.Web)
+		err = doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly, st.Web, st.PushOnly)
 		// Restore stash after submit completes
 		if st.StashRef != "" {
 			fmt.Println("Restoring auto-stashed changes...")

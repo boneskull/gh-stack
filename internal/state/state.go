@@ -30,6 +30,8 @@ type CascadeState struct {
 	UpdateOnly bool `json:"update_only,omitempty"`
 	// Web (submit only) - if true, open PRs in browser after creation/update
 	Web bool `json:"web,omitempty"`
+	// PushOnly (submit only) - if true, skip PR creation/update phase entirely
+	PushOnly bool `json:"push_only,omitempty"`
 	// Branches (submit only) - the complete list of branches being submitted.
 	// Used to rebuild the full set for push/PR phases after cascade completes.
 	Branches []string `json:"branches,omitempty"`

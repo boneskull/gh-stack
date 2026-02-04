@@ -87,3 +87,39 @@ func TestSubmitState(t *testing.T) {
 		t.Errorf("expected first branch %q, got %q", "feature-a", loaded.Branches[0])
 	}
 }
+
+func TestSubmitStatePushOnly(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := filepath.Join(dir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &state.CascadeState{
+		Current:      "feature-b",
+		Pending:      []string{"feature-c"},
+		OriginalHead: "abc123",
+		Operation:    state.OperationSubmit,
+		PushOnly:     true,
+		Branches:     []string{"feature-a", "feature-b", "feature-c"},
+	}
+
+	if err := state.Save(gitDir, s); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	loaded, err := state.Load(gitDir)
+	if err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+
+	if loaded.Operation != state.OperationSubmit {
+		t.Errorf("expected operation %q, got %q", state.OperationSubmit, loaded.Operation)
+	}
+	if !loaded.PushOnly {
+		t.Error("expected PushOnly to be true")
+	}
+	if loaded.UpdateOnly {
+		t.Error("expected UpdateOnly to be false")
+	}
+}

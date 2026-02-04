@@ -273,6 +273,7 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 | `--dry-run`      | Show what would happen without doing it         |
 | `--current-only` | Only submit the current branch, not descendants |
 | `--update-only`  | Only update existing PRs, don't create new ones |
+| `--push-only`    | Skip PR creation/update, only cascade and push  |
 
 ### cascade
 
