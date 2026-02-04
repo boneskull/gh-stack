@@ -15,6 +15,14 @@ const (
 	undoDir    = "stack-undo"
 	archiveDir = "done"
 	timeFormat = "20060102T150405.000000000Z" // Compact ISO8601 with nanoseconds to avoid collisions
+
+	// maxActiveSnapshots is the maximum number of pending undo snapshots to keep.
+	// Oldest snapshots are pruned automatically when this limit is exceeded.
+	maxActiveSnapshots = 50
+
+	// maxArchivedSnapshots is the maximum number of archived (used) snapshots to keep.
+	// Oldest archived snapshots are pruned automatically when this limit is exceeded.
+	maxArchivedSnapshots = 50
 )
 
 // ErrNoSnapshot is returned when no undo snapshot exists.
@@ -52,6 +60,7 @@ func NewSnapshot(operation, command, originalHead string) *Snapshot {
 }
 
 // Save persists the snapshot to .git/stack-undo/{timestamp}-{operation}.json.
+// Automatically prunes old snapshots if the count exceeds maxActiveSnapshots.
 func Save(gitDir string, snapshot *Snapshot) error {
 	dir := filepath.Join(gitDir, undoDir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -65,7 +74,12 @@ func Save(gitDir string, snapshot *Snapshot) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return err
+	}
+
+	// Prune old snapshots if we exceed the limit
+	return pruneDir(dir, maxActiveSnapshots)
 }
 
 // LoadLatest reads the most recent snapshot from .git/stack-undo/.
@@ -125,6 +139,7 @@ func Load(path string) (*Snapshot, error) {
 }
 
 // Archive moves a snapshot file to the done/ subdirectory.
+// Automatically prunes old archived snapshots if the count exceeds maxArchivedSnapshots.
 func Archive(gitDir, snapshotPath string) error {
 	archivePath := filepath.Join(gitDir, undoDir, archiveDir)
 	if err := os.MkdirAll(archivePath, 0755); err != nil {
@@ -133,7 +148,12 @@ func Archive(gitDir, snapshotPath string) error {
 
 	filename := filepath.Base(snapshotPath)
 	dest := filepath.Join(archivePath, filename)
-	return os.Rename(snapshotPath, dest)
+	if err := os.Rename(snapshotPath, dest); err != nil {
+		return err
+	}
+
+	// Prune old archived snapshots if we exceed the limit
+	return pruneDir(archivePath, maxArchivedSnapshots)
 }
 
 // List returns all available (non-archived) snapshots, sorted newest first.
@@ -194,4 +214,45 @@ func Remove(snapshotPath string) error {
 		return nil
 	}
 	return err
+}
+
+// pruneDir removes the oldest .json files in dir if the count exceeds max.
+// Files are sorted by name (which starts with a timestamp), so oldest are deleted first.
+func pruneDir(dir string, max int) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	// Filter to only .json files
+	var jsonFiles []os.DirEntry
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			jsonFiles = append(jsonFiles, entry)
+		}
+	}
+
+	// Nothing to prune
+	if len(jsonFiles) <= max {
+		return nil
+	}
+
+	// Sort ascending by name (oldest first, since filenames start with timestamp)
+	sort.Slice(jsonFiles, func(i, j int) bool {
+		return jsonFiles[i].Name() < jsonFiles[j].Name()
+	})
+
+	// Delete oldest files until we're at or below max
+	toDelete := len(jsonFiles) - max
+	for i := 0; i < toDelete; i++ {
+		path := filepath.Join(dir, jsonFiles[i].Name())
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			return removeErr
+		}
+	}
+
+	return nil
 }

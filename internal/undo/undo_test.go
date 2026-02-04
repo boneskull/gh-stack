@@ -320,3 +320,91 @@ func TestRemove(t *testing.T) {
 		t.Errorf("Remove non-existent should not error: %v", err)
 	}
 }
+
+func TestSavePrunesOldSnapshots(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := filepath.Join(dir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create 55 snapshots (exceeds the 50 limit)
+	for i := 0; i < 55; i++ {
+		snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+		// Use distinct timestamps to ensure unique filenames
+		snapshot.Timestamp = time.Date(2024, 1, 1, 0, 0, i, 0, time.UTC)
+		snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
+		if err := undo.Save(gitDir, snapshot); err != nil {
+			t.Fatalf("Save %d failed: %v", i, err)
+		}
+	}
+
+	// Verify only 50 snapshots remain
+	snapshots, err := undo.List(gitDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(snapshots) != 50 {
+		t.Errorf("Expected 50 snapshots after pruning, got %d", len(snapshots))
+	}
+
+	// Verify the oldest 5 were pruned (timestamps 0-4 should be gone)
+	// The newest should be timestamp second=54, oldest kept should be second=5
+	if len(snapshots) > 0 {
+		newest := snapshots[0]
+		if newest.Timestamp.Second() != 54 {
+			t.Errorf("Expected newest snapshot to have second=54, got %d", newest.Timestamp.Second())
+		}
+		oldest := snapshots[len(snapshots)-1]
+		if oldest.Timestamp.Second() != 5 {
+			t.Errorf("Expected oldest kept snapshot to have second=5, got %d", oldest.Timestamp.Second())
+		}
+	}
+}
+
+func TestArchivePrunesOldSnapshots(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := filepath.Join(dir, ".git")
+	if err := os.MkdirAll(gitDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create and archive 55 snapshots (exceeds the 50 limit)
+	for i := 0; i < 55; i++ {
+		snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+		snapshot.Timestamp = time.Date(2024, 1, 1, 0, 0, i, 0, time.UTC)
+		snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
+		if err := undo.Save(gitDir, snapshot); err != nil {
+			t.Fatalf("Save %d failed: %v", i, err)
+		}
+
+		// Get the path and archive it
+		_, path, err := undo.LoadLatest(gitDir)
+		if err != nil {
+			t.Fatalf("LoadLatest %d failed: %v", i, err)
+		}
+		if err := undo.Archive(gitDir, path); err != nil {
+			t.Fatalf("Archive %d failed: %v", i, err)
+		}
+	}
+
+	// Verify only 50 archived snapshots remain
+	doneDir := filepath.Join(gitDir, "stack-undo", "done")
+	entries, err := os.ReadDir(doneDir)
+	if err != nil {
+		t.Fatalf("Failed to read done dir: %v", err)
+	}
+
+	// Count only .json files
+	jsonCount := 0
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".json" {
+			jsonCount++
+		}
+	}
+
+	if jsonCount != 50 {
+		t.Errorf("Expected 50 archived snapshots after pruning, got %d", jsonCount)
+	}
+}
