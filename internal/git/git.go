@@ -324,8 +324,7 @@ func (g *Git) Stash(message string) (string, error) {
 
 // StashPop restores a specific stash entry when a reference is provided.
 // If ref is empty, it pops the most recent stash entry (matching `git stash pop`).
-// When a commit hash is provided (from Stash()), uses apply since pop only accepts stash refs.
-// Note: apply doesn't remove the stash entry, but this is acceptable for undo purposes.
+// When a commit hash is provided (from Stash()), uses apply+drop since pop only accepts stash refs.
 // Returns an error if there are conflicts or no matching stash entry.
 func (g *Git) StashPop(ref string) error {
 	if ref == "" {
@@ -334,8 +333,42 @@ func (g *Git) StashPop(ref string) error {
 
 	// git stash pop only accepts stash references (stash@{n}), not commit hashes.
 	// Use apply instead which accepts commit hashes.
-	// Note: This leaves the stash entry in place, which is fine for our use case.
-	return g.runInteractive("stash", "apply", ref)
+	if err := g.runInteractive("stash", "apply", ref); err != nil {
+		return err
+	}
+
+	// Find and drop the stash entry by matching its commit hash
+	stashRef, err := g.findStashByHash(ref)
+	if err != nil {
+		// Apply succeeded but we couldn't find stash to drop - not fatal
+		return nil
+	}
+	if stashRef != "" {
+		// Silently drop; errors aren't critical since apply already succeeded
+		_ = g.runSilent("stash", "drop", stashRef) //nolint:errcheck // best effort cleanup
+	}
+	return nil
+}
+
+// findStashByHash finds the stash@{n} reference for a given commit hash.
+// Returns empty string if not found.
+func (g *Git) findStashByHash(hash string) (string, error) {
+	// List stashes with their hashes
+	out, err := g.run("stash", "list", "--format=%H %gd")
+	if err != nil {
+		return "", err
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) == 2 && parts[0] == hash {
+			return parts[1], nil
+		}
+	}
+	return "", nil
 }
 
 // StashList returns true if there are any stash entries.
@@ -388,4 +421,13 @@ func (g *Git) GetCommits(base, head string) ([]Commit, error) {
 	}
 
 	return commits, nil
+}
+
+// AbbrevSHA safely abbreviates a SHA to 7 characters.
+// Returns the full string if it's shorter than 7 characters.
+func AbbrevSHA(sha string) string {
+	if len(sha) <= 7 {
+		return sha
+	}
+	return sha[:7]
 }

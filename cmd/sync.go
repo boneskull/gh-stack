@@ -9,6 +9,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/prompt"
+	"github.com/boneskull/gh-stack/internal/state"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
@@ -111,6 +112,20 @@ func runSync(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+
+	// Track if we hit a conflict (stash is saved in state for conflicts)
+	var hitConflict bool
+
+	// Ensure stash is restored on any exit (success or error, except conflicts)
+	// This defer must be after stashRef is set
+	defer func() {
+		if stashRef != "" && !hitConflict {
+			fmt.Println("Restoring auto-stashed changes...")
+			if popErr := g.StashPop(stashRef); popErr != nil {
+				fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(stashRef), popErr)
+			}
+		}
+	}()
 
 	// Fetch
 	fmt.Println("Fetching from origin...")
@@ -339,7 +354,10 @@ func runSync(cmd *cobra.Command, args []string) error {
 		for _, child := range root.Children {
 			allBranches := []*tree.Node{child}
 			allBranches = append(allBranches, tree.GetDescendants(child)...)
-			if err := doCascade(g, cfg, allBranches, syncDryRunFlag); err != nil {
+			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, nil, stashRef); err != nil {
+				if err == ErrConflict {
+					hitConflict = true
+				}
 				return err
 			}
 		}
@@ -353,15 +371,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Restore auto-stashed changes after successful operation
-	if stashRef != "" {
-		fmt.Println("Restoring auto-stashed changes...")
-		if popErr := g.StashPop(stashRef); popErr != nil {
-			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", stashRef[:7], popErr)
-		}
-	}
-
 	fmt.Println("\nSync complete!")
+	// Stash restoration handled by defer
 	return nil
 }
 

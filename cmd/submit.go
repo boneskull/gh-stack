@@ -124,18 +124,25 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Phase 1: Cascade
 	fmt.Println("=== Phase 1: Cascade ===")
-	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames); cascadeErr != nil {
-		return cascadeErr // Conflict or error - state saved, user can continue
+	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames, stashRef); cascadeErr != nil {
+		// Stash is saved in state for conflicts; restore on other errors
+		if cascadeErr != ErrConflict && stashRef != "" {
+			fmt.Println("Restoring auto-stashed changes...")
+			if popErr := g.StashPop(stashRef); popErr != nil {
+				fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(stashRef), popErr)
+			}
+		}
+		return cascadeErr
 	}
 
 	// Phases 2 & 3
 	err = doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag)
 
-	// Restore auto-stashed changes after successful operation
-	if err == nil && stashRef != "" {
+	// Restore auto-stashed changes after operation completes
+	if stashRef != "" {
 		fmt.Println("Restoring auto-stashed changes...")
 		if popErr := g.StashPop(stashRef); popErr != nil {
-			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", stashRef[:7], popErr)
+			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(stashRef), popErr)
 		}
 	}
 

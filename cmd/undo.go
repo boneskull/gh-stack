@@ -77,9 +77,9 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	for name, bs := range snapshot.Branches {
 		currentSHA, tipErr := g.GetTip(name)
 		if tipErr != nil {
-			fmt.Printf("  - %s: (branch missing) → %s\n", name, bs.SHA[:7])
+			fmt.Printf("  - %s: (branch missing) → %s\n", name, git.AbbrevSHA(bs.SHA))
 		} else if currentSHA != bs.SHA {
-			fmt.Printf("  - %s: %s → %s\n", name, currentSHA[:7], bs.SHA[:7])
+			fmt.Printf("  - %s: %s → %s\n", name, git.AbbrevSHA(currentSHA), git.AbbrevSHA(bs.SHA))
 		} else {
 			fmt.Printf("  - %s: (unchanged)\n", name)
 		}
@@ -90,7 +90,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 		if g.BranchExists(name) {
 			fmt.Printf("  - %s: (already exists, will skip)\n", name)
 		} else {
-			fmt.Printf("  - Recreate deleted branch: %s at %s\n", name, bs.SHA[:7])
+			fmt.Printf("  - Recreate deleted branch: %s at %s\n", name, git.AbbrevSHA(bs.SHA))
 		}
 	}
 
@@ -150,7 +150,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 		currentSHA, err := g.GetTip(name)
 		if err != nil {
 			// Branch doesn't exist, create it (can be done while checked out)
-			fmt.Printf("  Creating %s at %s\n", name, bs.SHA[:7])
+			fmt.Printf("  Creating %s at %s\n", name, git.AbbrevSHA(bs.SHA))
 			if createErr := g.CreateBranchAt(name, bs.SHA); createErr != nil {
 				return fmt.Errorf("failed to create branch %s: %w", name, createErr)
 			}
@@ -188,7 +188,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 
 	// Now reset all branches that need it
 	for name, bs := range branchesToReset {
-		fmt.Printf("  Resetting %s to %s\n", name, bs.SHA[:7])
+		fmt.Printf("  Resetting %s to %s\n", name, git.AbbrevSHA(bs.SHA))
 		if resetErr := g.SetBranchRef(name, bs.SHA); resetErr != nil {
 			return fmt.Errorf("failed to reset branch %s: %w", name, resetErr)
 		}
@@ -200,7 +200,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 			fmt.Printf("  Skipping %s (already exists)\n", name)
 			continue
 		}
-		fmt.Printf("  Recreating %s at %s\n", name, bs.SHA[:7])
+		fmt.Printf("  Recreating %s at %s\n", name, git.AbbrevSHA(bs.SHA))
 		if createErr := g.CreateBranchAt(name, bs.SHA); createErr != nil {
 			return fmt.Errorf("failed to recreate branch %s: %w", name, createErr)
 		}
@@ -223,7 +223,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	if snapshot.StashRef != "" {
 		fmt.Println("  Restoring stashed changes...")
 		if err := g.StashPop(snapshot.StashRef); err != nil {
-			fmt.Printf("  Warning: could not cleanly restore stashed changes. Your changes are still in stash (commit %s).\n", snapshot.StashRef[:7])
+			fmt.Printf("  Warning: could not cleanly restore stashed changes. Your changes are still in stash (commit %s).\n", git.AbbrevSHA(snapshot.StashRef))
 		}
 	}
 

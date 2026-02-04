@@ -33,6 +33,9 @@ type CascadeState struct {
 	// Branches (submit only) - the complete list of branches being submitted.
 	// Used to rebuild the full set for push/PR phases after cascade completes.
 	Branches []string `json:"branches,omitempty"`
+	// StashRef is the commit hash of auto-stashed changes (if any).
+	// Used to restore working tree changes when operation completes or is aborted.
+	StashRef string `json:"stash_ref,omitempty"`
 }
 
 // Save persists cascade state to .git/STACK_CASCADE_STATE.

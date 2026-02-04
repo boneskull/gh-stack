@@ -46,6 +46,14 @@ func runAbort(cmd *cobra.Command, args []string) error {
 	// Clean up state (ignore error - best effort cleanup)
 	_ = state.Remove(g.GetGitDir()) //nolint:errcheck // best effort cleanup
 
+	// Restore auto-stashed changes if any
+	if st.StashRef != "" {
+		fmt.Println("Restoring auto-stashed changes...")
+		if popErr := g.StashPop(st.StashRef); popErr != nil {
+			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(st.StashRef), popErr)
+		}
+	}
+
 	fmt.Printf("Cascade aborted. Original HEAD was %s\n", st.OriginalHead)
 	return nil
 }
