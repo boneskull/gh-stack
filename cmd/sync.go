@@ -98,6 +98,17 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Save undo snapshot of all tracked branches (unless dry-run)
+	// This captures state before any modifications (fetch, delete, rebase)
+	if !syncDryRunFlag {
+		allBranches, listErr := cfg.ListTrackedBranches()
+		if listErr == nil && len(allBranches) > 0 {
+			if saveErr := saveUndoSnapshotByName(g, cfg, allBranches, nil, "sync", "gh stack sync"); saveErr != nil {
+				fmt.Printf("Warning: could not save undo state: %v\n", saveErr)
+			}
+		}
+	}
+
 	// Fetch
 	fmt.Println("Fetching from origin...")
 	if !syncDryRunFlag {

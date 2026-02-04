@@ -61,15 +61,6 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	g := git.New(cwd)
 
-	// Check for dirty working tree
-	dirty, err := g.IsDirty()
-	if err != nil {
-		return err
-	}
-	if dirty {
-		return fmt.Errorf("working tree has uncommitted changes; commit or stash first")
-	}
-
 	// Check if operation already in progress
 	if state.Exists(g.GetGitDir()) {
 		return fmt.Errorf("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
@@ -119,6 +110,13 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	branchNames := make([]string, len(branches))
 	for i, b := range branches {
 		branchNames[i] = b.Name
+	}
+
+	// Save undo snapshot (unless dry-run)
+	if !submitDryRunFlag {
+		if err := saveUndoSnapshot(g, cfg, branches, nil, "submit", "gh stack submit"); err != nil {
+			fmt.Printf("Warning: could not save undo state: %v\n", err)
+		}
 	}
 
 	// Phase 1: Cascade

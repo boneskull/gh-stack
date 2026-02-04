@@ -146,24 +146,25 @@ func TestSubmitUpdateOnlyDryRun(t *testing.T) {
 	}
 }
 
-func TestSubmitRequiresCleanWorkTree(t *testing.T) {
+func TestSubmitWithDirtyWorkTreeAutoStashes(t *testing.T) {
 	env := NewTestEnvWithRemote(t)
 	env.MustRun("init")
 
 	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature-1 work")
+	env.Git("push", "-u", "origin", "feature-1")
 
 	// Create uncommitted changes
 	env.WriteFile("dirty.txt", "uncommitted")
 	env.Git("add", "dirty.txt")
 
-	// Submit should fail
-	result := env.Run("submit")
+	// Submit should auto-stash and succeed (at least the cascade phase)
+	// Note: without GH_TOKEN, PR creation will fail, but cascade phase should work
+	result := env.Run("submit", "--dry-run")
 
-	if result.Success() {
-		t.Error("expected submit to fail with dirty working tree")
-	}
-	if !strings.Contains(result.Stderr, "uncommitted changes") {
-		t.Errorf("expected error about uncommitted changes, got: %s", result.Stderr)
+	// In dry-run mode, auto-stash still happens but no actual rebases
+	if result.Failed() {
+		t.Errorf("submit dry-run should succeed with auto-stash, got: %s", result.Stderr)
 	}
 }
 

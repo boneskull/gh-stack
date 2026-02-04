@@ -54,11 +54,11 @@ func TestCascadeWithDirtyTree(t *testing.T) {
 
 	result := env.Run("cascade")
 
-	// Should fail gracefully
-	if result.Success() {
-		t.Error("cascade should fail with dirty tree")
+	// Should auto-stash and succeed
+	if result.Failed() {
+		t.Errorf("cascade should auto-stash and succeed, got: %s", result.Stderr)
 	}
-	if !result.ContainsStderr("uncommitted") {
-		t.Errorf("expected error about uncommitted changes, got: %s", result.Stderr)
+	if !result.ContainsStdout("Auto-stashed") {
+		t.Errorf("expected auto-stash message, got: %s", result.Stdout)
 	}
 }

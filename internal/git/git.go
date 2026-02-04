@@ -281,6 +281,55 @@ func (g *Git) DeleteBranch(branch string) error {
 	return g.runSilent("branch", "-D", branch)
 }
 
+// SetBranchRef sets a branch ref to point to a specific SHA.
+// This is equivalent to `git branch -f <branch> <sha>`.
+func (g *Git) SetBranchRef(branch, sha string) error {
+	return g.runSilent("branch", "-f", branch, sha)
+}
+
+// CreateBranchAt creates a new branch at a specific SHA.
+// This is equivalent to `git branch <name> <sha>`.
+func (g *Git) CreateBranchAt(name, sha string) error {
+	return g.runSilent("branch", name, sha)
+}
+
+// Stash creates a stash with the given message and returns the stash reference.
+// Returns an empty string if there was nothing to stash.
+// Includes untracked files (-u) to capture all working tree changes.
+func (g *Git) Stash(message string) (string, error) {
+	// Check if there's anything to stash first
+	dirty, err := g.IsDirty()
+	if err != nil {
+		return "", err
+	}
+	if !dirty {
+		return "", nil
+	}
+
+	// Create the stash with -u to include untracked files
+	if err := g.runSilent("stash", "push", "-u", "-m", message); err != nil {
+		return "", err
+	}
+
+	// Get the stash reference (stash@{0} after a successful push)
+	return "stash@{0}", nil
+}
+
+// StashPop pops the most recent stash entry.
+// Returns an error if there are conflicts or no stash entries.
+func (g *Git) StashPop() error {
+	return g.runInteractive("stash", "pop")
+}
+
+// StashList returns true if there are any stash entries.
+func (g *Git) StashList() (bool, error) {
+	out, err := g.run("stash", "list")
+	if err != nil {
+		return false, err
+	}
+	return len(out) > 0, nil
+}
+
 // Commit represents a git commit with its subject and body.
 type Commit struct {
 	Subject string // First line of the commit message
