@@ -146,24 +146,24 @@ func TestSubmitUpdateOnlyDryRun(t *testing.T) {
 	}
 }
 
-func TestSubmitRequiresCleanWorkTree(t *testing.T) {
+func TestSubmitDryRunAllowsDirtyWorkTree(t *testing.T) {
 	env := NewTestEnvWithRemote(t)
 	env.MustRun("init")
 
 	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature-1 work")
+	env.Git("push", "-u", "origin", "feature-1")
 
 	// Create uncommitted changes
 	env.WriteFile("dirty.txt", "uncommitted")
 	env.Git("add", "dirty.txt")
 
-	// Submit should fail
-	result := env.Run("submit")
+	// Submit --dry-run should succeed even with dirty working tree
+	// (dry-run skips the undo snapshot which includes auto-stashing)
+	result := env.Run("submit", "--dry-run")
 
-	if result.Success() {
-		t.Error("expected submit to fail with dirty working tree")
-	}
-	if !strings.Contains(result.Stderr, "uncommitted changes") {
-		t.Errorf("expected error about uncommitted changes, got: %s", result.Stderr)
+	if result.Failed() {
+		t.Errorf("submit --dry-run should succeed with dirty tree, got: %s", result.Stderr)
 	}
 }
 

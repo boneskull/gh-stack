@@ -281,6 +281,105 @@ func (g *Git) DeleteBranch(branch string) error {
 	return g.runSilent("branch", "-D", branch)
 }
 
+// SetBranchRef sets a branch ref to point to a specific SHA.
+// This is equivalent to `git branch -f <branch> <sha>`.
+func (g *Git) SetBranchRef(branch, sha string) error {
+	return g.runSilent("branch", "-f", branch, sha)
+}
+
+// CreateBranchAt creates a new branch at a specific SHA.
+// This is equivalent to `git branch <name> <sha>`.
+func (g *Git) CreateBranchAt(name, sha string) error {
+	return g.runSilent("branch", name, sha)
+}
+
+// Stash creates a stash with the given message and returns the stash commit hash.
+// Returns an empty string if there was nothing to stash.
+// Includes untracked files (-u) to capture all working tree changes.
+// The returned hash is stable and can be used to restore this specific stash
+// even if other stashes are created later.
+func (g *Git) Stash(message string) (string, error) {
+	// Check if there's anything to stash first
+	dirty, err := g.IsDirty()
+	if err != nil {
+		return "", err
+	}
+	if !dirty {
+		return "", nil
+	}
+
+	// Create the stash with -u to include untracked files
+	if stashErr := g.runSilent("stash", "push", "-u", "-m", message); stashErr != nil {
+		return "", stashErr
+	}
+
+	// Resolve the created stash to a stable identifier (its commit hash)
+	// This is more reliable than stash@{0} which can shift if user creates more stashes
+	out, parseErr := g.run("rev-parse", "stash@{0}")
+	if parseErr != nil {
+		return "", parseErr
+	}
+	return out, nil
+}
+
+// StashPop restores a specific stash entry when a reference is provided.
+// If ref is empty, it pops the most recent stash entry (matching `git stash pop`).
+// When a commit hash is provided (from Stash()), uses apply+drop since pop only accepts stash refs.
+// Returns an error if there are conflicts or no matching stash entry.
+func (g *Git) StashPop(ref string) error {
+	if ref == "" {
+		return g.runInteractive("stash", "pop")
+	}
+
+	// git stash pop only accepts stash references (stash@{n}), not commit hashes.
+	// Use apply instead which accepts commit hashes.
+	if err := g.runInteractive("stash", "apply", ref); err != nil {
+		return err
+	}
+
+	// Find and drop the stash entry by matching its commit hash
+	stashRef, err := g.findStashByHash(ref)
+	if err != nil {
+		// Apply succeeded but we couldn't find stash to drop - not fatal
+		return nil
+	}
+	if stashRef != "" {
+		// Silently drop; errors aren't critical since apply already succeeded
+		_ = g.runSilent("stash", "drop", stashRef) //nolint:errcheck // best effort cleanup
+	}
+	return nil
+}
+
+// findStashByHash finds the stash@{n} reference for a given commit hash.
+// Returns empty string if not found.
+func (g *Git) findStashByHash(hash string) (string, error) {
+	// List stashes with their hashes
+	out, err := g.run("stash", "list", "--format=%H %gd")
+	if err != nil {
+		return "", err
+	}
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, " ", 2)
+		if len(parts) == 2 && parts[0] == hash {
+			return parts[1], nil
+		}
+	}
+	return "", nil
+}
+
+// StashList returns true if there are any stash entries.
+func (g *Git) StashList() (bool, error) {
+	out, err := g.run("stash", "list")
+	if err != nil {
+		return false, err
+	}
+	return len(out) > 0, nil
+}
+
 // Commit represents a git commit with its subject and body.
 type Commit struct {
 	Subject string // First line of the commit message
@@ -322,4 +421,13 @@ func (g *Git) GetCommits(base, head string) ([]Commit, error) {
 	}
 
 	return commits, nil
+}
+
+// AbbrevSHA safely abbreviates a SHA to 7 characters.
+// Returns the full string if it's shorter than 7 characters.
+func AbbrevSHA(sha string) string {
+	if len(sha) <= 7 {
+		return sha
+	}
+	return sha[:7]
 }

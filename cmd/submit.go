@@ -61,15 +61,6 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	g := git.New(cwd)
 
-	// Check for dirty working tree
-	dirty, err := g.IsDirty()
-	if err != nil {
-		return err
-	}
-	if dirty {
-		return fmt.Errorf("working tree has uncommitted changes; commit or stash first")
-	}
-
 	// Check if operation already in progress
 	if state.Exists(g.GetGitDir()) {
 		return fmt.Errorf("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
@@ -121,14 +112,41 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		branchNames[i] = b.Name
 	}
 
+	// Save undo snapshot (unless dry-run)
+	var stashRef string
+	if !submitDryRunFlag {
+		var saveErr error
+		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "submit", "gh stack submit")
+		if saveErr != nil {
+			fmt.Printf("Warning: could not save undo state: %v\n", saveErr)
+		}
+	}
+
 	// Phase 1: Cascade
 	fmt.Println("=== Phase 1: Cascade ===")
-	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames); err != nil {
-		return err // Conflict or error - state saved, user can continue
+	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames, stashRef); cascadeErr != nil {
+		// Stash is saved in state for conflicts; restore on other errors
+		if cascadeErr != ErrConflict && stashRef != "" {
+			fmt.Println("Restoring auto-stashed changes...")
+			if popErr := g.StashPop(stashRef); popErr != nil {
+				fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(stashRef), popErr)
+			}
+		}
+		return cascadeErr
 	}
 
 	// Phases 2 & 3
-	return doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag)
+	err = doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag)
+
+	// Restore auto-stashed changes after operation completes
+	if stashRef != "" {
+		fmt.Println("Restoring auto-stashed changes...")
+		if popErr := g.StashPop(stashRef); popErr != nil {
+			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(stashRef), popErr)
+		}
+	}
+
+	return err
 }
 
 // doSubmitPushAndPR handles push and PR creation/update phases.
