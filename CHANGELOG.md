@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/boneskull/gh-stack/compare/v0.1.2...v0.2.0) (2026-02-04)
+
+
+### Features
+
+* add undo command ([#20](https://github.com/boneskull/gh-stack/issues/20)) ([2ad9b1b](https://github.com/boneskull/gh-stack/commit/2ad9b1bd284b599d393c6787387b98058116a040))
+
 ## [0.1.2](https://github.com/boneskull/gh-stack/compare/v0.1.1...v0.1.2) (2026-02-03)
 
 
