@@ -87,7 +87,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, nil, stashRef)
+	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef)
 
 	// Restore auto-stashed changes after operation (unless conflict, which saves stash in state)
 	if stashRef != "" && err != ErrConflict {
@@ -103,7 +103,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 // doCascadeWithState performs cascade and saves state with the given operation type.
 // allBranches is the complete list of branches for submit operations (used for push/PR after continue).
 // stashRef is the commit hash of auto-stashed changes (if any), persisted to state on conflict.
-func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web bool, allBranches []string, stashRef string) error {
+func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web, pushOnly bool, allBranches []string, stashRef string) error {
 	originalBranch, err := g.CurrentBranch()
 	if err != nil {
 		return err
@@ -181,6 +181,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 				Operation:    operation,
 				UpdateOnly:   updateOnly,
 				Web:          web,
+				PushOnly:     pushOnly,
 				Branches:     allBranches,
 				StashRef:     stashRef,
 			}

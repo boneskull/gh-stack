@@ -254,3 +254,68 @@ func TestSubmitFromTrunkNoDescendantsFails(t *testing.T) {
 		t.Errorf("expected error about no stack branches, got: %s", result.Stderr)
 	}
 }
+
+func TestSubmitPushOnlyDryRun(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	result := env.MustRun("submit", "--dry-run", "--push-only")
+
+	// Should show all three phases
+	if !strings.Contains(result.Stdout, "Phase 1: Cascade") {
+		t.Error("expected cascade phase output")
+	}
+	if !strings.Contains(result.Stdout, "Phase 2: Push") {
+		t.Error("expected push phase output")
+	}
+	if !strings.Contains(result.Stdout, "Phase 3: PRs") {
+		t.Error("expected PR phase header")
+	}
+
+	// Should show skipped message for PR phase
+	if !strings.Contains(result.Stdout, "Skipped (--push-only)") {
+		t.Error("expected 'Skipped (--push-only)' message")
+	}
+
+	// Should NOT mention PR creation
+	if strings.Contains(result.Stdout, "Would create PR") {
+		t.Error("should not mention PR creation with --push-only")
+	}
+}
+
+func TestSubmitPushOnlyWithUpdateOnlyFails(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	result := env.Run("submit", "--dry-run", "--push-only", "--update-only")
+
+	if result.Success() {
+		t.Error("expected --push-only and --update-only to fail")
+	}
+	if !strings.Contains(result.Stderr, "--push-only and --update-only cannot be used together") {
+		t.Errorf("expected error about conflicting flags, got: %s", result.Stderr)
+	}
+}
+
+func TestSubmitPushOnlyWithWebFails(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-1")
+	env.CreateCommit("feature 1 work")
+
+	result := env.Run("submit", "--dry-run", "--push-only", "--web")
+
+	if result.Success() {
+		t.Error("expected --push-only and --web to fail")
+	}
+	if !strings.Contains(result.Stderr, "--push-only and --web cannot be used together") {
+		t.Errorf("expected error about conflicting flags, got: %s", result.Stderr)
+	}
+}

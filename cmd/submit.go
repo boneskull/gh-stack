@@ -35,6 +35,7 @@ var (
 	submitDryRunFlag      bool
 	submitCurrentOnlyFlag bool
 	submitUpdateOnlyFlag  bool
+	submitPushOnlyFlag    bool
 	submitYesFlag         bool
 	submitWebFlag         bool
 )
@@ -43,12 +44,21 @@ func init() {
 	submitCmd.Flags().BoolVar(&submitDryRunFlag, "dry-run", false, "show what would be done without doing it")
 	submitCmd.Flags().BoolVar(&submitCurrentOnlyFlag, "current-only", false, "only submit current branch, not descendants")
 	submitCmd.Flags().BoolVar(&submitUpdateOnlyFlag, "update-only", false, "only update existing PRs, don't create new ones")
+	submitCmd.Flags().BoolVar(&submitPushOnlyFlag, "push-only", false, "skip PR creation/update, only cascade and push")
 	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts and use auto-generated title/description for PRs")
 	submitCmd.Flags().BoolVarP(&submitWebFlag, "web", "w", false, "open created/updated PRs in web browser")
 	rootCmd.AddCommand(submitCmd)
 }
 
 func runSubmit(cmd *cobra.Command, args []string) error {
+	// Validate flag combinations
+	if submitPushOnlyFlag && submitUpdateOnlyFlag {
+		return fmt.Errorf("--push-only and --update-only cannot be used together: --push-only skips all PR operations")
+	}
+	if submitPushOnlyFlag && submitWebFlag {
+		return fmt.Errorf("--push-only and --web cannot be used together: --push-only skips all PR operations")
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -124,7 +134,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Phase 1: Cascade
 	fmt.Println("=== Phase 1: Cascade ===")
-	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames, stashRef); cascadeErr != nil {
+	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag, branchNames, stashRef); cascadeErr != nil {
 		// Stash is saved in state for conflicts; restore on other errors
 		if cascadeErr != ErrConflict && stashRef != "" {
 			fmt.Println("Restoring auto-stashed changes...")
@@ -136,7 +146,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Phases 2 & 3
-	err = doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag)
+	err = doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag)
 
 	// Restore auto-stashed changes after operation completes
 	if stashRef != "" {
@@ -151,7 +161,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 // doSubmitPushAndPR handles push and PR creation/update phases.
 // This is called after cascade succeeds (or from continue after conflict resolution).
-func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly, openWeb bool) error {
+func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly, openWeb, pushOnly bool) error {
 	// Phase 2: Push all branches
 	fmt.Println("\n=== Phase 2: Push ===")
 	for _, b := range branches {
@@ -168,6 +178,11 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 	}
 
 	// Phase 3: Create/update PRs
+	if pushOnly {
+		fmt.Println("\n=== Phase 3: PRs ===")
+		fmt.Println("Skipped (--push-only)")
+		return nil
+	}
 	return doSubmitPRs(g, cfg, root, branches, dryRun, updateOnly, openWeb)
 }
 
