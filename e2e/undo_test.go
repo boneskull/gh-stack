@@ -183,7 +183,7 @@ func TestUndoArchivesSnapshot(t *testing.T) {
 	}
 }
 
-func TestUndoWithAutoStash(t *testing.T) {
+func TestCascadeWithAutoStashRestoresAfterSuccess(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -198,22 +198,19 @@ func TestUndoWithAutoStash(t *testing.T) {
 	// Create uncommitted changes
 	env.WriteFile("uncommitted.txt", "uncommitted content\n")
 
-	// Cascade should auto-stash
+	// Cascade should auto-stash and then restore after success
 	result := env.MustRun("cascade")
 	if !result.ContainsStdout("Auto-stashed") {
 		t.Error("expected auto-stash message")
 	}
+	if !result.ContainsStdout("Restoring auto-stashed") {
+		t.Error("expected restore message after successful cascade")
+	}
 
-	// Working tree should be clean (stashed)
-	env.AssertClean()
-
-	// Undo should restore stash
-	env.MustRun("undo", "--force")
-
-	// Check that uncommitted file is back
+	// Uncommitted file should be restored after successful cascade
 	content, err := os.ReadFile(filepath.Join(env.WorkDir, "uncommitted.txt"))
 	if err != nil {
-		t.Errorf("uncommitted file should be restored: %v", err)
+		t.Errorf("uncommitted file should be present after cascade: %v", err)
 	} else if string(content) != "uncommitted content\n" {
 		t.Errorf("uncommitted file has wrong content: %q", content)
 	}

@@ -219,11 +219,11 @@ func runUndo(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Restore stash
+	// Restore stash using the specific stash commit hash
 	if snapshot.StashRef != "" {
 		fmt.Println("  Restoring stashed changes...")
-		if err := g.StashPop(); err != nil {
-			fmt.Printf("  Warning: could not cleanly restore stashed changes. Your changes are still in %s.\n", snapshot.StashRef)
+		if err := g.StashPop(snapshot.StashRef); err != nil {
+			fmt.Printf("  Warning: could not cleanly restore stashed changes. Your changes are still in stash (commit %s).\n", snapshot.StashRef[:7])
 		}
 	}
 

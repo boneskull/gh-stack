@@ -14,7 +14,7 @@ import (
 const (
 	undoDir    = "stack-undo"
 	archiveDir = "done"
-	timeFormat = "20060102T150405Z" // Compact ISO8601 for filenames
+	timeFormat = "20060102T150405.000000000Z" // Compact ISO8601 with nanoseconds to avoid collisions
 )
 
 // ErrNoSnapshot is returned when no undo snapshot exists.
@@ -52,16 +52,16 @@ func NewSnapshot(operation, command, originalHead string) *Snapshot {
 }
 
 // Save persists the snapshot to .git/stack-undo/{timestamp}-{operation}.json.
-func Save(gitDir string, s *Snapshot) error {
+func Save(gitDir string, snapshot *Snapshot) error {
 	dir := filepath.Join(gitDir, undoDir)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	filename := s.Timestamp.Format(timeFormat) + "-" + s.Operation + ".json"
+	filename := snapshot.Timestamp.Format(timeFormat) + "-" + snapshot.Operation + ".json"
 	path := filepath.Join(dir, filename)
 
-	data, err := json.MarshalIndent(s, "", "  ")
+	data, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -82,9 +82,9 @@ func LoadLatest(gitDir string) (*Snapshot, string, error) {
 
 	// Filter to only .json files (not the done/ directory)
 	var jsonFiles []os.DirEntry
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
-			jsonFiles = append(jsonFiles, e)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			jsonFiles = append(jsonFiles, entry)
 		}
 	}
 
@@ -103,11 +103,11 @@ func LoadLatest(gitDir string) (*Snapshot, string, error) {
 		return nil, "", err
 	}
 
-	var s Snapshot
-	if err := json.Unmarshal(data, &s); err != nil {
+	var snapshot Snapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
 		return nil, "", err
 	}
-	return &s, path, nil
+	return &snapshot, path, nil
 }
 
 // Load reads a snapshot from a specific path.
@@ -117,11 +117,11 @@ func Load(path string) (*Snapshot, error) {
 		return nil, err
 	}
 
-	var s Snapshot
-	if err := json.Unmarshal(data, &s); err != nil {
+	var snapshot Snapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
 		return nil, err
 	}
-	return &s, nil
+	return &snapshot, nil
 }
 
 // Archive moves a snapshot file to the done/ subdirectory.
@@ -149,9 +149,9 @@ func List(gitDir string) ([]*Snapshot, error) {
 
 	// Filter to only .json files
 	var jsonFiles []os.DirEntry
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
-			jsonFiles = append(jsonFiles, e)
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			jsonFiles = append(jsonFiles, entry)
 		}
 	}
 
@@ -161,13 +161,13 @@ func List(gitDir string) ([]*Snapshot, error) {
 	})
 
 	var snapshots []*Snapshot
-	for _, f := range jsonFiles {
-		path := filepath.Join(dir, f.Name())
-		s, err := Load(path)
+	for _, file := range jsonFiles {
+		path := filepath.Join(dir, file.Name())
+		snapshot, err := Load(path)
 		if err != nil {
 			continue // Skip malformed files
 		}
-		snapshots = append(snapshots, s)
+		snapshots = append(snapshots, snapshot)
 	}
 	return snapshots, nil
 }
@@ -179,8 +179,8 @@ func Exists(gitDir string) bool {
 	if err != nil {
 		return false
 	}
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".json") {
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
 			return true
 		}
 	}

@@ -113,20 +113,33 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Save undo snapshot (unless dry-run)
+	var stashRef string
 	if !submitDryRunFlag {
-		if err := saveUndoSnapshot(g, cfg, branches, nil, "submit", "gh stack submit"); err != nil {
-			fmt.Printf("Warning: could not save undo state: %v\n", err)
+		var saveErr error
+		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "submit", "gh stack submit")
+		if saveErr != nil {
+			fmt.Printf("Warning: could not save undo state: %v\n", saveErr)
 		}
 	}
 
 	// Phase 1: Cascade
 	fmt.Println("=== Phase 1: Cascade ===")
-	if err := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames); err != nil {
-		return err // Conflict or error - state saved, user can continue
+	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, branchNames); cascadeErr != nil {
+		return cascadeErr // Conflict or error - state saved, user can continue
 	}
 
 	// Phases 2 & 3
-	return doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag)
+	err = doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag)
+
+	// Restore auto-stashed changes after successful operation
+	if err == nil && stashRef != "" {
+		fmt.Println("Restoring auto-stashed changes...")
+		if popErr := g.StashPop(stashRef); popErr != nil {
+			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", stashRef[:7], popErr)
+		}
+	}
+
+	return err
 }
 
 // doSubmitPushAndPR handles push and PR creation/update phases.

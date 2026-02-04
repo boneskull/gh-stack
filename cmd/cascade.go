@@ -78,13 +78,26 @@ func runCascade(cmd *cobra.Command, args []string) error {
 	}
 
 	// Save undo snapshot (unless dry-run)
+	var stashRef string
 	if !cascadeDryRunFlag {
-		if err := saveUndoSnapshot(g, cfg, branches, nil, "cascade", "gh stack cascade"); err != nil {
-			fmt.Printf("Warning: could not save undo state: %v\n", err)
+		var saveErr error
+		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "cascade", "gh stack cascade")
+		if saveErr != nil {
+			fmt.Printf("Warning: could not save undo state: %v\n", saveErr)
 		}
 	}
 
-	return doCascade(g, cfg, branches, cascadeDryRunFlag)
+	err = doCascade(g, cfg, branches, cascadeDryRunFlag)
+
+	// Restore auto-stashed changes after successful operation
+	if err == nil && stashRef != "" {
+		fmt.Println("Restoring auto-stashed changes...")
+		if popErr := g.StashPop(stashRef); popErr != nil {
+			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", stashRef[:7], popErr)
+		}
+	}
+
+	return err
 }
 
 func doCascade(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool) error {
@@ -201,27 +214,30 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 // It auto-stashes any uncommitted changes if the working tree is dirty.
 // branches: branches that will be modified (rebased)
 // deletedBranches: branches that will be deleted (for sync)
-func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, deletedBranches []*tree.Node, operation, command string) error {
+// Returns the stash ref (commit hash) if changes were stashed, empty string otherwise.
+func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, deletedBranches []*tree.Node, operation, command string) (string, error) {
 	gitDir := g.GetGitDir()
 
 	// Get current branch for original head
 	currentBranch, err := g.CurrentBranch()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Create snapshot
 	snapshot := undo.NewSnapshot(operation, command, currentBranch)
 
 	// Auto-stash if dirty
+	var stashRef string
 	dirty, err := g.IsDirty()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if dirty {
-		stashRef, stashErr := g.Stash("gh-stack auto-stash before " + operation)
+		var stashErr error
+		stashRef, stashErr = g.Stash("gh-stack auto-stash before " + operation)
 		if stashErr != nil {
-			return fmt.Errorf("failed to stash changes: %w", stashErr)
+			return "", fmt.Errorf("failed to stash changes: %w", stashErr)
 		}
 		if stashRef != "" {
 			snapshot.StashRef = stashRef
@@ -231,10 +247,10 @@ func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, del
 
 	// Capture state of branches that will be modified
 	for _, node := range branches {
-		bs, err := captureBranchState(g, cfg, node.Name)
-		if err != nil {
+		bs, captureErr := captureBranchState(g, cfg, node.Name)
+		if captureErr != nil {
 			// Non-fatal: log warning and continue
-			fmt.Printf("Warning: could not capture state for %s: %v\n", node.Name, err)
+			fmt.Printf("Warning: could not capture state for %s: %v\n", node.Name, captureErr)
 			continue
 		}
 		snapshot.Branches[node.Name] = bs
@@ -242,41 +258,47 @@ func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, del
 
 	// Capture state of branches that will be deleted
 	for _, node := range deletedBranches {
-		bs, err := captureBranchState(g, cfg, node.Name)
-		if err != nil {
-			fmt.Printf("Warning: could not capture state for deleted branch %s: %v\n", node.Name, err)
+		bs, captureErr := captureBranchState(g, cfg, node.Name)
+		if captureErr != nil {
+			fmt.Printf("Warning: could not capture state for deleted branch %s: %v\n", node.Name, captureErr)
 			continue
 		}
 		snapshot.DeletedBranches[node.Name] = bs
 	}
 
 	// Save snapshot
-	return undo.Save(gitDir, snapshot)
+	if saveErr := undo.Save(gitDir, snapshot); saveErr != nil {
+		return "", saveErr
+	}
+	return stashRef, nil
 }
 
 // saveUndoSnapshotByName is like saveUndoSnapshot but takes branch names instead of tree nodes.
 // Useful for sync where we don't always have tree nodes.
-func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string, deletedBranchNames []string, operation, command string) error {
+// Returns the stash ref (commit hash) if changes were stashed, empty string otherwise.
+func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string, deletedBranchNames []string, operation, command string) (string, error) {
 	gitDir := g.GetGitDir()
 
 	// Get current branch for original head
 	currentBranch, err := g.CurrentBranch()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Create snapshot
 	snapshot := undo.NewSnapshot(operation, command, currentBranch)
 
 	// Auto-stash if dirty
+	var stashRef string
 	dirty, err := g.IsDirty()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if dirty {
-		stashRef, stashErr := g.Stash("gh-stack auto-stash before " + operation)
+		var stashErr error
+		stashRef, stashErr = g.Stash("gh-stack auto-stash before " + operation)
 		if stashErr != nil {
-			return fmt.Errorf("failed to stash changes: %w", stashErr)
+			return "", fmt.Errorf("failed to stash changes: %w", stashErr)
 		}
 		if stashRef != "" {
 			snapshot.StashRef = stashRef
@@ -286,9 +308,9 @@ func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string
 
 	// Capture state of branches that will be modified
 	for _, name := range branchNames {
-		bs, err := captureBranchState(g, cfg, name)
-		if err != nil {
-			fmt.Printf("Warning: could not capture state for %s: %v\n", name, err)
+		bs, captureErr := captureBranchState(g, cfg, name)
+		if captureErr != nil {
+			fmt.Printf("Warning: could not capture state for %s: %v\n", name, captureErr)
 			continue
 		}
 		snapshot.Branches[name] = bs
@@ -296,16 +318,19 @@ func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string
 
 	// Capture state of branches that will be deleted
 	for _, name := range deletedBranchNames {
-		bs, err := captureBranchState(g, cfg, name)
-		if err != nil {
-			fmt.Printf("Warning: could not capture state for deleted branch %s: %v\n", name, err)
+		bs, captureErr := captureBranchState(g, cfg, name)
+		if captureErr != nil {
+			fmt.Printf("Warning: could not capture state for deleted branch %s: %v\n", name, captureErr)
 			continue
 		}
 		snapshot.DeletedBranches[name] = bs
 	}
 
 	// Save snapshot
-	return undo.Save(gitDir, snapshot)
+	if saveErr := undo.Save(gitDir, snapshot); saveErr != nil {
+		return "", saveErr
+	}
+	return stashRef, nil
 }
 
 // captureBranchState captures the current state of a single branch.

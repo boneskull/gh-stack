@@ -293,9 +293,11 @@ func (g *Git) CreateBranchAt(name, sha string) error {
 	return g.runSilent("branch", name, sha)
 }
 
-// Stash creates a stash with the given message and returns the stash reference.
+// Stash creates a stash with the given message and returns the stash commit hash.
 // Returns an empty string if there was nothing to stash.
 // Includes untracked files (-u) to capture all working tree changes.
+// The returned hash is stable and can be used to restore this specific stash
+// even if other stashes are created later.
 func (g *Git) Stash(message string) (string, error) {
 	// Check if there's anything to stash first
 	dirty, err := g.IsDirty()
@@ -307,18 +309,33 @@ func (g *Git) Stash(message string) (string, error) {
 	}
 
 	// Create the stash with -u to include untracked files
-	if err := g.runSilent("stash", "push", "-u", "-m", message); err != nil {
-		return "", err
+	if stashErr := g.runSilent("stash", "push", "-u", "-m", message); stashErr != nil {
+		return "", stashErr
 	}
 
-	// Get the stash reference (stash@{0} after a successful push)
-	return "stash@{0}", nil
+	// Resolve the created stash to a stable identifier (its commit hash)
+	// This is more reliable than stash@{0} which can shift if user creates more stashes
+	out, parseErr := g.run("rev-parse", "stash@{0}")
+	if parseErr != nil {
+		return "", parseErr
+	}
+	return out, nil
 }
 
-// StashPop pops the most recent stash entry.
-// Returns an error if there are conflicts or no stash entries.
-func (g *Git) StashPop() error {
-	return g.runInteractive("stash", "pop")
+// StashPop restores a specific stash entry when a reference is provided.
+// If ref is empty, it pops the most recent stash entry (matching `git stash pop`).
+// When a commit hash is provided (from Stash()), uses apply since pop only accepts stash refs.
+// Note: apply doesn't remove the stash entry, but this is acceptable for undo purposes.
+// Returns an error if there are conflicts or no matching stash entry.
+func (g *Git) StashPop(ref string) error {
+	if ref == "" {
+		return g.runInteractive("stash", "pop")
+	}
+
+	// git stash pop only accepts stash references (stash@{n}), not commit hashes.
+	// Use apply instead which accepts commit hashes.
+	// Note: This leaves the stash entry in place, which is fine for our use case.
+	return g.runInteractive("stash", "apply", ref)
 }
 
 // StashList returns true if there are any stash entries.

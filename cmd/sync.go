@@ -100,10 +100,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Save undo snapshot of all tracked branches (unless dry-run)
 	// This captures state before any modifications (fetch, delete, rebase)
+	var stashRef string
 	if !syncDryRunFlag {
 		allBranches, listErr := cfg.ListTrackedBranches()
 		if listErr == nil && len(allBranches) > 0 {
-			if saveErr := saveUndoSnapshotByName(g, cfg, allBranches, nil, "sync", "gh stack sync"); saveErr != nil {
+			var saveErr error
+			stashRef, saveErr = saveUndoSnapshotByName(g, cfg, allBranches, nil, "sync", "gh stack sync")
+			if saveErr != nil {
 				fmt.Printf("Warning: could not save undo state: %v\n", saveErr)
 			}
 		}
@@ -347,6 +350,14 @@ func runSync(cmd *cobra.Command, args []string) error {
 		fmt.Println("\nUpdating stack comments...")
 		if err := updateStackComments(cfg, gh); err != nil {
 			fmt.Printf("Warning: failed to update some comments: %v\n", err)
+		}
+	}
+
+	// Restore auto-stashed changes after successful operation
+	if stashRef != "" {
+		fmt.Println("Restoring auto-stashed changes...")
+		if popErr := g.StashPop(stashRef); popErr != nil {
+			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", stashRef[:7], popErr)
 		}
 	}
 
