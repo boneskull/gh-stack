@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/boneskull/gh-stack/compare/v0.2.0...v0.3.0) (2026-02-04)
+
+
+### Features
+
+* **submit:** add --push-only flag ([#25](https://github.com/boneskull/gh-stack/issues/25)) ([c14dabb](https://github.com/boneskull/gh-stack/commit/c14dabb2c281a3bef14415bd928bd1aa589a6872))
+* **submit:** add --push-only flag to skip PR creation ([c14dabb](https://github.com/boneskull/gh-stack/commit/c14dabb2c281a3bef14415bd928bd1aa589a6872))
+
+
+### Bug Fixes
+
+* **submit:** move draft-to-ready prompt to Phase 3 (PRs) ([#28](https://github.com/boneskull/gh-stack/issues/28)) ([0afdba7](https://github.com/boneskull/gh-stack/commit/0afdba7d273d26af56102566f048ad75283af51f))
+* **submit:** use first commit as default PR title ([#27](https://github.com/boneskull/gh-stack/issues/27)) ([9bc1881](https://github.com/boneskull/gh-stack/commit/9bc188154bf6b1539768741c75e5130e3c442e0b))
+* **undo:** auto-prune snapshots to prevent unbounded growth ([#23](https://github.com/boneskull/gh-stack/issues/23)) ([d298e99](https://github.com/boneskull/gh-stack/commit/d298e997729469b3afc88816a598506b24ec465c))
+
 ## [0.2.0](https://github.com/boneskull/gh-stack/compare/v0.1.2...v0.2.0) (2026-02-04)
 
 
