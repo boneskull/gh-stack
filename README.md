@@ -416,8 +416,6 @@ If you want the kitchen sink—stack navigation, branch surgery, a web UI, AI re
 - **Easier debugging.** You can inspect and repair state with `git config --edit` or a text editor. No need for `git cat-file` or `git log` on an internal ref.
 - **No state history.** **git-spice** gets a full audit log for free. **gh-stack** provides multi-level undo via separate snapshot files instead, which covers the common case (undoing the last operation) without the overhead.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of **gh-stack**'s data storage approach.
-
 ## Project Scope
 
 - **gh-stack** aims to be a minimal alternative to Graphite for those who do not need its full feature set
@@ -436,6 +434,8 @@ make test         # Run tests
 make lint         # Run linter
 make gh-install   # Install as gh extension locally
 ```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of **gh-stack**'s data storage approach.
 
 ## Acknowledgements
 
