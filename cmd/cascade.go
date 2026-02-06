@@ -9,6 +9,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/state"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/boneskull/gh-stack/internal/undo"
 	"github.com/spf13/cobra"
@@ -36,6 +37,8 @@ func init() {
 }
 
 func runCascade(cmd *cobra.Command, args []string) error {
+	s := style.New()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -81,19 +84,19 @@ func runCascade(cmd *cobra.Command, args []string) error {
 	var stashRef string
 	if !cascadeDryRunFlag {
 		var saveErr error
-		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "cascade", "gh stack cascade")
+		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "cascade", "gh stack cascade", s)
 		if saveErr != nil {
-			fmt.Printf("Warning: could not save undo state: %v\n", saveErr)
+			fmt.Printf("%s could not save undo state: %v\n", s.WarningIcon(), saveErr)
 		}
 	}
 
-	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef)
+	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, s)
 
 	// Restore auto-stashed changes after operation (unless conflict, which saves stash in state)
 	if stashRef != "" && err != ErrConflict {
 		fmt.Println("Restoring auto-stashed changes...")
 		if popErr := g.StashPop(stashRef); popErr != nil {
-			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(stashRef), popErr)
+			fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(stashRef), popErr)
 		}
 	}
 
@@ -103,7 +106,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 // doCascadeWithState performs cascade and saves state with the given operation type.
 // allBranches is the complete list of branches for submit operations (used for push/PR after continue).
 // stashRef is the commit hash of auto-stashed changes (if any), persisted to state on conflict.
-func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web, pushOnly bool, allBranches []string, stashRef string) error {
+func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web, pushOnly bool, allBranches []string, stashRef string, s *style.Style) error {
 	originalBranch, err := g.CurrentBranch()
 	if err != nil {
 		return err
@@ -126,12 +129,12 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 		}
 
 		if !needsRebase {
-			fmt.Printf("Cascading %s... already up to date\n", b.Name)
+			fmt.Printf("Cascading %s... %s\n", s.Branch(b.Name), s.Muted("already up to date"))
 			continue
 		}
 
 		if dryRun {
-			fmt.Printf("Would rebase %s onto %s\n", b.Name, parent)
+			fmt.Printf("%s Would rebase %s onto %s\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(parent))
 			continue
 		}
 
@@ -150,9 +153,9 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 		}
 
 		if useOnto {
-			fmt.Printf("Cascading %s onto %s (using fork point)...\n", b.Name, parent)
+			fmt.Printf("Cascading %s onto %s %s...\n", s.Branch(b.Name), s.Branch(parent), s.Muted("(using fork point)"))
 		} else {
-			fmt.Printf("Cascading %s onto %s...\n", b.Name, parent)
+			fmt.Printf("Cascading %s onto %s...\n", s.Branch(b.Name), s.Branch(parent))
 		}
 
 		// Checkout and rebase
@@ -187,15 +190,15 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 			}
 			_ = state.Save(g.GetGitDir(), st) //nolint:errcheck // best effort - user can recover manually
 
-			fmt.Printf("\nCONFLICT: Resolve conflicts and run 'gh stack continue', or 'gh stack abort' to cancel.\n")
+			fmt.Printf("\n%s %s\n", s.FailureIcon(), s.Error("CONFLICT: Resolve conflicts and run 'gh stack continue', or 'gh stack abort' to cancel."))
 			fmt.Printf("Remaining branches: %v\n", remaining)
 			if stashRef != "" {
-				fmt.Printf("Note: Your uncommitted changes are stashed and will be restored when you continue or abort.\n")
+				fmt.Println(s.Muted("Note: Your uncommitted changes are stashed and will be restored when you continue or abort."))
 			}
 			return ErrConflict
 		}
 
-		fmt.Printf("Cascading %s... ok\n", b.Name)
+		fmt.Printf("Cascading %s... %s\n", s.Branch(b.Name), s.Success("ok"))
 
 		// Update fork point to current parent tip
 		parentTip, tipErr := g.GetTip(parent)
@@ -217,7 +220,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 // branches: branches that will be modified (rebased)
 // deletedBranches: branches that will be deleted (for sync)
 // Returns the stash ref (commit hash) if changes were stashed, empty string otherwise.
-func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, deletedBranches []*tree.Node, operation, command string) (string, error) {
+func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, deletedBranches []*tree.Node, operation, command string, s *style.Style) (string, error) {
 	gitDir := g.GetGitDir()
 
 	// Get current branch for original head
@@ -243,7 +246,7 @@ func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, del
 		}
 		if stashRef != "" {
 			snapshot.StashRef = stashRef
-			fmt.Println("Auto-stashed uncommitted changes")
+			fmt.Println(s.Muted("Auto-stashed uncommitted changes"))
 		}
 	}
 
@@ -252,7 +255,7 @@ func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, del
 		bs, captureErr := captureBranchState(g, cfg, node.Name)
 		if captureErr != nil {
 			// Non-fatal: log warning and continue
-			fmt.Printf("Warning: could not capture state for %s: %v\n", node.Name, captureErr)
+			fmt.Printf("%s could not capture state for %s: %v\n", s.WarningIcon(), s.Branch(node.Name), captureErr)
 			continue
 		}
 		snapshot.Branches[node.Name] = bs
@@ -262,7 +265,7 @@ func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, del
 	for _, node := range deletedBranches {
 		bs, captureErr := captureBranchState(g, cfg, node.Name)
 		if captureErr != nil {
-			fmt.Printf("Warning: could not capture state for deleted branch %s: %v\n", node.Name, captureErr)
+			fmt.Printf("%s could not capture state for deleted branch %s: %v\n", s.WarningIcon(), s.Branch(node.Name), captureErr)
 			continue
 		}
 		snapshot.DeletedBranches[node.Name] = bs
@@ -278,7 +281,7 @@ func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, del
 // saveUndoSnapshotByName is like saveUndoSnapshot but takes branch names instead of tree nodes.
 // Useful for sync where we don't always have tree nodes.
 // Returns the stash ref (commit hash) if changes were stashed, empty string otherwise.
-func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string, deletedBranchNames []string, operation, command string) (string, error) {
+func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string, deletedBranchNames []string, operation, command string, s *style.Style) (string, error) {
 	gitDir := g.GetGitDir()
 
 	// Get current branch for original head
@@ -304,7 +307,7 @@ func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string
 		}
 		if stashRef != "" {
 			snapshot.StashRef = stashRef
-			fmt.Println("Auto-stashed uncommitted changes")
+			fmt.Println(s.Muted("Auto-stashed uncommitted changes"))
 		}
 	}
 
@@ -312,7 +315,7 @@ func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string
 	for _, name := range branchNames {
 		bs, captureErr := captureBranchState(g, cfg, name)
 		if captureErr != nil {
-			fmt.Printf("Warning: could not capture state for %s: %v\n", name, captureErr)
+			fmt.Printf("%s could not capture state for %s: %v\n", s.WarningIcon(), s.Branch(name), captureErr)
 			continue
 		}
 		snapshot.Branches[name] = bs
@@ -322,7 +325,7 @@ func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string
 	for _, name := range deletedBranchNames {
 		bs, captureErr := captureBranchState(g, cfg, name)
 		if captureErr != nil {
-			fmt.Printf("Warning: could not capture state for deleted branch %s: %v\n", name, captureErr)
+			fmt.Printf("%s could not capture state for deleted branch %s: %v\n", s.WarningIcon(), s.Branch(name), captureErr)
 			continue
 		}
 		snapshot.DeletedBranches[name] = bs

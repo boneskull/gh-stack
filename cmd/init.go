@@ -7,6 +7,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -55,9 +56,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("branch %q does not exist", trunk)
 	}
 
+	s := style.New()
+
 	// Check if already initialized
 	if existing, err := cfg.GetTrunk(); err == nil {
-		fmt.Printf("Already initialized with trunk %q\n", existing)
+		fmt.Printf("Already initialized with trunk %s\n", s.Branch(existing))
 		return nil
 	}
 
@@ -65,6 +68,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Initialized stack tracking with trunk %q\n", trunk)
+	fmt.Printf("%s Initialized stack tracking with trunk %s\n", s.SuccessIcon(), s.Branch(trunk))
 	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/prompt"
 	"github.com/boneskull/gh-stack/internal/state"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/undo"
 	"github.com/spf13/cobra"
 )
@@ -41,6 +42,8 @@ func init() {
 }
 
 func runUndo(cmd *cobra.Command, args []string) error {
+	s := style.New()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -63,34 +66,34 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	snapshot, snapshotPath, err := undo.LoadLatest(gitDir)
 	if err != nil {
 		if errors.Is(err, undo.ErrNoSnapshot) {
-			fmt.Println("Nothing to undo.")
+			fmt.Println(s.Muted("Nothing to undo."))
 			return nil
 		}
 		return fmt.Errorf("failed to load undo state: %w", err)
 	}
 
 	// Display what will be restored
-	fmt.Printf("About to undo '%s' from %s\n\n", snapshot.Command, snapshot.Timestamp.Local().Format("2006-01-02 15:04:05"))
+	fmt.Printf("About to undo '%s' from %s\n\n", s.Bold(snapshot.Command), snapshot.Timestamp.Local().Format("2006-01-02 15:04:05"))
 	fmt.Println("This will restore:")
 
 	// Show branch changes
 	for name, bs := range snapshot.Branches {
 		currentSHA, tipErr := g.GetTip(name)
 		if tipErr != nil {
-			fmt.Printf("  - %s: (branch missing) → %s\n", name, git.AbbrevSHA(bs.SHA))
+			fmt.Printf("  - %s: %s → %s\n", s.Branch(name), s.Muted("(branch missing)"), git.AbbrevSHA(bs.SHA))
 		} else if currentSHA != bs.SHA {
-			fmt.Printf("  - %s: %s → %s\n", name, git.AbbrevSHA(currentSHA), git.AbbrevSHA(bs.SHA))
+			fmt.Printf("  - %s: %s → %s\n", s.Branch(name), git.AbbrevSHA(currentSHA), git.AbbrevSHA(bs.SHA))
 		} else {
-			fmt.Printf("  - %s: (unchanged)\n", name)
+			fmt.Printf("  - %s: %s\n", s.Branch(name), s.Muted("(unchanged)"))
 		}
 	}
 
 	// Show deleted branches to recreate
 	for name, bs := range snapshot.DeletedBranches {
 		if g.BranchExists(name) {
-			fmt.Printf("  - %s: (already exists, will skip)\n", name)
+			fmt.Printf("  - %s: %s\n", s.Branch(name), s.Muted("(already exists, will skip)"))
 		} else {
-			fmt.Printf("  - Recreate deleted branch: %s at %s\n", name, git.AbbrevSHA(bs.SHA))
+			fmt.Printf("  - Recreate deleted branch: %s at %s\n", s.Branch(name), git.AbbrevSHA(bs.SHA))
 		}
 	}
 
@@ -103,7 +106,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 
 	// Dry run exits here
 	if undoDryRun {
-		fmt.Println("Dry run: no changes made.")
+		fmt.Println(s.Muted("Dry run: no changes made."))
 		return nil
 	}
 
@@ -114,7 +117,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 			return confirmErr
 		}
 		if !confirmed {
-			fmt.Println("Undo cancelled.")
+			fmt.Println(s.Muted("Undo cancelled."))
 			return nil
 		}
 	}
@@ -150,7 +153,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 		currentSHA, err := g.GetTip(name)
 		if err != nil {
 			// Branch doesn't exist, create it (can be done while checked out)
-			fmt.Printf("  Creating %s at %s\n", name, git.AbbrevSHA(bs.SHA))
+			fmt.Printf("  Creating %s at %s\n", s.Branch(name), git.AbbrevSHA(bs.SHA))
 			if createErr := g.CreateBranchAt(name, bs.SHA); createErr != nil {
 				return fmt.Errorf("failed to create branch %s: %w", name, createErr)
 			}
@@ -160,7 +163,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 
 		// Restore config
 		if configErr := restoreBranchConfig(cfg, name, bs); configErr != nil {
-			fmt.Printf("  Warning: failed to restore config for %s: %v\n", name, configErr)
+			fmt.Printf("  %s failed to restore config for %s: %v\n", s.WarningIcon(), s.Branch(name), configErr)
 		}
 	}
 
@@ -188,7 +191,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 
 	// Now reset all branches that need it
 	for name, bs := range branchesToReset {
-		fmt.Printf("  Resetting %s to %s\n", name, git.AbbrevSHA(bs.SHA))
+		fmt.Printf("  Resetting %s to %s\n", s.Branch(name), git.AbbrevSHA(bs.SHA))
 		if resetErr := g.SetBranchRef(name, bs.SHA); resetErr != nil {
 			return fmt.Errorf("failed to reset branch %s: %w", name, resetErr)
 		}
@@ -197,25 +200,25 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	// Recreate deleted branches
 	for name, bs := range snapshot.DeletedBranches {
 		if g.BranchExists(name) {
-			fmt.Printf("  Skipping %s (already exists)\n", name)
+			fmt.Printf("  Skipping %s %s\n", s.Branch(name), s.Muted("(already exists)"))
 			continue
 		}
-		fmt.Printf("  Recreating %s at %s\n", name, git.AbbrevSHA(bs.SHA))
+		fmt.Printf("  Recreating %s at %s\n", s.Branch(name), git.AbbrevSHA(bs.SHA))
 		if createErr := g.CreateBranchAt(name, bs.SHA); createErr != nil {
 			return fmt.Errorf("failed to recreate branch %s: %w", name, createErr)
 		}
 
 		// Restore config for deleted branch
 		if configErr := restoreBranchConfig(cfg, name, bs); configErr != nil {
-			fmt.Printf("  Warning: failed to restore config for %s: %v\n", name, configErr)
+			fmt.Printf("  %s failed to restore config for %s: %v\n", s.WarningIcon(), s.Branch(name), configErr)
 		}
 	}
 
 	// Checkout original HEAD
 	if snapshot.OriginalHead != "" {
-		fmt.Printf("  Checking out %s\n", snapshot.OriginalHead)
+		fmt.Printf("  Checking out %s\n", s.Branch(snapshot.OriginalHead))
 		if checkoutErr := g.Checkout(snapshot.OriginalHead); checkoutErr != nil {
-			fmt.Printf("  Warning: failed to checkout %s: %v\n", snapshot.OriginalHead, checkoutErr)
+			fmt.Printf("  %s failed to checkout %s: %v\n", s.WarningIcon(), s.Branch(snapshot.OriginalHead), checkoutErr)
 		}
 	}
 
@@ -223,16 +226,16 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	if snapshot.StashRef != "" {
 		fmt.Println("  Restoring stashed changes...")
 		if err := g.StashPop(snapshot.StashRef); err != nil {
-			fmt.Printf("  Warning: could not cleanly restore stashed changes. Your changes are still in stash (commit %s).\n", git.AbbrevSHA(snapshot.StashRef))
+			fmt.Printf("  %s could not cleanly restore stashed changes. Your changes are still in stash (commit %s).\n", s.WarningIcon(), git.AbbrevSHA(snapshot.StashRef))
 		}
 	}
 
 	// Archive the snapshot
 	if err := undo.Archive(gitDir, snapshotPath); err != nil {
-		fmt.Printf("Warning: failed to archive undo state: %v\n", err)
+		fmt.Printf("%s failed to archive undo state: %v\n", s.WarningIcon(), err)
 	}
 
-	fmt.Printf("\nUndo complete. Restored state from before '%s'.\n", snapshot.Command)
+	fmt.Printf("\n%s Restored state from before '%s'.\n", s.SuccessIcon(), s.Bold(snapshot.Command))
 	return nil
 }
 

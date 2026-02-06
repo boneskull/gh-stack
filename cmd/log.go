@@ -9,6 +9,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/github"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/cli/go-gh/v2/pkg/tableprinter"
 	"github.com/cli/go-gh/v2/pkg/term"
@@ -55,11 +56,14 @@ func runLog(cmd *cobra.Command, args []string) error {
 	// Try to get GitHub client for PR URLs (optional - may fail if not in a GitHub repo)
 	gh, _ := github.NewClient() //nolint:errcheck // nil is fine, URLs won't be shown
 
+	s := style.New()
+
 	if logPorcelainFlag {
-		printPorcelain(root, currentBranch, gh)
+		printPorcelain(root, currentBranch, gh, s)
 	} else {
 		opts := tree.FormatOptions{
 			CurrentBranch: currentBranch,
+			Style:         s,
 		}
 		if gh != nil {
 			opts.PRURLFunc = gh.PRURL
@@ -79,7 +83,7 @@ func runLog(cmd *cobra.Command, args []string) error {
 //   - PARENT: parent branch name (empty for trunk)
 //   - PR: associated PR number (empty if none)
 //   - URL: full PR URL (empty if no PR or GitHub client unavailable)
-func printPorcelain(node *tree.Node, current string, gh *github.Client) {
+func printPorcelain(node *tree.Node, current string, gh *github.Client, s *style.Style) {
 	t := term.FromEnv()
 	isTTY := t.IsTerminalOutput()
 
@@ -108,12 +112,18 @@ func printPorcelain(node *tree.Node, current string, gh *github.Client) {
 	addNode = func(n *tree.Node) {
 		branchName := n.Name
 		if isTTY && n.Name == current {
-			branchName = "* " + n.Name
+			branchName = s.Bold("* " + n.Name)
+		} else if isTTY {
+			branchName = s.Branch(n.Name)
 		}
 
 		parent := ""
 		if n.Parent != nil {
-			parent = n.Parent.Name
+			if isTTY {
+				parent = s.Branch(n.Parent.Name)
+			} else {
+				parent = n.Parent.Name
+			}
 		}
 
 		prNum := ""
@@ -139,6 +149,6 @@ func printPorcelain(node *tree.Node, current string, gh *github.Client) {
 	addNode(node)
 
 	if err := tp.Render(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to render table: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%s failed to render table: %v\n", s.WarningIcon(), err)
 	}
 }

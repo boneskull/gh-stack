@@ -7,6 +7,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
@@ -103,6 +104,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		_ = cfg.SetForkPoint(branchName, forkPoint) //nolint:errcheck // best effort
 	}
 
-	fmt.Printf("Adopted branch %q with parent %q\n", branchName, parent)
+	s := style.New()
+	fmt.Printf("%s Adopted branch %s with parent %s\n", s.SuccessIcon(), s.Branch(branchName), s.Branch(parent))
 	return nil
 }
