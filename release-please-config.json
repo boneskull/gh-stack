@@ -3,8 +3,7 @@
   "packages": {
     ".": {
       "initial-version": "0.1.0-rc.0",
-      "release-type": "go",
-      "prerelease": true
+      "release-type": "go"
     }
   }
 }
