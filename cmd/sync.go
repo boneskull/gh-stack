@@ -109,7 +109,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		allBranches, listErr := cfg.ListTrackedBranches()
 		if listErr == nil && len(allBranches) > 0 {
 			var saveErr error
-			stashRef, saveErr = saveUndoSnapshotByName(g, cfg, allBranches, nil, "sync", "gh stack sync")
+			stashRef, saveErr = saveUndoSnapshotByName(g, cfg, allBranches, nil, "sync", "gh stack sync", s)
 			if saveErr != nil {
 				fmt.Printf("%s could not save undo state: %v\n", s.WarningIcon(), saveErr)
 			}
@@ -360,7 +360,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println(s.SuccessMessage("\nSync complete!"))
+	fmt.Println()
+	fmt.Println(s.SuccessMessage("Sync complete!"))
 	// Stash restoration handled by defer
 	return nil
 }

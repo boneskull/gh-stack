@@ -60,7 +60,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Check if already initialized
 	if existing, err := cfg.GetTrunk(); err == nil {
-		fmt.Printf("%s Already initialized with trunk %s\n", s.Muted("ℹ"), s.Branch(existing))
+		fmt.Printf("Already initialized with trunk %s\n", s.Branch(existing))
 		return nil
 	}
 

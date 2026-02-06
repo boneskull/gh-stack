@@ -281,8 +281,7 @@ func saveUndoSnapshot(g *git.Git, cfg *config.Config, branches []*tree.Node, del
 // saveUndoSnapshotByName is like saveUndoSnapshot but takes branch names instead of tree nodes.
 // Useful for sync where we don't always have tree nodes.
 // Returns the stash ref (commit hash) if changes were stashed, empty string otherwise.
-func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string, deletedBranchNames []string, operation, command string) (string, error) {
-	s := style.New()
+func saveUndoSnapshotByName(g *git.Git, cfg *config.Config, branchNames []string, deletedBranchNames []string, operation, command string, s *style.Style) (string, error) {
 	gitDir := g.GetGitDir()
 
 	// Get current branch for original head
