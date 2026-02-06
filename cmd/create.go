@@ -7,6 +7,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -84,12 +85,14 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	s := style.New()
+
 	// Commit staged changes if any
 	if hasStaged && !createEmptyFlag && createMessageFlag != "" {
 		if err := g.Commit(createMessageFlag); err != nil {
 			return err
 		}
-		fmt.Printf("Committed staged changes: %s\n", createMessageFlag)
+		fmt.Printf("%s Committed staged changes: %s\n", s.SuccessIcon(), createMessageFlag)
 	}
 
 	// Set parent
@@ -103,6 +106,6 @@ func runCreate(cmd *cobra.Command, args []string) error {
 		_ = cfg.SetForkPoint(branchName, forkPoint) //nolint:errcheck // best effort
 	}
 
-	fmt.Printf("Created branch %q stacked on %q\n", branchName, currentBranch)
+	fmt.Printf("%s Created branch %s stacked on %s\n", s.SuccessIcon(), s.Branch(branchName), s.Branch(currentBranch))
 	return nil
 }

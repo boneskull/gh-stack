@@ -8,6 +8,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -54,6 +55,7 @@ func runLink(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Linked PR #%d to branch %q\n", prNumber, branch)
+	s := style.New()
+	fmt.Printf("%s Linked PR #%d to branch %s\n", s.SuccessIcon(), prNumber, s.Branch(branch))
 	return nil
 }

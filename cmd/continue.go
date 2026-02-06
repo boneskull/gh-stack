@@ -8,6 +8,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/state"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
@@ -24,6 +25,8 @@ func init() {
 }
 
 func runContinue(cmd *cobra.Command, args []string) error {
+	s := style.New()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -45,7 +48,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("Completed %s\n", st.Current)
+	fmt.Printf("%s Completed %s\n", s.SuccessIcon(), s.Branch(st.Current))
 
 	cfg, err := config.Load(cwd)
 	if err != nil {
@@ -70,12 +73,12 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		// Remove state file before continuing (will be recreated if conflict)
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
-		if cascadeErr := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.PushOnly, st.Branches, st.StashRef); cascadeErr != nil {
+		if cascadeErr := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.PushOnly, st.Branches, st.StashRef, s); cascadeErr != nil {
 			// Stash handling is done by doCascadeWithState (conflict saves in state, errors restore)
 			if cascadeErr != ErrConflict && st.StashRef != "" {
 				fmt.Println("Restoring auto-stashed changes...")
 				if popErr := g.StashPop(st.StashRef); popErr != nil {
-					fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(st.StashRef), popErr)
+					fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(st.StashRef), popErr)
 				}
 			}
 			return cascadeErr // Another conflict - state saved
@@ -111,12 +114,12 @@ func runContinue(cmd *cobra.Command, args []string) error {
 			allBranches = append(allBranches, node)
 		}
 
-		err = doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly, st.Web, st.PushOnly)
+		err = doSubmitPushAndPR(g, cfg, root, allBranches, false, st.UpdateOnly, st.Web, st.PushOnly, s)
 		// Restore stash after submit completes
 		if st.StashRef != "" {
 			fmt.Println("Restoring auto-stashed changes...")
 			if popErr := g.StashPop(st.StashRef); popErr != nil {
-				fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(st.StashRef), popErr)
+				fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(st.StashRef), popErr)
 			}
 		}
 		return err
@@ -126,10 +129,10 @@ func runContinue(cmd *cobra.Command, args []string) error {
 	if st.StashRef != "" {
 		fmt.Println("Restoring auto-stashed changes...")
 		if popErr := g.StashPop(st.StashRef); popErr != nil {
-			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(st.StashRef), popErr)
+			fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(st.StashRef), popErr)
 		}
 	}
 
-	fmt.Println("Cascade complete!")
+	fmt.Println(s.SuccessMessage("Cascade complete!"))
 	return nil
 }

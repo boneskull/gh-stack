@@ -7,6 +7,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -42,6 +43,7 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("Unlinked PR from branch %q\n", branch)
+	s := style.New()
+	fmt.Printf("%s Unlinked PR from branch %s\n", s.SuccessIcon(), s.Branch(branch))
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/style"
 )
 
 // Node represents a branch in the stack tree.
@@ -111,6 +112,8 @@ type FormatOptions struct {
 	CurrentBranch string
 	// PRURLFunc returns the URL for a PR number (optional)
 	PRURLFunc func(pr int) string
+	// Style is used for coloring output (optional, defaults to no color)
+	Style *style.Style
 }
 
 // FormatTree returns a string representation of the tree with box-drawing characters.
@@ -131,10 +134,21 @@ func formatNode(sb *strings.Builder, node *Node, prefix string, isLast bool, opt
 		connector = ""
 	}
 
+	// Format branch name with optional styling
+	branchDisplay := node.Name
+	if opts.Style != nil {
+		branchDisplay = opts.Style.Branch(node.Name)
+	}
+
 	// Current branch marker
 	marker := ""
 	if node.Name == opts.CurrentBranch {
 		marker = "* "
+		// Bold the current branch marker and name
+		if opts.Style != nil {
+			branchDisplay = opts.Style.Bold("* " + node.Name)
+			marker = ""
+		}
 	}
 
 	// PR info
@@ -150,7 +164,7 @@ func formatNode(sb *strings.Builder, node *Node, prefix string, isLast bool, opt
 	sb.WriteString(prefix)
 	sb.WriteString(connector)
 	sb.WriteString(marker)
-	sb.WriteString(node.Name)
+	sb.WriteString(branchDisplay)
 	sb.WriteString(prInfo)
 	sb.WriteString("\n")
 

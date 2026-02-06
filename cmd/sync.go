@@ -10,6 +10,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/prompt"
 	"github.com/boneskull/gh-stack/internal/state"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +34,7 @@ func init() {
 }
 
 // updateStackComments updates the navigation comment on all PRs in the stack.
-func updateStackComments(cfg *config.Config, gh *github.Client) error {
+func updateStackComments(cfg *config.Config, gh *github.Client, s *style.Style) error {
 	trunk, err := cfg.GetTrunk()
 	if err != nil {
 		return err
@@ -53,22 +54,22 @@ func updateStackComments(cfg *config.Config, gh *github.Client) error {
 	}
 
 	// Walk tree and update each PR's comment
-	return walkTreeAndUpdateComments(root, root, trunk, gh, prInfo)
+	return walkTreeAndUpdateComments(root, root, trunk, gh, prInfo, s)
 }
 
-func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.Client, prInfo map[int]github.PRInfo) error {
+func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.Client, prInfo map[int]github.PRInfo, s *style.Style) error {
 	if node.PR > 0 {
 		comment := github.GenerateStackComment(root, node.Name, trunk, gh.RepoURL(), prInfo)
 		if comment != "" {
 			if err := gh.CreateOrUpdateStackComment(node.PR, comment); err != nil {
-				fmt.Printf("Warning: failed to update comment on PR #%d: %v\n", node.PR, err)
+				fmt.Printf("%s failed to update comment on PR #%d: %v\n", s.WarningIcon(), node.PR, err)
 				// Continue with other PRs
 			}
 		}
 	}
 
 	for _, child := range node.Children {
-		if err := walkTreeAndUpdateComments(child, root, trunk, gh, prInfo); err != nil {
+		if err := walkTreeAndUpdateComments(child, root, trunk, gh, prInfo, s); err != nil {
 			return err
 		}
 	}
@@ -77,6 +78,8 @@ func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.C
 }
 
 func runSync(cmd *cobra.Command, args []string) error {
+	s := style.New()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -108,7 +111,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 			var saveErr error
 			stashRef, saveErr = saveUndoSnapshotByName(g, cfg, allBranches, nil, "sync", "gh stack sync")
 			if saveErr != nil {
-				fmt.Printf("Warning: could not save undo state: %v\n", saveErr)
+				fmt.Printf("%s could not save undo state: %v\n", s.WarningIcon(), saveErr)
 			}
 		}
 	}
@@ -122,7 +125,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		if stashRef != "" && !hitConflict {
 			fmt.Println("Restoring auto-stashed changes...")
 			if popErr := g.StashPop(stashRef); popErr != nil {
-				fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(stashRef), popErr)
+				fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(stashRef), popErr)
 			}
 		}
 	}()
@@ -137,10 +140,10 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Fast-forward trunk
 	currentBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine
-	fmt.Printf("Fast-forwarding %s...\n", trunk)
+	fmt.Printf("Fast-forwarding %s...\n", s.Branch(trunk))
 	if !syncDryRunFlag {
 		if ffErr := g.FastForward(trunk); ffErr != nil {
-			fmt.Printf("Warning: could not fast-forward %s: %v\n", trunk, ffErr)
+			fmt.Printf("%s could not fast-forward %s: %v\n", s.WarningIcon(), s.Branch(trunk), ffErr)
 		}
 		// Return to original branch
 		_ = g.Checkout(currentBranch) //nolint:errcheck // best effort
@@ -161,7 +164,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 		pr, getPRErr := gh.GetPR(prNum)
 		if getPRErr != nil {
-			fmt.Printf("Warning: could not fetch PR #%d: %v\n", prNum, getPRErr)
+			fmt.Printf("%s could not fetch PR #%d: %v\n", s.WarningIcon(), prNum, getPRErr)
 			continue
 		}
 
@@ -211,25 +214,25 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 		// Check if parent exists on remote
 		if !g.RemoteBranchExists(parent) {
-			fmt.Printf("\nWarning: parent branch %q of %q does not exist on remote.\n", parent, branch)
+			fmt.Printf("\n%s parent branch %s of %s does not exist on remote.\n", s.WarningIcon(), s.Branch(parent), s.Branch(branch))
 			if prompt.IsInteractive() {
 				retarget, _ := prompt.Confirm(fmt.Sprintf("Retarget %s to %s?", branch, trunk), true) //nolint:errcheck // default is fine
 				if retarget {
 					_ = cfg.SetParent(branch, trunk) //nolint:errcheck // best effort
-					fmt.Printf("Retargeted %s to %s\n", branch, trunk)
+					fmt.Printf("%s Retargeted %s to %s\n", s.SuccessIcon(), s.Branch(branch), s.Branch(trunk))
 
 					// Update PR base on GitHub if PR exists
 					prNum, _ := cfg.GetPR(branch) //nolint:errcheck // 0 is fine
 					if prNum > 0 {
 						if updateErr := gh.UpdatePRBase(prNum, trunk); updateErr != nil {
-							fmt.Printf("Warning: failed to update PR #%d base: %v\n", prNum, updateErr)
+							fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), prNum, updateErr)
 						} else {
-							fmt.Printf("Updated PR #%d base to %s\n", prNum, trunk)
+							fmt.Printf("%s Updated PR #%d base to %s\n", s.SuccessIcon(), prNum, s.Branch(trunk))
 						}
 					}
 				}
 			} else {
-				fmt.Printf("Run 'git config branch.%s.stackParent %s' to fix.\n", branch, trunk)
+				fmt.Println(s.Muted(fmt.Sprintf("Run 'git config branch.%s.stackParent %s' to fix.", branch, trunk)))
 			}
 		}
 	}
@@ -253,9 +256,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 		// Handle merged branch with interactive prompt
 		if syncDryRunFlag {
-			fmt.Printf("Would handle merged branch %s\n", branch)
+			fmt.Printf("%s Would handle merged branch %s\n", s.Muted("dry-run:"), s.Branch(branch))
 		} else {
-			action := handleMergedBranch(g, cfg, branch, trunk, &currentBranch)
+			action := handleMergedBranch(g, cfg, branch, trunk, &currentBranch, s)
 			if action == mergedActionSkip {
 				// User chose to skip - don't collect fork points or retarget children
 				continue
@@ -270,7 +273,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 				// Fall back to calculating from parent (before it's deleted)
 				forkPoint, fpErr = g.GetMergeBase(child.Name, branch)
 				if fpErr != nil {
-					fmt.Printf("Warning: could not get fork point for %s: %v\n", child.Name, fpErr)
+					fmt.Printf("%s could not get fork point for %s: %v\n", s.WarningIcon(), s.Branch(child.Name), fpErr)
 					forkPoint = "" // Will fall back to simple rebase
 				}
 			}
@@ -286,17 +289,17 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Retarget children to trunk
 	for _, rt := range retargets {
 		if syncDryRunFlag {
-			fmt.Printf("Would retarget %s to %s (fork point: %s)\n", rt.childName, trunk, rt.forkPoint)
+			fmt.Printf("%s Would retarget %s to %s (fork point: %s)\n", s.Muted("dry-run:"), s.Branch(rt.childName), s.Branch(trunk), rt.forkPoint)
 			continue
 		}
 
-		fmt.Printf("Retargeting %s to %s\n", rt.childName, trunk)
+		fmt.Printf("Retargeting %s to %s\n", s.Branch(rt.childName), s.Branch(trunk))
 		_ = cfg.SetParent(rt.childName, trunk) //nolint:errcheck // best effort
 
 		// Update PR base on GitHub
 		if rt.childPR > 0 {
 			if updateErr := gh.UpdatePRBase(rt.childPR, trunk); updateErr != nil {
-				fmt.Printf("Warning: failed to update PR #%d base: %v\n", rt.childPR, updateErr)
+				fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), rt.childPR, updateErr)
 			}
 		}
 
@@ -306,12 +309,12 @@ func runSync(cmd *cobra.Command, args []string) error {
 			if len(displayForkPoint) > 8 {
 				displayForkPoint = displayForkPoint[:8]
 			}
-			fmt.Printf("Rebasing %s onto %s (from fork point %s)...\n", rt.childName, trunk, displayForkPoint)
+			fmt.Printf("Rebasing %s onto %s (from fork point %s)...\n", s.Branch(rt.childName), s.Branch(trunk), displayForkPoint)
 			if rebaseErr := g.RebaseOnto(trunk, rt.forkPoint, rt.childName); rebaseErr != nil {
-				fmt.Printf("Warning: --onto rebase failed, will try normal cascade: %v\n", rebaseErr)
+				fmt.Printf("%s --onto rebase failed, will try normal cascade: %v\n", s.WarningIcon(), rebaseErr)
 				// Don't return error - let cascade try
 			} else {
-				fmt.Printf("Rebased %s successfully\n", rt.childName)
+				fmt.Printf("%s Rebased %s successfully\n", s.SuccessIcon(), s.Branch(rt.childName))
 
 				// Update fork point to new parent tip after successful rebase
 				trunkTip, tipErr := g.GetTip(trunk)
@@ -329,7 +332,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Cascade all (if not disabled)
 	if !syncNoCascadeFlag {
-		fmt.Println("\nCascading all branches...")
+		fmt.Println(s.Bold("\nCascading all branches..."))
 		// Rebuild tree after modifications
 		root, err = tree.Build(cfg)
 		if err != nil {
@@ -340,7 +343,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		for _, child := range root.Children {
 			allBranches := []*tree.Node{child}
 			allBranches = append(allBranches, tree.GetDescendants(child)...)
-			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef); err != nil {
+			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, s); err != nil {
 				if err == ErrConflict {
 					hitConflict = true
 				}
@@ -352,12 +355,12 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Update stack comments on all PRs
 	if !syncDryRunFlag {
 		fmt.Println("\nUpdating stack comments...")
-		if err := updateStackComments(cfg, gh); err != nil {
-			fmt.Printf("Warning: failed to update some comments: %v\n", err)
+		if err := updateStackComments(cfg, gh, s); err != nil {
+			fmt.Printf("%s failed to update some comments: %v\n", s.WarningIcon(), err)
 		}
 	}
 
-	fmt.Println("\nSync complete!")
+	fmt.Println(s.SuccessMessage("\nSync complete!"))
 	// Stash restoration handled by defer
 	return nil
 }
@@ -384,12 +387,12 @@ const (
 // handleMergedBranch prompts the user for how to handle a merged branch and executes the choice.
 // Returns the action taken. If the user is on the merged branch, it will checkout trunk first.
 // The currentBranch pointer is updated if a checkout occurs.
-func handleMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string) mergedAction {
-	fmt.Printf("\nBranch %q appears to be merged into %s.\n", branch, trunk)
+func handleMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string, s *style.Style) mergedAction {
+	fmt.Printf("\nBranch %s appears to be %s into %s.\n", s.Branch(branch), s.Merged("merged"), s.Branch(trunk))
 
 	// Default to delete in non-interactive mode
 	if !prompt.IsInteractive() {
-		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch)
+		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch, s)
 	}
 
 	// Interactive mode: prompt for action
@@ -401,44 +404,44 @@ func handleMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, cu
 
 	switch choice {
 	case 0: // Delete
-		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch)
+		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch, s)
 	case 1: // Orphan
-		return orphanMergedBranch(cfg, branch)
+		return orphanMergedBranch(cfg, branch, s)
 	case 2: // Skip
-		fmt.Printf("Skipping %s (keeping in stack)\n", branch)
+		fmt.Printf("Skipping %s (keeping in stack)\n", s.Branch(branch))
 		return mergedActionSkip
 	default:
-		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch)
+		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch, s)
 	}
 }
 
 // deleteMergedBranch deletes a merged branch and removes it from stack config.
 // If the user is on the branch, it checks out trunk first.
-func deleteMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string) mergedAction {
+func deleteMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string, s *style.Style) mergedAction {
 	// If user is on the merged branch, checkout trunk first
 	if *currentBranch == branch {
-		fmt.Printf("Checking out %s (currently on merged branch)...\n", trunk)
+		fmt.Printf("Checking out %s (currently on merged branch)...\n", s.Branch(trunk))
 		if err := g.Checkout(trunk); err != nil {
-			fmt.Printf("Warning: could not checkout %s: %v\n", trunk, err)
-			fmt.Printf("Falling back to orphan instead of delete.\n")
-			return orphanMergedBranch(cfg, branch)
+			fmt.Printf("%s could not checkout %s: %v\n", s.WarningIcon(), s.Branch(trunk), err)
+			fmt.Println(s.Muted("Falling back to orphan instead of delete."))
+			return orphanMergedBranch(cfg, branch, s)
 		}
 		*currentBranch = trunk
 	}
 
-	fmt.Printf("Deleting merged branch %s\n", branch)
+	fmt.Printf("Deleting merged branch %s\n", s.Branch(branch))
 	_ = cfg.RemoveParent(branch)    //nolint:errcheck // best effort cleanup
 	_ = cfg.RemovePR(branch)        //nolint:errcheck // best effort cleanup
 	_ = cfg.RemoveForkPoint(branch) //nolint:errcheck // best effort cleanup
 	if err := g.DeleteBranch(branch); err != nil {
-		fmt.Printf("Warning: could not delete branch %s: %v\n", branch, err)
+		fmt.Printf("%s could not delete branch %s: %v\n", s.WarningIcon(), s.Branch(branch), err)
 	}
 	return mergedActionDelete
 }
 
 // orphanMergedBranch removes a branch from stack config but keeps the git branch.
-func orphanMergedBranch(cfg *config.Config, branch string) mergedAction {
-	fmt.Printf("Orphaning %s (branch preserved, removed from stack)\n", branch)
+func orphanMergedBranch(cfg *config.Config, branch string, s *style.Style) mergedAction {
+	fmt.Printf("Orphaning %s (branch preserved, removed from stack)\n", s.Branch(branch))
 	_ = cfg.RemoveParent(branch)    //nolint:errcheck // best effort cleanup
 	_ = cfg.RemovePR(branch)        //nolint:errcheck // best effort cleanup
 	_ = cfg.RemoveForkPoint(branch) //nolint:errcheck // best effort cleanup

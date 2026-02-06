@@ -7,6 +7,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
@@ -66,6 +67,8 @@ func runOrphan(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("branch %q has children; use --force to orphan descendants too", branchName)
 	}
 
+	s := style.New()
+
 	// Orphan descendants if --force
 	if orphanForceFlag {
 		descendants := tree.GetDescendants(node)
@@ -73,7 +76,7 @@ func runOrphan(cmd *cobra.Command, args []string) error {
 			_ = cfg.RemoveParent(desc.Name)    //nolint:errcheck // best effort cleanup
 			_ = cfg.RemovePR(desc.Name)        //nolint:errcheck // best effort cleanup
 			_ = cfg.RemoveForkPoint(desc.Name) //nolint:errcheck // best effort cleanup
-			fmt.Printf("Orphaned %q\n", desc.Name)
+			fmt.Printf("%s Orphaned %s\n", s.SuccessIcon(), s.Branch(desc.Name))
 		}
 	}
 
@@ -81,7 +84,7 @@ func runOrphan(cmd *cobra.Command, args []string) error {
 	_ = cfg.RemoveParent(branchName)    //nolint:errcheck // best effort cleanup
 	_ = cfg.RemovePR(branchName)        //nolint:errcheck // best effort cleanup
 	_ = cfg.RemoveForkPoint(branchName) //nolint:errcheck // best effort cleanup
-	fmt.Printf("Orphaned %q\n", branchName)
+	fmt.Printf("%s Orphaned %s\n", s.SuccessIcon(), s.Branch(branchName))
 
 	return nil
 }

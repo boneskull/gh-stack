@@ -7,6 +7,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/state"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +23,8 @@ func init() {
 }
 
 func runAbort(cmd *cobra.Command, args []string) error {
+	s := style.New()
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -50,10 +53,10 @@ func runAbort(cmd *cobra.Command, args []string) error {
 	if st.StashRef != "" {
 		fmt.Println("Restoring auto-stashed changes...")
 		if popErr := g.StashPop(st.StashRef); popErr != nil {
-			fmt.Printf("Warning: could not restore stashed changes (commit %s): %v\n", git.AbbrevSHA(st.StashRef), popErr)
+			fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(st.StashRef), popErr)
 		}
 	}
 
-	fmt.Printf("Cascade aborted. Original HEAD was %s\n", st.OriginalHead)
+	fmt.Printf("%s Cascade aborted. Original HEAD was %s\n", s.WarningIcon(), st.OriginalHead)
 	return nil
 }
