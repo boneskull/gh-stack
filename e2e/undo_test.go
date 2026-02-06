@@ -263,8 +263,8 @@ func TestUndoBlockedDuringCascade(t *testing.T) {
 	if result.Success() {
 		t.Error("undo should fail during cascade in progress")
 	}
-	if !result.ContainsStdout("cascade/submit is in progress") && !result.ContainsStderr("cascade/submit is in progress") {
-		t.Errorf("expected message about cascade in progress, got stdout: %s, stderr: %s", result.Stdout, result.Stderr)
+	if !result.ContainsStdout("operation is in progress") && !result.ContainsStderr("operation is in progress") {
+		t.Errorf("expected message about operation in progress, got stdout: %s, stderr: %s", result.Stdout, result.Stderr)
 	}
 
 	// Abort the cascade

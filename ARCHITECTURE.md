@@ -86,14 +86,14 @@ When a multi-branch rebase is interrupted by a conflict, gh-stack saves the oper
 | `current`                         | Branch where the conflict occurred                                         |
 | `pending`                         | Remaining branches to rebase                                               |
 | `original_head`                   | HEAD before the operation started (for abort)                              |
-| `operation`                       | `"cascade"` or `"submit"`                                                  |
+| `operation`                       | `"cascade"` or `"submit"` (`"cascade"` is used by the `restack` command)   |
 | `stash_ref`                       | Commit hash of auto-stashed uncommitted changes                            |
 | `branches`                        | Full branch list (submit only; used to rebuild the set for push/PR phases) |
 | `update_only`, `web`, `push_only` | Submit-specific flags preserved across continue                            |
 
 ### Cascade State Lifecycle
 
-1. **Created** when a rebase conflict interrupts `cascade`, `submit`, or `sync`.
+1. **Created** when a rebase conflict interrupts `restack`, `submit`, or `sync`.
 2. **Removed** before `continue` resumes (will be recreated if another conflict occurs).
 3. **Removed** on successful completion or `abort`.
 
@@ -101,7 +101,7 @@ When a multi-branch rebase is interrupted by a conflict, gh-stack saves the oper
 
 This is an ephemeral, single-operation state file. It is not designed to survive beyond the operation that created it.
 
-- **Single-operation scope.** Only one cascade/submit/sync can be in progress at a time. The code checks for this file and refuses to start a new operation if one exists.
+- **Single-operation scope.** Only one restack/submit/sync can be in progress at a time. The code checks for this file and refuses to start a new operation if one exists.
 - **Best-effort persistence.** Save errors are ignored (`//nolint:errcheck`) because if we can't save state, the user can still recover manually by aborting the rebase and re-running the command.
 
 ## Undo Snapshots
@@ -116,7 +116,7 @@ Before any destructive operation, gh-stack captures a snapshot of every affected
 {
   "timestamp": "2026-02-05T12:00:00Z",
   "operation": "cascade",
-  "command": "gh stack cascade",
+  "command": "gh stack restack",
   "original_head": "abc123...",
   "stash_ref": "",
   "branches": {
@@ -133,7 +133,7 @@ Before any destructive operation, gh-stack captures a snapshot of every affected
 
 ### Snapshot Lifecycle
 
-1. **Created** before destructive operations (`cascade`, `submit`, `sync`).
+1. **Created** before destructive operations (`restack`, `submit`, `sync`).
 2. **Used** by `undo`, which restores branch refs and config keys from the snapshot.
 3. **Archived** to `done/` after a successful undo.
 4. **Pruned** automatically: max 50 active snapshots and 50 archived. Oldest are removed first.
@@ -153,7 +153,7 @@ flowchart TD
         init[init]
         create[create / adopt]
         submit[submit / link]
-        cascade[cascade / sync]
+        restack[restack / sync]
         undoCmd[undo]
     end
 
@@ -166,8 +166,8 @@ flowchart TD
     init -->|set trunk| config
     create -->|set parent, fork point| config
     submit -->|set PR number| config
-    cascade -->|on conflict| state
-    cascade -->|before start| snapshots
+    restack -->|on conflict| state
+    restack -->|before start| snapshots
     undoCmd -->|restore from| snapshots
     undoCmd -->|restore| config
 ```

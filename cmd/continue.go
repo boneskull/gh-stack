@@ -16,7 +16,7 @@ import (
 var continueCmd = &cobra.Command{
 	Use:   "continue",
 	Short: "Continue an operation after resolving conflicts",
-	Long:  `Continue a cascade or submit operation after resolving rebase conflicts.`,
+	Long:  `Continue a restack, submit, or sync operation after resolving rebase conflicts.`,
 	RunE:  runContinue,
 }
 
@@ -133,6 +133,6 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println(s.SuccessMessage("Cascade complete!"))
+	fmt.Println(s.SuccessMessage("Restack complete!"))
 	return nil
 }

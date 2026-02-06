@@ -16,8 +16,8 @@ func TestSubmitDryRun(t *testing.T) {
 	result := env.MustRun("submit", "--dry-run")
 
 	// Should show all three phases
-	if !strings.Contains(result.Stdout, "Phase 1: Cascade") {
-		t.Error("expected cascade phase output")
+	if !strings.Contains(result.Stdout, "Phase 1: Restack") {
+		t.Error("expected restack phase output")
 	}
 	if !strings.Contains(result.Stdout, "Phase 2: Push") {
 		t.Error("expected push phase output")
@@ -265,8 +265,8 @@ func TestSubmitPushOnlyDryRun(t *testing.T) {
 	result := env.MustRun("submit", "--dry-run", "--push-only")
 
 	// Should show all three phases
-	if !strings.Contains(result.Stdout, "Phase 1: Cascade") {
-		t.Error("expected cascade phase output")
+	if !strings.Contains(result.Stdout, "Phase 1: Restack") {
+		t.Error("expected restack phase output")
 	}
 	if !strings.Contains(result.Stdout, "Phase 2: Push") {
 		t.Error("expected push phase output")

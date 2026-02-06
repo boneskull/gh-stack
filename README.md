@@ -76,26 +76,26 @@ main
 Say we've made changes in `feature-auth`. To keep the stack in sync, we will need to rebase `feature-auth-tests` onto `feature-auth`. From branch `feature-auth`, execute:
 
 ```bash
-gh stack cascade
+gh stack restack
 ```
 
-If you run into conflicts, resolve them and run `gh stack continue` to resume the cascade (or `gh stack abort` to cancel). Once complete, your local stacks will be in sync. _They won't yet be pushed to the remote repository._
+If you run into conflicts, resolve them and run `gh stack continue` to resume the restack (or `gh stack abort` to cancel). Once complete, your local stacks will be in sync. _They won't yet be pushed to the remote repository._
 
 #### Scenario 2: Changes in the local trunk
 
 Maybe we pulled down `main` and it has new commits. We'll use the same strategy as above, but this time from the `main` branch:
 
 ```bash
-gh stack cascade
+gh stack restack
 ```
 
 > [!NOTE]
 >
-> Since `main` (the trunk) is the parent of every stack, `gh stack cascade` will naturally cascade _all_ stacks.
+> Since `main` (the trunk) is the parent of every stack, `gh stack restack` will naturally restack _all_ stacks.
 
 #### Scenario 3: Upstream changes
 
-Say `feature-auth` has been merged into the remote `main`. We now need to cascade the changes, but also retarget `feature-auth-tests` to `main` from `feature-auth`. You'll want to run:
+Say `feature-auth` has been merged into the remote `main`. We now need to restack the changes, but also retarget `feature-auth-tests` to `main` from `feature-auth`. You'll want to run:
 
 ```bash
 gh stack sync
@@ -108,7 +108,7 @@ This will:
 3. Detect merged PRs
 4. Clean up merged branches
 5. Retarget orphaned children to trunk
-6. Cascade all branches
+6. Restack all branches
 
 What it _won't_ do is push back up to the remote; see the [next section](#creating--updating-prs) for that.
 
@@ -124,7 +124,7 @@ Whenever you need to push these branches again, or update the PRs, you can run `
 
 > [!TIP]
 >
-> `gh stack submit` does everything `gh stack cascade` does, and then some. Generally, if you want to make local mid-stack changes _without_ pushing to the remote, you'll want `gh stack cascade`; otherwise just use `gh stack submit`.
+> `gh stack submit` does everything `gh stack restack` does, and then some. Generally, if you want to make local mid-stack changes _without_ pushing to the remote, you'll want `gh stack restack`; otherwise just use `gh stack submit`.
 
 ## Commands
 
@@ -137,11 +137,11 @@ Whenever you need to push these branches again, or update the PRs, you can run `
 | `orphan`   | Stop tracking a branch                              |
 | `link`     | Associate PR number with branch                     |
 | `unlink`   | Remove PR association                               |
-| `submit`   | Cascade, push, and create/update PRs in one command |
-| `cascade`  | Rebase branch and descendants onto parents          |
+| `submit`   | Restack, push, and create/update PRs in one command |
+| `restack`  | Rebase branch and descendants onto parents          |
 | `continue` | Resume operation after conflict resolution          |
 | `abort`    | Cancel in-progress operation                        |
-| `sync`     | Full sync: fetch, cleanup merged PRs, cascade all   |
+| `sync`     | Full sync: fetch, cleanup merged PRs, restack all   |
 | `undo`     | Undo the last destructive operation                 |
 
 ## Command Reference
@@ -254,11 +254,11 @@ The PR itself is not affected; this only removes the local tracking.
 
 ### submit
 
-Cascade, push, and create/update PRs for current branch and descendants.
+Restack, push, and create/update PRs for current branch and descendants.
 
 This is the primary workflow command. It performs three phases:
 
-1. **Cascade**: Rebase current branch and descendants onto their parents
+1. **Restack**: Rebase current branch and descendants onto their parents
 2. **Push**: Force-push all affected branches (using `--force-with-lease`)
 3. **PR**: Create PRs for branches without them; update PR bases for existing PRs
 
@@ -273,38 +273,38 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 | `--dry-run`      | Show what would happen without doing it         |
 | `--current-only` | Only submit the current branch, not descendants |
 | `--update-only`  | Only update existing PRs, don't create new ones |
-| `--push-only`    | Skip PR creation/update, only cascade and push  |
+| `--push-only`    | Skip PR creation/update, only restack and push  |
 
-### cascade
+### restack
 
-Rebase the current branch and its descendants onto their parents.
+Rebase the current branch and its descendants onto their parents. Aliased as `cascade`.
 
 Use this when you've made local changes and want to keep your stack in sync without pushing or creating PRs. For a full submit workflow, use `gh stack submit` instead.
 
 If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
-#### cascade Flags
+#### restack Flags
 
-| Flag        | Description                                  |
-| ----------- | -------------------------------------------- |
-| `--only`    | Only cascade current branch, not descendants |
-| `--dry-run` | Show what would be done                      |
+| Flag        | Description                                   |
+| ----------- | --------------------------------------------- |
+| `--only`    | Only restack current branch, not descendants  |
+| `--dry-run` | Show what would be done                       |
 
 ### continue
 
-Continue a cascade or submit operation after resolving rebase conflicts.
+Continue a restack or submit operation after resolving rebase conflicts.
 
 After resolving conflicts and staging the changes, run this command to resume the operation.
 
 ### abort
 
-Abort a cascade or submit operation in progress.
+Abort a restack or submit operation in progress.
 
 This aborts any in-progress rebase and cleans up the operation state. Your branches will be left in their pre-operation state.
 
 ### sync
 
-Full sync: fetch from origin, detect merged PRs, clean up merged branches, retarget orphaned children, and cascade all branches.
+Full sync: fetch from origin, detect merged PRs, clean up merged branches, retarget orphaned children, and restack all branches.
 
 This is the command to run when upstream changes have occurred (e.g., a PR in your stack was merged). It handles the bookkeeping of updating your local stack to match remote state.
 
@@ -312,12 +312,12 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 
 | Flag           | Description             |
 | -------------- | ----------------------- |
-| `--no-cascade` | Skip cascading branches |
+| `--no-restack` | Skip restacking branches |
 | `--dry-run`    | Show what would be done |
 
 ### undo
 
-Undo the last destructive operation (cascade, submit, or sync) by restoring branches to their pre-operation state.
+Undo the last destructive operation (restack, submit, or sync) by restoring branches to their pre-operation state.
 
 Before any destructive operation, gh-stack automatically captures a snapshot of affected branches. If something goes wrong or you change your mind, `undo` restores:
 

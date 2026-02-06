@@ -18,7 +18,7 @@ import (
 var undoCmd = &cobra.Command{
 	Use:   "undo",
 	Short: "Undo the last destructive operation",
-	Long: `Undo the last cascade, submit, or sync operation by restoring branches
+	Long: `Undo the last restack, submit, or sync operation by restoring branches
 to their previous state. This includes:
 
 - Resetting branch refs to their pre-operation SHAs
@@ -54,7 +54,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 
 	// Check if a cascade/submit is in progress
 	if state.Exists(gitDir) {
-		return errors.New("cannot undo while a cascade/submit is in progress; run 'gh stack continue' or 'gh stack abort' first")
+		return errors.New("cannot undo while an operation is in progress; run 'gh stack continue' or 'gh stack abort' first")
 	}
 
 	// Check if a rebase is in progress
