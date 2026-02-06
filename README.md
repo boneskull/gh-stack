@@ -422,7 +422,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of **gh-stack**'
 
 - **gh-stack** aims to be a minimal alternative to Graphite for those who do not need its full feature set
 - **gh-stack** wants to support only the minimum set of operations needed to manage stacked PRs
-- Being a [GitHub CLI][] extension, **gh-stack** will not support other Git hosting service
+- Being a [GitHub CLI][] extension, **gh-stack** will not support other Git hosting services
 
 ## Development
 
