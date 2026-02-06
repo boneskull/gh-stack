@@ -333,9 +333,9 @@ Snapshots are stored in `.git/stack-undo/` and archived to `.git/stack-undo/done
 
 #### undo Flags
 
-| Flag        | Description                              |
-| ----------- | ---------------------------------------- |
-| `--force`   | Skip confirmation prompt                 |
+| Flag        | Description                                  |
+| ----------- | -------------------------------------------- |
+| `--force`   | Skip confirmation prompt                     |
 | `--dry-run` | Show what would be restored without doing it |
 
 ## How It Works
@@ -361,7 +361,32 @@ No remote service required. Your stack relationships stay with your repository.
 
 ### vs. Graphite
 
-[Graphite](https://graphite.dev/) is a SaaS product with a polished CLI and web dashboard. It requires an account and stores stack metadata on their servers. **gh-stack** stores everything locally in `.git/config`—no account, no remote dependency.
+[Graphite](https://graphite.dev/) is a SaaS product with a polished CLI (`gt`) and web dashboard. It requires an account and stores stack metadata on their servers.
+
+Graphite's CLI is significantly more feature-rich:
+
+| Feature                               | Graphite (`gt`) | `gh-stack` |
+| ------------------------------------- | :-------------: | :--------: |
+| Create / track / untrack branches     |       ✅        |     ✅     |
+| View stack hierarchy                  |       ✅        |     ✅     |
+| Sync with trunk                       |       ✅        |     ✅     |
+| Create & update PRs                   |       ✅        |     ✅     |
+| Conflict recovery (continue/abort)    |       ✅        |     ✅     |
+| Undo last operation                   |       ✅        |     ✅     |
+| Stack navigation (up/down/top/bottom) |       ✅        |     ❌     |
+| Move branch to new parent             |       ✅        |     ❌     |
+| Fold / split / reorder branches       |       ✅        |     ❌     |
+| Absorb changes into downstack         |       ✅        |     ❌     |
+| Amend / squash commits                |       ✅        |     ❌     |
+| Fetch teammate's stack                |       ✅        |     ❌     |
+| Freeze branch to prevent edits        |       ✅        |     ❌     |
+| Web dashboard & PR inbox              |       ✅        |     ❌     |
+| AI code review                        |       ✅        |     ❌     |
+| Merge queue                           |       ✅        |     ❌     |
+| Works offline (no account required)   |       ❌        |     ✅     |
+| Open source                           |       ❌        |     ✅     |
+
+If you want the kitchen sink—stack navigation, branch surgery, a web UI, AI reviews, merge queues—Graphite is hard to beat. If you want a lightweight, open-source tool that handles the core stacking workflow without an account or remote dependency, that's what **gh-stack** is for.
 
 ### vs. spr
 
@@ -380,6 +405,24 @@ No remote service required. Your stack relationships stay with your repository.
 [git-branchless](https://github.com/arxanas/git-branchless) is a powerful suite that enhances Git with undo functionality, interactive commit graph editing, and patch-stack workflows. It's designed for power users and optimized for massive repositories.
 
 **gh-stack** is narrower in scope: it tracks parent-child relationships between branches and helps you manage the resulting PRs. It doesn't modify how Git works—it just adds stack awareness on top.
+
+### vs. git-spice
+
+[git-spice](https://abhinav.github.io/git-spice/) is a stacking tool that stores all operational state as Git objects in a local ref (`refs/spice/data`). Every state mutation creates a new commit in that ref, giving you a full history of every change to your stack metadata—explorable with `git log --patch refs/spice/data`. It supports both GitHub and GitLab.
+
+**gh-stack** stores stack metadata directly in `.git/config` as standard Git configuration keys, with operation recovery and undo handled by plain JSON files in `.git/`. This means:
+
+- **Faster writes.** Setting a config key is a single `git config` subprocess call. Creating a Git object requires hashing, compressing, writing a blob, writing a tree, writing a commit, and updating the ref.
+- **Easier debugging.** You can inspect and repair state with `git config --edit` or a text editor. No need for `git cat-file` or `git log` on an internal ref.
+- **No state history.** **git-spice** gets a full audit log for free. **gh-stack** provides multi-level undo via separate snapshot files instead, which covers the common case (undoing the last operation) without the overhead.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of **gh-stack**'s data storage approach.
+
+## Project Scope
+
+- **gh-stack** aims to be a minimal alternative to Graphite for those who do not need its full feature set
+- **gh-stack** wants to support only the minimum set of operations needed to manage stacked PRs
+- Being a [GitHub CLI][] extension, **gh-stack** will not support other Git hosting service
 
 ## Development
 
