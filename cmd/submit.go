@@ -19,12 +19,12 @@ import (
 
 var submitCmd = &cobra.Command{
 	Use:   "submit",
-	Short: "Cascade, push, and create/update PRs for current branch and descendants",
+	Short: "Restack, push, and create/update PRs for current branch and descendants",
 	Long: `Submit rebases the current branch and its descendants onto their parents,
 pushes all affected branches, and creates or updates pull requests.
 
 This is the typical workflow command after making changes in a stack:
-1. Cascade: rebase current branch + descendants onto their parents
+1. Restack: rebase current branch + descendants onto their parents
 2. Push: force-push all affected branches (with --force-with-lease)
 3. PR: create PRs for branches without them, update PR bases for those that have them
 
@@ -45,7 +45,7 @@ func init() {
 	submitCmd.Flags().BoolVar(&submitDryRunFlag, "dry-run", false, "show what would be done without doing it")
 	submitCmd.Flags().BoolVar(&submitCurrentOnlyFlag, "current-only", false, "only submit current branch, not descendants")
 	submitCmd.Flags().BoolVar(&submitUpdateOnlyFlag, "update-only", false, "only update existing PRs, don't create new ones")
-	submitCmd.Flags().BoolVar(&submitPushOnlyFlag, "push-only", false, "skip PR creation/update, only cascade and push")
+	submitCmd.Flags().BoolVar(&submitPushOnlyFlag, "push-only", false, "skip PR creation/update, only restack and push")
 	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts and use auto-generated title/description for PRs")
 	submitCmd.Flags().BoolVarP(&submitWebFlag, "web", "w", false, "open created/updated PRs in web browser")
 	rootCmd.AddCommand(submitCmd)
@@ -135,8 +135,8 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Phase 1: Cascade
-	fmt.Println(s.Bold("=== Phase 1: Cascade ==="))
+	// Phase 1: Restack
+	fmt.Println(s.Bold("=== Phase 1: Restack ==="))
 	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag, branchNames, stashRef, s); cascadeErr != nil {
 		// Stash is saved in state for conflicts; restore on other errors
 		if cascadeErr != ErrConflict && stashRef != "" {

@@ -19,10 +19,11 @@ import (
 var ErrConflict = errors.New("rebase conflict: resolve and run 'gh stack continue', or 'gh stack abort'")
 
 var cascadeCmd = &cobra.Command{
-	Use:   "cascade",
-	Short: "Rebase current branch and descendants onto their parents",
-	Long:  `Rebase the current branch onto its parent, then recursively cascade to descendants.`,
-	RunE:  runCascade,
+	Use:     "restack",
+	Aliases: []string{"cascade"},
+	Short:   "Rebase current branch and descendants onto their parents",
+	Long:    `Rebase the current branch onto its parent, then recursively restack descendants.`,
+	RunE:    runCascade,
 }
 
 var (
@@ -31,7 +32,7 @@ var (
 )
 
 func init() {
-	cascadeCmd.Flags().BoolVar(&cascadeOnlyFlag, "only", false, "only cascade current branch, not descendants")
+	cascadeCmd.Flags().BoolVar(&cascadeOnlyFlag, "only", false, "only restack current branch, not descendants")
 	cascadeCmd.Flags().BoolVar(&cascadeDryRunFlag, "dry-run", false, "show what would be done")
 	rootCmd.AddCommand(cascadeCmd)
 }
@@ -53,7 +54,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 
 	// Check if cascade already in progress
 	if state.Exists(g.GetGitDir()) {
-		return fmt.Errorf("cascade already in progress; use 'gh stack continue' or 'gh stack abort'")
+		return fmt.Errorf("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
 	}
 
 	currentBranch, err := g.CurrentBranch()
@@ -84,7 +85,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 	var stashRef string
 	if !cascadeDryRunFlag {
 		var saveErr error
-		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "cascade", "gh stack cascade", s)
+		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "cascade", "gh stack restack", s)
 		if saveErr != nil {
 			fmt.Printf("%s could not save undo state: %v\n", s.WarningIcon(), saveErr)
 		}
@@ -129,7 +130,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 		}
 
 		if !needsRebase {
-			fmt.Printf("Cascading %s... %s\n", s.Branch(b.Name), s.Muted("already up to date"))
+			fmt.Printf("Restacking %s... %s\n", s.Branch(b.Name), s.Muted("already up to date"))
 			continue
 		}
 
@@ -153,9 +154,9 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 		}
 
 		if useOnto {
-			fmt.Printf("Cascading %s onto %s %s...\n", s.Branch(b.Name), s.Branch(parent), s.Muted("(using fork point)"))
+			fmt.Printf("Restacking %s onto %s %s...\n", s.Branch(b.Name), s.Branch(parent), s.Muted("(using fork point)"))
 		} else {
-			fmt.Printf("Cascading %s onto %s...\n", s.Branch(b.Name), s.Branch(parent))
+			fmt.Printf("Restacking %s onto %s...\n", s.Branch(b.Name), s.Branch(parent))
 		}
 
 		// Checkout and rebase
@@ -198,7 +199,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 			return ErrConflict
 		}
 
-		fmt.Printf("Cascading %s... %s\n", s.Branch(b.Name), s.Success("ok"))
+		fmt.Printf("Restacking %s... %s\n", s.Branch(b.Name), s.Success("ok"))
 
 		// Update fork point to current parent tip
 		parentTip, tipErr := g.GetTip(parent)
@@ -213,6 +214,18 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 	}
 
 	return nil
+}
+
+// displayOperationName maps internal operation constants to user-facing names.
+func displayOperationName(op string) string {
+	switch op {
+	case state.OperationCascade:
+		return "Restack"
+	case state.OperationSubmit:
+		return "Submit"
+	default:
+		return "Operation"
+	}
 }
 
 // saveUndoSnapshot captures the current state of branches before a destructive operation.

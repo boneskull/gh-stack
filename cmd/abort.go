@@ -13,8 +13,8 @@ import (
 
 var abortCmd = &cobra.Command{
 	Use:   "abort",
-	Short: "Abort a cascade in progress",
-	Long:  `Abort a cascade operation and restore the original state.`,
+	Short: "Abort an operation in progress",
+	Long:  `Abort a restack, submit, or sync operation and restore the original state.`,
 	RunE:  runAbort,
 }
 
@@ -35,7 +35,7 @@ func runAbort(cmd *cobra.Command, args []string) error {
 	// Check if cascade in progress
 	st, err := state.Load(g.GetGitDir())
 	if err != nil {
-		return fmt.Errorf("no cascade in progress")
+		return fmt.Errorf("no operation in progress")
 	}
 
 	// Abort rebase if in progress
@@ -57,6 +57,6 @@ func runAbort(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("%s Cascade aborted. Original HEAD was %s\n", s.WarningIcon(), st.OriginalHead)
+	fmt.Printf("%s %s aborted. Original HEAD was %s\n", s.WarningIcon(), displayOperationName(st.Operation), st.OriginalHead)
 	return nil
 }

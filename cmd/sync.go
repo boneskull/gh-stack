@@ -17,8 +17,8 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
-	Short: "Fetch, detect merged PRs, retarget orphaned branches, cascade all",
-	Long:  `Fetch from origin, detect merged PRs, retarget orphaned branches to trunk, and cascade all branches.`,
+	Short: "Fetch, detect merged PRs, retarget orphaned branches, restack all",
+	Long:  `Fetch from origin, detect merged PRs, retarget orphaned branches to trunk, and restack all branches.`,
 	RunE:  runSync,
 }
 
@@ -28,7 +28,7 @@ var (
 )
 
 func init() {
-	syncCmd.Flags().BoolVar(&syncNoCascadeFlag, "no-cascade", false, "skip cascading branches")
+	syncCmd.Flags().BoolVar(&syncNoCascadeFlag, "no-restack", false, "skip restacking branches")
 	syncCmd.Flags().BoolVar(&syncDryRunFlag, "dry-run", false, "show what would be done")
 	rootCmd.AddCommand(syncCmd)
 }
@@ -311,7 +311,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Printf("Rebasing %s onto %s (from fork point %s)...\n", s.Branch(rt.childName), s.Branch(trunk), displayForkPoint)
 			if rebaseErr := g.RebaseOnto(trunk, rt.forkPoint, rt.childName); rebaseErr != nil {
-				fmt.Printf("%s --onto rebase failed, will try normal cascade: %v\n", s.WarningIcon(), rebaseErr)
+				fmt.Printf("%s --onto rebase failed, will try normal restack: %v\n", s.WarningIcon(), rebaseErr)
 				// Don't return error - let cascade try
 			} else {
 				fmt.Printf("%s Rebased %s successfully\n", s.SuccessIcon(), s.Branch(rt.childName))
@@ -332,7 +332,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 
 	// Cascade all (if not disabled)
 	if !syncNoCascadeFlag {
-		fmt.Println(s.Bold("\nCascading all branches..."))
+		fmt.Println(s.Bold("\nRestacking all branches..."))
 		// Rebuild tree after modifications
 		root, err = tree.Build(cfg)
 		if err != nil {

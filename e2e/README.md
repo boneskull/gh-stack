@@ -30,7 +30,7 @@ make test
 - `scenario_helpers_test.go` - Conflict and remote simulation helpers
 - `smoke_test.go` - Basic smoke test
 - `init_create_test.go` - Init and create command tests
-- `cascade_test.go` - Cascade tests including conflict recovery
+- `cascade_test.go` - Restack tests including conflict recovery
 - `adopt_orphan_test.go` - Adopt and orphan command tests
 - `push_test.go` - Push command tests
 - `error_cases_test.go` - Error handling tests
@@ -58,7 +58,7 @@ make test
 
 | Category | Description |
 |----------|-------------|
-| Happy path | Normal workflows (init, create, cascade, push) |
+| Happy path | Normal workflows (init, create, restack, push) |
 | Error recovery | Conflicts, abort/continue, dirty working tree |
 | Chaos tests | Manual git operations, remote sync edge cases |
 
