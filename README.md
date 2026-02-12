@@ -443,7 +443,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of **gh-stack**'
 
 ## License
 
-Copyright © 2026 [Christopher "boneskull" Hiller][boneskull]. Licensed under [Apache-2.0](LICENSE).
+Copyright © 2026 [Christopher "boneskull" Hiller][boneskull]. Licensed under [BlueOak-1.0.0](LICENSE.md).
 
 [GitHub CLI]: https://cli.github.com/
 [boneskull]: https://github.com/boneskull
