@@ -570,24 +570,37 @@ var htmlTagRe = regexp.MustCompile(`</?[a-zA-Z][a-zA-Z0-9]*[\s/>]`)
 // before checking for HTML. Otherwise `<token>` in code would trigger a false positive.
 var inlineCodeRe = regexp.MustCompile("`[^`]+`")
 
+// fenceMarker returns the fence prefix ("```" or "~~~") if the line opens or
+// closes a fenced code block, or "" otherwise.
+func fenceMarker(trimmedLine string) string {
+	if strings.HasPrefix(trimmedLine, "```") {
+		return "```"
+	}
+	if strings.HasPrefix(trimmedLine, "~~~") {
+		return "~~~"
+	}
+	return ""
+}
+
 // containsHTMLOutsideCode scans the text for HTML tags that appear in prose,
 // ignoring content inside fenced code blocks, indented code blocks, and inline
 // code spans. Returns true if HTML is found in any prose line.
 func containsHTMLOutsideCode(text string) bool {
 	lines := strings.Split(text, "\n")
-	inFencedCodeBlock := false
+	var openFence string // tracks the opening fence marker ("```" or "~~~"), empty when outside
 
 	for _, line := range lines {
 		trimmed := strings.TrimRight(line, " \t")
+		marker := fenceMarker(trimmed)
 
-		// Track fenced code blocks (``` or ~~~)
-		if !inFencedCodeBlock && (strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")) {
-			inFencedCodeBlock = true
+		// Track fenced code blocks — only the matching marker can close a block
+		if openFence == "" && marker != "" {
+			openFence = marker
 			continue
 		}
-		if inFencedCodeBlock {
-			if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-				inFencedCodeBlock = false
+		if openFence != "" {
+			if marker == openFence {
+				openFence = ""
 			}
 			continue
 		}
@@ -620,7 +633,7 @@ func unwrapParagraphs(text string) string {
 	lines := strings.Split(text, "\n")
 	var result []string
 	var paragraph []string
-	inFencedCodeBlock := false
+	var openFence string // tracks the opening fence marker ("```" or "~~~"), empty when outside
 
 	flushParagraph := func() {
 		if len(paragraph) > 0 {
@@ -631,18 +644,19 @@ func unwrapParagraphs(text string) string {
 
 	for _, line := range lines {
 		trimmed := strings.TrimRight(line, " \t")
+		marker := fenceMarker(trimmed)
 
-		// Track fenced code blocks (``` or ~~~)
-		if !inFencedCodeBlock && (strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")) {
+		// Track fenced code blocks — only the matching marker can close a block
+		if openFence == "" && marker != "" {
 			flushParagraph()
 			result = append(result, line)
-			inFencedCodeBlock = true
+			openFence = marker
 			continue
 		}
-		if inFencedCodeBlock {
+		if openFence != "" {
 			result = append(result, line)
-			if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
-				inFencedCodeBlock = false
+			if marker == openFence {
+				openFence = ""
 			}
 			continue
 		}

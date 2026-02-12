@@ -1,4 +1,9 @@
 // cmd/submit_internal_test.go
+//
+// This file uses package cmd (not cmd_test) to unit-test unexported helpers
+// like unwrapParagraphs, isBlockElement, etc. that are pure functions with no
+// dependency on command wiring. The external test files (package cmd_test)
+// cover command-level integration behavior.
 package cmd
 
 import (
@@ -117,6 +122,16 @@ func TestUnwrapParagraphs(t *testing.T) {
 			name: "HTML in prose with code block HTML still bails out",
 			in:   "Use the <details> tag.\n\n```html\n<div>code</div>\n```",
 			want: "Use the <details> tag.\n\n```html\n<div>code</div>\n```",
+		},
+		{
+			name: "mismatched fence markers do not close each other",
+			in:   "Text before.\n\n```\n~~~\nstill in code\n```\n\nParagraph that is\nhard-wrapped.",
+			want: "Text before.\n\n```\n~~~\nstill in code\n```\n\nParagraph that is hard-wrapped.",
+		},
+		{
+			name: "tilde fence with backticks inside",
+			in:   "Text.\n\n~~~\n```\nnested marker\n~~~\n\nWrapped line\ncontinues here.",
+			want: "Text.\n\n~~~\n```\nnested marker\n~~~\n\nWrapped line continues here.",
 		},
 	}
 
