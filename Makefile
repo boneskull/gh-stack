@@ -29,10 +29,8 @@ clean:
 
 # Install as gh extension
 gh-install: build
-	mkdir -p ~/.local/share/gh/extensions/gh-stack
-	cp gh-stack ~/.local/share/gh/extensions/gh-stack/
-	@# Clear macOS extended attributes that can cause hangs
-	@xattr -c ~/.local/share/gh/extensions/gh-stack/gh-stack 2>/dev/null || true
+	gh extension remove gh-stack || true
+	gh extension install .
 
 # Install development tools
 tools:
