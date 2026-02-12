@@ -429,6 +429,7 @@ To build from source, you'll need Go 1.25+.
 ```bash
 gh repo clone boneskull/gh-stack
 cd gh-stack
+make tools        # Install development tools
 make build        # Build binary to ./gh-stack
 make test         # Run tests
 make lint         # Run linter
