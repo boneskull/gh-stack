@@ -158,6 +158,8 @@ func TestContainsHTMLOutsideCode(t *testing.T) {
 		{"HTML in inline code", "Use `<div>` for this", false},
 		{"HTML in prose AND code block", "<br/>\n\n```\n<div>x</div>\n```", true},
 		{"angle bracket not HTML", "x < y", false},
+		{"hyphenated custom element", "Use <my-component> here", true},
+		{"namespaced XML tag", "The <xml:tag> element", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

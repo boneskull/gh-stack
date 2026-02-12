@@ -553,18 +553,9 @@ func generatePRBody(g *git.Git, base, head string) (string, error) {
 	return sb.String(), nil
 }
 
-// unwrapParagraphs removes hard line breaks within plain-text paragraphs while
-// preserving intentional structure: blank lines, markdown block-level syntax
-// (headers, lists, blockquotes, horizontal rules), and code blocks (both fenced
-// and indented). This converts the ~72-column convention used in commit messages
-// into flowing text suitable for GitHub's markdown renderer.
-//
-// If HTML tags are found in prose (outside code blocks and inline code spans),
-// the entire text is returned as-is — anyone writing raw HTML in a commit message
-// is doing something intentional with formatting.
-
-// htmlTagRe matches anything that looks like an HTML tag (e.g. <div>, </span>, <br/>).
-var htmlTagRe = regexp.MustCompile(`</?[a-zA-Z][a-zA-Z0-9]*[\s/>]`)
+// htmlTagRe matches anything that looks like an HTML tag, including custom
+// elements with hyphens (e.g. <my-component>) and namespaced tags (e.g. <xml:tag>).
+var htmlTagRe = regexp.MustCompile(`</?[a-zA-Z][-:a-zA-Z0-9]*[\s/>]`)
 
 // inlineCodeRe matches backtick-enclosed inline code spans so we can strip them
 // before checking for HTML. Otherwise `<token>` in code would trigger a false positive.
@@ -620,6 +611,15 @@ func containsHTMLOutsideCode(text string) bool {
 	return false
 }
 
+// unwrapParagraphs removes hard line breaks within plain-text paragraphs while
+// preserving intentional structure: blank lines, markdown block-level syntax
+// (headers, lists, blockquotes, horizontal rules), and code blocks (both fenced
+// and indented). This converts the ~72-column convention used in commit messages
+// into flowing text suitable for GitHub's markdown renderer.
+//
+// If HTML tags are found in prose (outside code blocks and inline code spans),
+// the entire text is returned as-is — anyone writing raw HTML in a commit message
+// is doing something intentional with formatting.
 func unwrapParagraphs(text string) string {
 	if text == "" {
 		return ""
