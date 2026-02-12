@@ -1,4 +1,4 @@
-.PHONY: build test test-unit e2e lint install clean
+.PHONY: build test test-unit e2e lint install clean tools hooks
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS := -ldflags "-X github.com/boneskull/gh-stack/cmd.version=$(VERSION)"
@@ -37,3 +37,8 @@ gh-install: build
 # Install development tools
 tools:
 	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	go install github.com/evilmartians/lefthook/v2@latest
+
+# Install git hooks via lefthook
+hooks:
+	lefthook install

@@ -1,0 +1,8 @@
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: lint
+      glob: '*.go'
+      run: golangci-lint run --new-from-rev=HEAD~ ./...
