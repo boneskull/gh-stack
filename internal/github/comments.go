@@ -48,7 +48,7 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 	}
 
 	// Stack header
-	sb.WriteString("### Stack\n\n")
+	sb.WriteString("### :books: Pull Request Stack\n\n")
 
 	// Render tree from root as nested markdown list
 	renderTree(&sb, root, currentBranch, repoURL, prInfo, 0)
