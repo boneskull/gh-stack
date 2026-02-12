@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/boneskull/gh-stack/compare/v0.3.0...v0.4.0) (2026-02-12)
+
+
+### Features
+
+* add ANSI color output following GitHub CLI conventions ([#30](https://github.com/boneskull/gh-stack/issues/30)) ([dbfe73f](https://github.com/boneskull/gh-stack/commit/dbfe73f9f1f7bcec47ee6b96b84f45e9534889b7))
+* rename cascade command to restack, keep cascade as alias ([#32](https://github.com/boneskull/gh-stack/issues/32)) ([3d3f524](https://github.com/boneskull/gh-stack/commit/3d3f524f4118f25859415b9d32a7bdfeda8e64ff))
+* **submit:** unwrap hard line breaks in generated PR descriptions ([#34](https://github.com/boneskull/gh-stack/issues/34)) ([15edb71](https://github.com/boneskull/gh-stack/commit/15edb719a28cae70d91f50c6089f92f667a8cf97))
+
+
+### Bug Fixes
+
+* **github:** make PR comment heading less obtuse ([f23002e](https://github.com/boneskull/gh-stack/commit/f23002e1929c61286c72ffcc9546589d46f86c77))
+
 ## [0.3.0](https://github.com/boneskull/gh-stack/compare/v0.2.0...v0.3.0) (2026-02-04)
 
 
