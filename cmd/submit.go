@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/boneskull/gh-stack/internal/config"
@@ -514,6 +515,10 @@ func promptMarkPRReady(ghClient *github.Client, prNumber int, branch, trunk stri
 // generatePRBody creates a PR description from the commits between base and head.
 // For a single commit: returns the commit body.
 // For multiple commits: returns each commit as a markdown section.
+//
+// Commit message bodies are unwrapped so that hard line breaks within paragraphs
+// (typical of the ~72-column git convention) are removed. This produces better
+// rendering in GitHub's PR description, which treats single newlines as <br> tags.
 func generatePRBody(g *git.Git, base, head string) (string, error) {
 	commits, err := g.GetCommits(base, head)
 	if err != nil {
@@ -526,7 +531,7 @@ func generatePRBody(g *git.Git, base, head string) (string, error) {
 
 	if len(commits) == 1 {
 		// Single commit: just use the body
-		return commits[0].Body, nil
+		return unwrapParagraphs(commits[0].Body), nil
 	}
 
 	// Multiple commits: format as markdown sections
@@ -540,10 +545,190 @@ func generatePRBody(g *git.Git, base, head string) (string, error) {
 		sb.WriteString("\n")
 		if commit.Body != "" {
 			sb.WriteString("\n")
-			sb.WriteString(commit.Body)
+			sb.WriteString(unwrapParagraphs(commit.Body))
 			sb.WriteString("\n")
 		}
 	}
 
 	return sb.String(), nil
+}
+
+// unwrapParagraphs removes hard line breaks within plain-text paragraphs while
+// preserving intentional structure: blank lines, markdown block-level syntax
+// (headers, lists, blockquotes, horizontal rules), and code blocks (both fenced
+// and indented). This converts the ~72-column convention used in commit messages
+// into flowing text suitable for GitHub's markdown renderer.
+//
+// If HTML tags are found in prose (outside code blocks and inline code spans),
+// the entire text is returned as-is — anyone writing raw HTML in a commit message
+// is doing something intentional with formatting.
+
+// htmlTagRe matches anything that looks like an HTML tag (e.g. <div>, </span>, <br/>).
+var htmlTagRe = regexp.MustCompile(`</?[a-zA-Z][a-zA-Z0-9]*[\s/>]`)
+
+// inlineCodeRe matches backtick-enclosed inline code spans so we can strip them
+// before checking for HTML. Otherwise `<token>` in code would trigger a false positive.
+var inlineCodeRe = regexp.MustCompile("`[^`]+`")
+
+// containsHTMLOutsideCode scans the text for HTML tags that appear in prose,
+// ignoring content inside fenced code blocks, indented code blocks, and inline
+// code spans. Returns true if HTML is found in any prose line.
+func containsHTMLOutsideCode(text string) bool {
+	lines := strings.Split(text, "\n")
+	inFencedCodeBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimRight(line, " \t")
+
+		// Track fenced code blocks (``` or ~~~)
+		if !inFencedCodeBlock && (strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")) {
+			inFencedCodeBlock = true
+			continue
+		}
+		if inFencedCodeBlock {
+			if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+				inFencedCodeBlock = false
+			}
+			continue
+		}
+
+		// Skip indented code blocks (4+ spaces or tab)
+		if strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t") {
+			continue
+		}
+
+		// Strip inline code spans, then check for HTML
+		stripped := inlineCodeRe.ReplaceAllString(line, "")
+		if htmlTagRe.MatchString(stripped) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func unwrapParagraphs(text string) string {
+	if text == "" {
+		return ""
+	}
+
+	// Bail if the text contains HTML tags in prose — don't mess with it.
+	if containsHTMLOutsideCode(text) {
+		return text
+	}
+
+	lines := strings.Split(text, "\n")
+	var result []string
+	var paragraph []string
+	inFencedCodeBlock := false
+
+	flushParagraph := func() {
+		if len(paragraph) > 0 {
+			result = append(result, strings.Join(paragraph, " "))
+			paragraph = nil
+		}
+	}
+
+	for _, line := range lines {
+		trimmed := strings.TrimRight(line, " \t")
+
+		// Track fenced code blocks (``` or ~~~)
+		if !inFencedCodeBlock && (strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~")) {
+			flushParagraph()
+			result = append(result, line)
+			inFencedCodeBlock = true
+			continue
+		}
+		if inFencedCodeBlock {
+			result = append(result, line)
+			if strings.HasPrefix(trimmed, "```") || strings.HasPrefix(trimmed, "~~~") {
+				inFencedCodeBlock = false
+			}
+			continue
+		}
+
+		// Blank line = paragraph break
+		if trimmed == "" {
+			flushParagraph()
+			result = append(result, "")
+			continue
+		}
+
+		// Preserve lines that are markdown block-level elements
+		if isBlockElement(trimmed) {
+			flushParagraph()
+			result = append(result, line)
+			continue
+		}
+
+		// Indented code block (4+ spaces or tab)
+		if strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t") {
+			flushParagraph()
+			result = append(result, line)
+			continue
+		}
+
+		// Otherwise it's a paragraph line — accumulate it
+		paragraph = append(paragraph, trimmed)
+	}
+
+	flushParagraph()
+
+	return strings.Join(result, "\n")
+}
+
+// isBlockElement returns true if the line starts with markdown block-level syntax
+// that should not be joined with adjacent lines.
+func isBlockElement(line string) bool {
+	// Headers
+	if strings.HasPrefix(line, "#") {
+		return true
+	}
+	// Unordered lists
+	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "+ ") ||
+		line == "-" || line == "*" || line == "+" {
+		return true
+	}
+	// Ordered lists (e.g. "1. ", "12. ")
+	for i, ch := range line {
+		if ch >= '0' && ch <= '9' {
+			continue
+		}
+		if ch == '.' && i > 0 && i+1 < len(line) && line[i+1] == ' ' {
+			return true
+		}
+		break
+	}
+	// Blockquotes
+	if strings.HasPrefix(line, ">") {
+		return true
+	}
+	// Horizontal rules (---, ***, ___)
+	if isHorizontalRule(line) {
+		return true
+	}
+	// Pipe tables
+	if strings.HasPrefix(line, "|") {
+		return true
+	}
+	return false
+}
+
+// isHorizontalRule checks for markdown horizontal rules: three or more
+// -, *, or _ characters (with optional spaces).
+func isHorizontalRule(line string) bool {
+	stripped := strings.ReplaceAll(line, " ", "")
+	if len(stripped) < 3 {
+		return false
+	}
+	ch := stripped[0]
+	if ch != '-' && ch != '*' && ch != '_' {
+		return false
+	}
+	for _, c := range stripped {
+		if byte(c) != ch {
+			return false
+		}
+	}
+	return true
 }
