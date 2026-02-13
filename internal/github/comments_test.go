@@ -126,9 +126,9 @@ func TestGenerateStackComment(t *testing.T) {
 		if strings.Contains(comment, "```") {
 			t.Error("should not use code blocks")
 		}
-		// Trunk has no PR, shown as backticked branch name
-		if !strings.Contains(comment, "- `main`") {
-			t.Error("should use markdown list format with trunk in backticks")
+		// Trunk has no PR, shown with "branch:" prefix
+		if !strings.Contains(comment, "- branch: `main`") {
+			t.Error("should use markdown list format with 'branch:' prefix for trunk")
 		}
 	})
 
@@ -139,6 +139,30 @@ func TestGenerateStackComment(t *testing.T) {
 		// Should fallback to just "#N" format (no title)
 		if !strings.Contains(comment, "[#1](https://github.com/test/repo/pull/1)") {
 			t.Error("should fallback to '#N' when title not available")
+		}
+	})
+
+	t.Run("no-PR branches show branch prefix", func(t *testing.T) {
+		// Branch without a PR in the middle of a stack
+		noPRRoot := &tree.Node{Name: "main"}
+		noPRMiddle := &tree.Node{Name: "wip-branch", PR: 0, Parent: noPRRoot}
+		noPRChild := &tree.Node{Name: "child-branch", PR: 5, Parent: noPRMiddle}
+
+		noPRRoot.Children = []*tree.Node{noPRMiddle}
+		noPRMiddle.Children = []*tree.Node{noPRChild}
+
+		childPRInfo := makePRInfo(struct {
+			num   int
+			title string
+		}{5, "Child feature"})
+		comment := GenerateStackComment(noPRRoot, "child-branch", "main", testRepoURL, childPRInfo)
+
+		// Trunk and middle branch both have no PR; both should show "branch:" prefix
+		if !strings.Contains(comment, "- branch: `main`") {
+			t.Error("trunk without PR should show 'branch:' prefix")
+		}
+		if !strings.Contains(comment, "- branch: `wip-branch`") {
+			t.Error("branch without PR should show 'branch:' prefix")
 		}
 	})
 }
@@ -192,7 +216,7 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("branch with siblings", func(t *testing.T) {
+	t.Run("branch with siblings only shows current stack", func(t *testing.T) {
 		root := &tree.Node{Name: "main"}
 		a := &tree.Node{Name: "feature-a", PR: 1, Parent: root}
 		b := &tree.Node{Name: "feature-b", PR: 2, Parent: root}
@@ -213,8 +237,47 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 		if !strings.Contains(comment, "feature-a") {
 			t.Error("should contain current branch")
 		}
-		if !strings.Contains(comment, "feature-b") {
-			t.Error("should contain sibling branch")
+		if strings.Contains(comment, "feature-b") {
+			t.Error("should NOT contain sibling branch from a different stack")
+		}
+	})
+
+	t.Run("multiple stacks only shows current one", func(t *testing.T) {
+		// Tree: main -> {stack1-base (#1) -> stack1-child (#2), unrelated (#3)}
+		root := &tree.Node{Name: "main"}
+		stack1Base := &tree.Node{Name: "stack1-base", PR: 1, Parent: root}
+		stack1Child := &tree.Node{Name: "stack1-child", PR: 2, Parent: stack1Base}
+		unrelated := &tree.Node{Name: "unrelated", PR: 3, Parent: root}
+
+		root.Children = []*tree.Node{stack1Base, unrelated}
+		stack1Base.Children = []*tree.Node{stack1Child}
+
+		prInfo := makePRInfo(
+			struct {
+				num   int
+				title string
+			}{1, "Stack 1 base"},
+			struct {
+				num   int
+				title string
+			}{2, "Stack 1 child"},
+			struct {
+				num   int
+				title string
+			}{3, "Unrelated feature"},
+		)
+
+		// Viewing the child PR - should see stack1-base and stack1-child, but NOT unrelated
+		comment := GenerateStackComment(root, "stack1-child", "main", testRepoURL, prInfo)
+
+		if !strings.Contains(comment, "stack1-base") {
+			t.Error("should contain ancestor branch in the current stack")
+		}
+		if !strings.Contains(comment, "stack1-child") {
+			t.Error("should contain current branch")
+		}
+		if strings.Contains(comment, "unrelated") {
+			t.Error("should NOT contain branch from a different stack")
 		}
 	})
 

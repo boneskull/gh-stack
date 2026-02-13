@@ -15,6 +15,9 @@ const StackCommentMarker = "<!-- gh-stack:nav -->"
 // It includes a warning if the PR targets a non-trunk branch.
 // The repoURL should be the base repository URL (e.g., "https://github.com/owner/repo").
 // The prInfo map provides titles for PRs (keyed by PR number).
+//
+// Only the current stack is rendered: the path from root to the current branch,
+// plus all descendants of the current branch. Sibling stacks are excluded.
 func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string, prInfo map[int]PRInfo) string {
 	var sb strings.Builder
 
@@ -22,6 +25,15 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 	currentNode := tree.FindNode(root, currentBranch)
 	if currentNode == nil {
 		return ""
+	}
+
+	// Build ancestor path: the set of branch names from root down to (and
+	// including) the current branch. When rendering, only children on this
+	// path are shown for ancestor nodes; descendants of the current branch
+	// are always shown in full.
+	ancestorPath := make(map[string]bool)
+	for n := currentNode; n != nil; n = n.Parent {
+		ancestorPath[n.Name] = true
 	}
 
 	// Start with marker
@@ -50,8 +62,8 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 	// Stack header
 	sb.WriteString("### :books: Pull Request Stack\n\n")
 
-	// Render tree from root as nested markdown list
-	renderTree(&sb, root, currentBranch, repoURL, prInfo, 0)
+	// Render tree from root as nested markdown list, filtered to current stack
+	renderTree(&sb, root, currentBranch, repoURL, prInfo, 0, ancestorPath)
 
 	sb.WriteString("\n---\n")
 	sb.WriteString("*Managed by [gh-stack](https://github.com/boneskull/gh-stack)*\n")
@@ -76,13 +88,20 @@ func collectPRNumbersRecursive(node *tree.Node, numbers *[]int) {
 }
 
 // renderTree recursively renders the tree structure as nested markdown lists.
-func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL string, prInfo map[int]PRInfo, depth int) {
+//
+// The ancestorPath set controls which children are rendered at each level:
+//   - For nodes that are ancestors of the current branch (on the path but not
+//     the current branch itself), only the child on the ancestor path is shown.
+//   - For the current branch and all its descendants, all children are shown.
+//
+// This ensures only the current stack is rendered, not sibling stacks.
+func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL string, prInfo map[int]PRInfo, depth int, ancestorPath map[string]bool) {
 	// Build prefix based on depth (2 spaces per level for markdown nested lists)
 	prefix := strings.Repeat("  ", depth) + "- "
 
 	isCurrent := node.Name == currentBranch
 
-	// Format: "[Title #N](url) - branch: `name`" or just branch name if no PR
+	// Format: "[Title #N](url) - branch: `name`" or "branch: `name`" if no PR
 	if node.PR > 0 {
 		prURL := fmt.Sprintf("%s/pull/%d", repoURL, node.PR)
 		linkText := fmt.Sprintf("#%d", node.PR)
@@ -97,19 +116,25 @@ func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL str
 			fmt.Fprintf(sb, "%s[%s](%s) - branch: `%s`", prefix, linkText, prURL, node.Name)
 		}
 	} else {
-		// No PR - just show branch name (e.g., trunk)
+		// No PR - show "branch: `name`"
 		if isCurrent {
-			fmt.Fprintf(sb, "%s**`%s`**", prefix, node.Name)
+			fmt.Fprintf(sb, "%s**branch: `%s`** *(this PR)*", prefix, node.Name)
 		} else {
-			fmt.Fprintf(sb, "%s`%s`", prefix, node.Name)
+			fmt.Fprintf(sb, "%sbranch: `%s`", prefix, node.Name)
 		}
 	}
 
 	sb.WriteString("\n")
 
-	// Render children
+	// For ancestor nodes (above the current branch), only render the child
+	// that leads to the current branch. For the current branch and its
+	// descendants, render all children.
+	isAncestorAboveCurrent := ancestorPath[node.Name] && !isCurrent
 	for _, child := range node.Children {
-		renderTree(sb, child, currentBranch, repoURL, prInfo, depth+1)
+		if isAncestorAboveCurrent && !ancestorPath[child.Name] {
+			continue
+		}
+		renderTree(sb, child, currentBranch, repoURL, prInfo, depth+1, ancestorPath)
 	}
 }
 
