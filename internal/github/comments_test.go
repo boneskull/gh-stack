@@ -49,7 +49,7 @@ func TestGenerateStackComment(t *testing.T) {
 	)
 
 	t.Run("middle of stack shows warning", func(t *testing.T) {
-		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo, nil)
 
 		if !strings.Contains(comment, StackCommentMarker) {
 			t.Error("missing stack comment marker")
@@ -77,7 +77,7 @@ func TestGenerateStackComment(t *testing.T) {
 		simpleAuth := &tree.Node{Name: "feature-auth", PR: 1, Parent: simpleRoot}
 		simpleRoot.Children = []*tree.Node{simpleAuth}
 
-		comment := GenerateStackComment(simpleRoot, "feature-auth", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(simpleRoot, "feature-auth", "main", testRepoURL, prInfo, nil)
 
 		if strings.Contains(comment, "[!WARNING]") {
 			t.Error("top-of-stack PR should not have warning")
@@ -85,7 +85,7 @@ func TestGenerateStackComment(t *testing.T) {
 	})
 
 	t.Run("current PR is highlighted", func(t *testing.T) {
-		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo, nil)
 
 		// The current PR should have "(this PR)" text
 		if !strings.Contains(comment, "*(this PR)*") {
@@ -94,7 +94,7 @@ func TestGenerateStackComment(t *testing.T) {
 	})
 
 	t.Run("PR links include title and number", func(t *testing.T) {
-		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo, nil)
 
 		// Check that PR links include title
 		if !strings.Contains(comment, "[Add authentication #1](https://github.com/test/repo/pull/1)") {
@@ -109,7 +109,7 @@ func TestGenerateStackComment(t *testing.T) {
 	})
 
 	t.Run("branch names shown in backticks", func(t *testing.T) {
-		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo, nil)
 
 		if !strings.Contains(comment, "branch: `feature-auth`") {
 			t.Error("should show branch name in backticks")
@@ -120,7 +120,7 @@ func TestGenerateStackComment(t *testing.T) {
 	})
 
 	t.Run("uses nested markdown lists", func(t *testing.T) {
-		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, prInfo, nil)
 
 		// Should use markdown list format, not code blocks
 		if strings.Contains(comment, "```") {
@@ -134,7 +134,7 @@ func TestGenerateStackComment(t *testing.T) {
 
 	t.Run("fallback when no title available", func(t *testing.T) {
 		// No PR info provided
-		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, nil)
+		comment := GenerateStackComment(root, "feature-auth-tests", "main", testRepoURL, nil, nil)
 
 		// Should fallback to just "#N" format (no title)
 		if !strings.Contains(comment, "[#1](https://github.com/test/repo/pull/1)") {
@@ -155,7 +155,7 @@ func TestGenerateStackComment(t *testing.T) {
 			num   int
 			title string
 		}{5, "Child feature"})
-		comment := GenerateStackComment(noPRRoot, "child-branch", "main", testRepoURL, childPRInfo)
+		comment := GenerateStackComment(noPRRoot, "child-branch", "main", testRepoURL, childPRInfo, nil)
 
 		// Trunk and middle branch both have no PR; both should show "branch:" prefix
 		if !strings.Contains(comment, "- branch: `main`") {
@@ -177,7 +177,7 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 			num   int
 			title string
 		}{1, "My feature"})
-		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, nil)
 
 		if strings.Contains(comment, "[!WARNING]") {
 			t.Error("single PR targeting trunk should not have warning")
@@ -205,7 +205,7 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 			prInfo[i] = PRInfo{Number: i, Title: fmt.Sprintf("Level %d feature", i)}
 		}
 
-		comment := GenerateStackComment(root, "level-3", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "level-3", "main", testRepoURL, prInfo, nil)
 
 		// Should show all levels with links
 		for i := 1; i <= 5; i++ {
@@ -232,7 +232,7 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 				title string
 			}{2, "Feature B"},
 		)
-		comment := GenerateStackComment(root, "feature-a", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature-a", "main", testRepoURL, prInfo, nil)
 
 		if !strings.Contains(comment, "feature-a") {
 			t.Error("should contain current branch")
@@ -268,7 +268,7 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 		)
 
 		// Viewing the child PR - should see stack1-base and stack1-child, but NOT unrelated
-		comment := GenerateStackComment(root, "stack1-child", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "stack1-child", "main", testRepoURL, prInfo, nil)
 
 		if !strings.Contains(comment, "stack1-base") {
 			t.Error("should contain ancestor branch in the current stack")
@@ -284,7 +284,7 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 	t.Run("branch not found returns empty", func(t *testing.T) {
 		root := &tree.Node{Name: "main"}
 
-		comment := GenerateStackComment(root, "nonexistent", "main", testRepoURL, nil)
+		comment := GenerateStackComment(root, "nonexistent", "main", testRepoURL, nil, nil)
 
 		if comment != "" {
 			t.Error("should return empty for nonexistent branch")
@@ -300,11 +300,135 @@ func TestGenerateStackComment_EdgeCases(t *testing.T) {
 			num   int
 			title string
 		}{1, "My feature"})
-		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo)
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, nil)
 
 		// The full link should be bolded for current PR
 		if !strings.Contains(comment, "**[My feature #1]") {
 			t.Error("current PR link should be bolded")
+		}
+	})
+}
+
+func TestGenerateStackComment_RemoteBranchFiltering(t *testing.T) {
+	t.Run("local-only branch without PR is omitted", func(t *testing.T) {
+		// Tree: main -> local-only (no PR) -> feature (#1)
+		root := &tree.Node{Name: "main"}
+		localOnly := &tree.Node{Name: "local-only", PR: 0, Parent: root}
+		feature := &tree.Node{Name: "feature", PR: 1, Parent: localOnly}
+
+		root.Children = []*tree.Node{localOnly}
+		localOnly.Children = []*tree.Node{feature}
+
+		prInfo := makePRInfo(struct {
+			num   int
+			title string
+		}{1, "My feature"})
+
+		// Only main and feature exist on the remote; local-only does not
+		remoteBranches := map[string]bool{"main": true, "feature": true}
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, remoteBranches)
+
+		if strings.Contains(comment, "local-only") {
+			t.Error("local-only branch should be omitted from comment")
+		}
+		if !strings.Contains(comment, "branch: `main`") {
+			t.Error("trunk should still be shown")
+		}
+		if !strings.Contains(comment, "My feature #1") {
+			t.Error("feature PR should still be shown")
+		}
+	})
+
+	t.Run("local-only branch children are promoted", func(t *testing.T) {
+		// Tree: main -> local-only (no PR) -> feature (#1)
+		// When local-only is skipped, feature should appear at depth 1 (not depth 2)
+		root := &tree.Node{Name: "main"}
+		localOnly := &tree.Node{Name: "local-only", PR: 0, Parent: root}
+		feature := &tree.Node{Name: "feature", PR: 1, Parent: localOnly}
+
+		root.Children = []*tree.Node{localOnly}
+		localOnly.Children = []*tree.Node{feature}
+
+		prInfo := makePRInfo(struct {
+			num   int
+			title string
+		}{1, "My feature"})
+
+		remoteBranches := map[string]bool{"main": true, "feature": true}
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, remoteBranches)
+
+		// Feature should be at depth 1 (2 spaces indent), not depth 2 (4 spaces)
+		if !strings.Contains(comment, "  - **[My feature #1]") {
+			t.Error("feature should be promoted to depth 1 when parent is skipped")
+		}
+		if strings.Contains(comment, "    - **[My feature #1]") {
+			t.Error("feature should NOT be at depth 2")
+		}
+	})
+
+	t.Run("remote branch without PR is shown", func(t *testing.T) {
+		// Tree: main -> wip-branch (no PR, but on remote) -> feature (#1)
+		root := &tree.Node{Name: "main"}
+		wip := &tree.Node{Name: "wip-branch", PR: 0, Parent: root}
+		feature := &tree.Node{Name: "feature", PR: 1, Parent: wip}
+
+		root.Children = []*tree.Node{wip}
+		wip.Children = []*tree.Node{feature}
+
+		prInfo := makePRInfo(struct {
+			num   int
+			title string
+		}{1, "My feature"})
+
+		// All branches exist on the remote
+		remoteBranches := map[string]bool{"main": true, "wip-branch": true, "feature": true}
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, remoteBranches)
+
+		if !strings.Contains(comment, "branch: `wip-branch`") {
+			t.Error("remote branch without PR should still be shown")
+		}
+	})
+
+	t.Run("nil remoteBranches disables filtering", func(t *testing.T) {
+		// Tree: main -> local-only (no PR) -> feature (#1)
+		root := &tree.Node{Name: "main"}
+		localOnly := &tree.Node{Name: "local-only", PR: 0, Parent: root}
+		feature := &tree.Node{Name: "feature", PR: 1, Parent: localOnly}
+
+		root.Children = []*tree.Node{localOnly}
+		localOnly.Children = []*tree.Node{feature}
+
+		prInfo := makePRInfo(struct {
+			num   int
+			title string
+		}{1, "My feature"})
+
+		// nil means no filtering — local-only should appear
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, nil)
+
+		if !strings.Contains(comment, "branch: `local-only`") {
+			t.Error("with nil remoteBranches, all branches should be shown")
+		}
+	})
+
+	t.Run("branches with PRs are never filtered", func(t *testing.T) {
+		// A branch with a PR should be shown even if not in remoteBranches
+		// (edge case: remoteBranches set might be stale)
+		root := &tree.Node{Name: "main"}
+		feature := &tree.Node{Name: "feature", PR: 1, Parent: root}
+		root.Children = []*tree.Node{feature}
+
+		prInfo := makePRInfo(struct {
+			num   int
+			title string
+		}{1, "My feature"})
+
+		// remoteBranches set is empty — but feature has a PR, so it stays
+		remoteBranches := map[string]bool{"main": true}
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, remoteBranches)
+
+		if !strings.Contains(comment, "My feature #1") {
+			t.Error("branch with PR should never be filtered out")
 		}
 	})
 }

@@ -209,6 +209,18 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 		}
 	}
 
+	// Build remote branches set for stack comment filtering.
+	// This uses locally-cached tracking refs which are up-to-date after Phase 2 push.
+	var remoteBranches map[string]bool
+	if !dryRun {
+		var rbErr error
+		remoteBranches, rbErr = g.ListRemoteBranches()
+		if rbErr != nil {
+			// Non-fatal: we can still render without filtering
+			fmt.Printf("%s could not list remote branches, stack comments may reference local-only branches: %v\n", s.WarningIcon(), rbErr)
+		}
+	}
+
 	// Collect PR URLs for --web flag
 	var prURLs []string
 
@@ -236,7 +248,7 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 					}
 				}
 				// Update stack comment
-				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, existingPR); err != nil {
+				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, existingPR, remoteBranches); err != nil {
 					fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), existingPR, err)
 				}
 
@@ -248,7 +260,7 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 			if dryRun {
 				fmt.Printf("%s Would create PR for %s (base: %s)\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(parent))
 			} else {
-				prNum, adopted, err := createPRForBranch(g, ghClient, cfg, root, b.Name, parent, trunk, s)
+				prNum, adopted, err := createPRForBranch(g, ghClient, cfg, root, b.Name, parent, trunk, remoteBranches, s)
 				if err != nil {
 					fmt.Printf("%s failed to create PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), err)
 				} else if adopted {
@@ -284,7 +296,7 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 // createPRForBranch creates a PR for the given branch and stores the PR number.
 // If a PR already exists for the branch, it adopts the existing PR instead.
 // Returns (prNumber, adopted, error) where adopted is true if we adopted an existing PR.
-func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, s *style.Style) (int, bool, error) {
+func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, remoteBranches map[string]bool, s *style.Style) (int, bool, error) {
 	// Determine if draft (not targeting trunk = middle of stack)
 	draft := base != trunk
 
@@ -309,7 +321,7 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 	if err != nil {
 		// Check if PR already exists - if so, adopt it
 		if strings.Contains(err.Error(), "pull request already exists") {
-			prNum, adoptErr := adoptExistingPR(ghClient, cfg, root, branch, base, trunk, s)
+			prNum, adoptErr := adoptExistingPR(ghClient, cfg, root, branch, base, trunk, remoteBranches, s)
 			return prNum, true, adoptErr
 		}
 		return 0, false, err
@@ -326,7 +338,7 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 	}
 
 	// Add stack navigation comment
-	if err := ghClient.GenerateAndPostStackComment(root, branch, trunk, pr.Number); err != nil {
+	if err := ghClient.GenerateAndPostStackComment(root, branch, trunk, pr.Number, remoteBranches); err != nil {
 		fmt.Printf("%s failed to add stack comment to PR #%d: %v\n", s.WarningIcon(), pr.Number, err)
 	}
 
@@ -435,7 +447,7 @@ func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style
 }
 
 // adoptExistingPR finds an existing PR for the branch and adopts it into the stack.
-func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, s *style.Style) (int, error) {
+func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, remoteBranches map[string]bool, s *style.Style) (int, error) {
 	existingPR, err := ghClient.FindPRByHead(branch)
 	if err != nil {
 		return 0, fmt.Errorf("failed to find existing PR: %w", err)
@@ -462,7 +474,7 @@ func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Nod
 	}
 
 	// Add/update stack navigation comment
-	if err := ghClient.GenerateAndPostStackComment(root, branch, trunk, existingPR.Number); err != nil {
+	if err := ghClient.GenerateAndPostStackComment(root, branch, trunk, existingPR.Number, remoteBranches); err != nil {
 		fmt.Printf("%s failed to update stack comment: %v\n", s.WarningIcon(), err)
 	}
 

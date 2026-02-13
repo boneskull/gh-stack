@@ -18,7 +18,11 @@ const StackCommentMarker = "<!-- gh-stack:nav -->"
 //
 // Only the current stack is rendered: the path from root to the current branch,
 // plus all descendants of the current branch. Sibling stacks are excluded.
-func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string, prInfo map[int]PRInfo) string {
+//
+// If remoteBranches is non-nil, branches without PRs that don't exist on the
+// remote are omitted (their children are promoted up a level). Pass nil to
+// disable this filtering.
+func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string, prInfo map[int]PRInfo, remoteBranches map[string]bool) string {
 	var sb strings.Builder
 
 	// Find the current node
@@ -40,13 +44,18 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 	sb.WriteString(StackCommentMarker)
 	sb.WriteString("\n")
 
+	// Find the effective parent: the nearest ancestor that would be visible
+	// in the rendered tree. A node is visible if it has a PR, exists on the
+	// remote, or remote filtering is disabled.
+	effectiveParent := findEffectiveParent(currentNode, remoteBranches)
+
 	// Add warning if not targeting trunk
-	if currentNode.Parent != nil && currentNode.Parent.Name != trunk {
+	if effectiveParent != nil && effectiveParent.Name != trunk {
 		sb.WriteString("> [!WARNING]\n")
-		sb.WriteString(fmt.Sprintf("> This PR is part of a stack and targets branch `%s`, not `%s`.\n", currentNode.Parent.Name, trunk))
+		sb.WriteString(fmt.Sprintf("> This PR is part of a stack and targets branch `%s`, not `%s`.\n", effectiveParent.Name, trunk))
 
 		// Build parent PR reference if available
-		parentPR := currentNode.Parent.PR
+		parentPR := effectiveParent.PR
 		if parentPR > 0 {
 			parentURL := fmt.Sprintf("%s/pull/%d", repoURL, parentPR)
 			linkText := fmt.Sprintf("#%d", parentPR)
@@ -63,7 +72,7 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 	sb.WriteString("### :books: Pull Request Stack\n\n")
 
 	// Render tree from root as nested markdown list, filtered to current stack
-	renderTree(&sb, root, currentBranch, repoURL, prInfo, 0, ancestorPath)
+	renderTree(&sb, root, currentBranch, repoURL, prInfo, 0, ancestorPath, remoteBranches)
 
 	sb.WriteString("\n---\n")
 	sb.WriteString("*Managed by [gh-stack](https://github.com/boneskull/gh-stack)*\n")
@@ -87,6 +96,19 @@ func collectPRNumbersRecursive(node *tree.Node, numbers *[]int) {
 	}
 }
 
+// findEffectiveParent walks up from a node's parent to find the nearest ancestor
+// that would be rendered in the comment. A node is "visible" if it has a PR or
+// exists on the remote (or if remote filtering is disabled). Returns nil if the
+// node has no parent (i.e., it's the root).
+func findEffectiveParent(node *tree.Node, remoteBranches map[string]bool) *tree.Node {
+	for p := node.Parent; p != nil; p = p.Parent {
+		if p.PR > 0 || remoteBranches == nil || remoteBranches[p.Name] {
+			return p
+		}
+	}
+	return nil
+}
+
 // renderTree recursively renders the tree structure as nested markdown lists.
 //
 // The ancestorPath set controls which children are rendered at each level:
@@ -94,37 +116,48 @@ func collectPRNumbersRecursive(node *tree.Node, numbers *[]int) {
 //     the current branch itself), only the child on the ancestor path is shown.
 //   - For the current branch and all its descendants, all children are shown.
 //
-// This ensures only the current stack is rendered, not sibling stacks.
-func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL string, prInfo map[int]PRInfo, depth int, ancestorPath map[string]bool) {
-	// Build prefix based on depth (2 spaces per level for markdown nested lists)
-	prefix := strings.Repeat("  ", depth) + "- "
-
+// If remoteBranches is non-nil, nodes without PRs that aren't on the remote
+// are collapsed: their children are rendered at the skipped node's depth
+// instead of being indented further. This prevents local-only branches from
+// appearing in the GitHub comment.
+func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL string, prInfo map[int]PRInfo, depth int, ancestorPath map[string]bool, remoteBranches map[string]bool) {
 	isCurrent := node.Name == currentBranch
 
-	// Format: "[Title #N](url) - branch: `name`" or "branch: `name`" if no PR
-	if node.PR > 0 {
-		prURL := fmt.Sprintf("%s/pull/%d", repoURL, node.PR)
-		linkText := fmt.Sprintf("#%d", node.PR)
-		if info, ok := prInfo[node.PR]; ok && info.Title != "" {
-			linkText = fmt.Sprintf("%s #%d", info.Title, node.PR)
+	// Skip branches that have no PR and don't exist on the remote.
+	// When remoteBranches is nil, no filtering is applied.
+	skipNode := node.PR == 0 && remoteBranches != nil && !remoteBranches[node.Name]
+
+	nextDepth := depth
+	if !skipNode {
+		// Build prefix based on depth (2 spaces per level for markdown nested lists)
+		prefix := strings.Repeat("  ", depth) + "- "
+
+		// Format: "[Title #N](url) - branch: `name`" or "branch: `name`" if no PR
+		if node.PR > 0 {
+			prURL := fmt.Sprintf("%s/pull/%d", repoURL, node.PR)
+			linkText := fmt.Sprintf("#%d", node.PR)
+			if info, ok := prInfo[node.PR]; ok && info.Title != "" {
+				linkText = fmt.Sprintf("%s #%d", info.Title, node.PR)
+			}
+
+			if isCurrent {
+				// Bold the link for current PR
+				fmt.Fprintf(sb, "%s**[%s](%s)** - branch: `%s` *(this PR)*", prefix, linkText, prURL, node.Name)
+			} else {
+				fmt.Fprintf(sb, "%s[%s](%s) - branch: `%s`", prefix, linkText, prURL, node.Name)
+			}
+		} else {
+			// No PR - show "branch: `name`"
+			if isCurrent {
+				fmt.Fprintf(sb, "%s**branch: `%s`** *(this PR)*", prefix, node.Name)
+			} else {
+				fmt.Fprintf(sb, "%sbranch: `%s`", prefix, node.Name)
+			}
 		}
 
-		if isCurrent {
-			// Bold the link for current PR
-			fmt.Fprintf(sb, "%s**[%s](%s)** - branch: `%s` *(this PR)*", prefix, linkText, prURL, node.Name)
-		} else {
-			fmt.Fprintf(sb, "%s[%s](%s) - branch: `%s`", prefix, linkText, prURL, node.Name)
-		}
-	} else {
-		// No PR - show "branch: `name`"
-		if isCurrent {
-			fmt.Fprintf(sb, "%s**branch: `%s`** *(this PR)*", prefix, node.Name)
-		} else {
-			fmt.Fprintf(sb, "%sbranch: `%s`", prefix, node.Name)
-		}
+		sb.WriteString("\n")
+		nextDepth = depth + 1
 	}
-
-	sb.WriteString("\n")
 
 	// For ancestor nodes (above the current branch), only render the child
 	// that leads to the current branch. For the current branch and its
@@ -134,7 +167,7 @@ func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL str
 		if isAncestorAboveCurrent && !ancestorPath[child.Name] {
 			continue
 		}
-		renderTree(sb, child, currentBranch, repoURL, prInfo, depth+1, ancestorPath)
+		renderTree(sb, child, currentBranch, repoURL, prInfo, nextDepth, ancestorPath, remoteBranches)
 	}
 }
 
@@ -177,7 +210,10 @@ func (c *Client) CreateOrUpdateStackComment(prNumber int, body string) error {
 
 // GenerateAndPostStackComment generates and posts/updates a stack comment for a PR.
 // It fetches PR titles via GraphQL and renders the full comment.
-func (c *Client) GenerateAndPostStackComment(root *tree.Node, branch, trunk string, prNumber int) error {
+//
+// If remoteBranches is non-nil, branches without PRs that don't exist on the
+// remote are omitted from the rendered comment. Pass nil to disable filtering.
+func (c *Client) GenerateAndPostStackComment(root *tree.Node, branch, trunk string, prNumber int, remoteBranches map[string]bool) error {
 	// Collect all PR numbers from the tree
 	prNumbers := CollectPRNumbers(root)
 
@@ -188,7 +224,7 @@ func (c *Client) GenerateAndPostStackComment(root *tree.Node, branch, trunk stri
 		prInfo = make(map[int]PRInfo)
 	}
 
-	comment := GenerateStackComment(root, branch, trunk, c.RepoURL(), prInfo)
+	comment := GenerateStackComment(root, branch, trunk, c.RepoURL(), prInfo, remoteBranches)
 	if comment == "" {
 		return nil
 	}

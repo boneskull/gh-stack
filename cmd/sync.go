@@ -34,7 +34,7 @@ func init() {
 }
 
 // updateStackComments updates the navigation comment on all PRs in the stack.
-func updateStackComments(cfg *config.Config, gh *github.Client, s *style.Style) error {
+func updateStackComments(cfg *config.Config, g *git.Git, gh *github.Client, s *style.Style) error {
 	trunk, err := cfg.GetTrunk()
 	if err != nil {
 		return err
@@ -53,13 +53,20 @@ func updateStackComments(cfg *config.Config, gh *github.Client, s *style.Style) 
 		prInfo = make(map[int]github.PRInfo)
 	}
 
+	// Build remote branches set for filtering local-only branches
+	remoteBranches, rbErr := g.ListRemoteBranches()
+	if rbErr != nil {
+		// Non-fatal: render without filtering
+		fmt.Printf("%s could not list remote branches: %v\n", s.WarningIcon(), rbErr)
+	}
+
 	// Walk tree and update each PR's comment
-	return walkTreeAndUpdateComments(root, root, trunk, gh, prInfo, s)
+	return walkTreeAndUpdateComments(root, root, trunk, gh, prInfo, remoteBranches, s)
 }
 
-func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.Client, prInfo map[int]github.PRInfo, s *style.Style) error {
+func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.Client, prInfo map[int]github.PRInfo, remoteBranches map[string]bool, s *style.Style) error {
 	if node.PR > 0 {
-		comment := github.GenerateStackComment(root, node.Name, trunk, gh.RepoURL(), prInfo)
+		comment := github.GenerateStackComment(root, node.Name, trunk, gh.RepoURL(), prInfo, remoteBranches)
 		if comment != "" {
 			if err := gh.CreateOrUpdateStackComment(node.PR, comment); err != nil {
 				fmt.Printf("%s failed to update comment on PR #%d: %v\n", s.WarningIcon(), node.PR, err)
@@ -69,7 +76,7 @@ func walkTreeAndUpdateComments(node, root *tree.Node, trunk string, gh *github.C
 	}
 
 	for _, child := range node.Children {
-		if err := walkTreeAndUpdateComments(child, root, trunk, gh, prInfo, s); err != nil {
+		if err := walkTreeAndUpdateComments(child, root, trunk, gh, prInfo, remoteBranches, s); err != nil {
 			return err
 		}
 	}
@@ -355,7 +362,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Update stack comments on all PRs
 	if !syncDryRunFlag {
 		fmt.Println("\nUpdating stack comments...")
-		if err := updateStackComments(cfg, gh, s); err != nil {
+		if err := updateStackComments(cfg, g, gh, s); err != nil {
 			fmt.Printf("%s failed to update some comments: %v\n", s.WarningIcon(), err)
 		}
 	}
