@@ -20,12 +20,15 @@ import (
 
 var submitCmd = &cobra.Command{
 	Use:   "submit",
-	Short: "Restack, push, and create/update PRs for current branch and descendants",
-	Long: `Submit rebases the current branch and its descendants onto their parents,
-pushes all affected branches, and creates or updates pull requests.
+	Short: "Restack, push, and create/update PRs for the entire stack",
+	Long: `Submit rebases, pushes, and creates or updates pull requests for all
+branches in the stack.
 
-This is the typical workflow command after making changes in a stack:
-1. Restack: rebase current branch + descendants onto their parents
+By default, submit processes every tracked branch (the entire stack) in
+parent-before-child order. Use --from to limit the scope to a subtree.
+
+Phases:
+1. Restack: rebase affected branches onto their parents
 2. Push: force-push all affected branches (with --force-with-lease)
 3. PR: create PRs for branches without them, update PR bases for those that have them
 
@@ -40,6 +43,7 @@ var (
 	submitPushOnlyFlag    bool
 	submitYesFlag         bool
 	submitWebFlag         bool
+	submitFromFlag        string
 )
 
 func init() {
@@ -49,6 +53,8 @@ func init() {
 	submitCmd.Flags().BoolVar(&submitPushOnlyFlag, "push-only", false, "skip PR creation/update, only restack and push")
 	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts and use auto-generated title/description for PRs")
 	submitCmd.Flags().BoolVarP(&submitWebFlag, "web", "w", false, "open created/updated PRs in web browser")
+	submitCmd.Flags().StringVar(&submitFromFlag, "from", "", "submit from this branch toward leaves (default: entire stack; bare --from = current branch)")
+	submitCmd.Flags().Lookup("from").NoOptDefVal = "HEAD"
 	rootCmd.AddCommand(submitCmd)
 }
 
@@ -61,6 +67,9 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	}
 	if submitPushOnlyFlag && submitWebFlag {
 		return fmt.Errorf("--push-only and --web cannot be used together: --push-only skips all PR operations")
+	}
+	if submitFromFlag != "" && submitCurrentOnlyFlag {
+		return fmt.Errorf("--from and --current-only cannot be used together")
 	}
 
 	cwd, err := os.Getwd()
@@ -96,27 +105,52 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	node := tree.FindNode(root, currentBranch)
-	if node == nil {
-		return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
-	}
-
-	// Collect branches to submit (current + descendants, but never trunk)
+	// Collect branches to submit.
+	//
+	// --current-only: only the current branch (no descendants, no ancestors).
+	// --from (bare):  current branch + descendants (old default behavior).
+	// --from=<branch>: that branch + descendants.
+	// Default:         entire stack (all trunk descendants).
 	var branches []*tree.Node
-	if currentBranch == trunk {
-		// On trunk: only submit descendants, not trunk itself
-		if submitCurrentOnlyFlag {
+	if submitCurrentOnlyFlag {
+		// --current-only: submit only the current checked-out branch
+		if currentBranch == trunk {
 			return fmt.Errorf("cannot submit trunk branch %q; switch to a stack branch or remove --current-only", trunk)
 		}
-		branches = tree.GetDescendants(node)
-		if len(branches) == 0 {
-			return fmt.Errorf("no stack branches to submit; trunk %q has no descendants", trunk)
+		node := tree.FindNode(root, currentBranch)
+		if node == nil {
+			return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
 		}
-	} else {
-		// On a stack branch: submit it and optionally its descendants
 		branches = append(branches, node)
-		if !submitCurrentOnlyFlag {
-			branches = append(branches, tree.GetDescendants(node)...)
+	} else {
+		// Determine the starting node for branch collection
+		var startNode *tree.Node
+		if submitFromFlag == "HEAD" {
+			// --from without value: resolve to current branch (old behavior)
+			startNode = tree.FindNode(root, currentBranch)
+			if startNode == nil {
+				return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
+			}
+		} else if submitFromFlag != "" && submitFromFlag != trunk {
+			// --from=<branch>: use specified branch
+			startNode = tree.FindNode(root, submitFromFlag)
+			if startNode == nil {
+				return fmt.Errorf("branch %q is not tracked in the stack", submitFromFlag)
+			}
+		} else {
+			// Default (no --from, or --from=<trunk>): entire stack
+			startNode = root
+		}
+
+		// Collect branches from start node (never include trunk itself)
+		if startNode == root {
+			branches = tree.GetDescendants(root)
+			if len(branches) == 0 {
+				return fmt.Errorf("no stack branches to submit; trunk %q has no descendants", trunk)
+			}
+		} else {
+			branches = append(branches, startNode)
+			branches = append(branches, tree.GetDescendants(startNode)...)
 		}
 	}
 
@@ -324,6 +358,12 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 			prNum, adoptErr := adoptExistingPR(ghClient, cfg, root, branch, base, trunk, remoteBranches, s)
 			return prNum, true, adoptErr
 		}
+		// Detect missing base branch on remote and provide an actionable message
+		if isBaseBranchInvalidError(err) {
+			return 0, false, fmt.Errorf(
+				"base branch %q does not exist on the remote; push it first or run 'gh stack submit' to push the entire stack: %w",
+				base, err)
+		}
 		return 0, false, err
 	}
 
@@ -522,6 +562,18 @@ func promptMarkPRReady(ghClient *github.Client, prNumber int, branch, trunk stri
 			fmt.Printf("%s PR #%d marked as ready for review.\n", s.SuccessIcon(), prNumber)
 		}
 	}
+}
+
+// isBaseBranchInvalidError returns true if the error indicates that the PR base
+// branch does not exist on the remote (GitHub returns HTTP 422 with
+// "PullRequest.base is invalid" in this case).
+func isBaseBranchInvalidError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "PullRequest.base is invalid") ||
+		strings.Contains(msg, "base is invalid")
 }
 
 // generatePRBody creates a PR description from the commits between base and head.

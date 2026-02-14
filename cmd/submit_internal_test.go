@@ -7,6 +7,7 @@
 package cmd
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -214,5 +215,48 @@ func TestIsHorizontalRule(t *testing.T) {
 		if isHorizontalRule(r) {
 			t.Errorf("expected isHorizontalRule(%q) = false", r)
 		}
+	}
+}
+
+func TestIsBaseBranchInvalidError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: false,
+		},
+		{
+			name: "unrelated error",
+			err:  fmt.Errorf("network timeout"),
+			want: false,
+		},
+		{
+			name: "exact GitHub 422 error",
+			err:  fmt.Errorf("failed to create PR: HTTP 422: Validation Failed (https://api.github.com/repos/owner/repo/pulls)\nPullRequest.base is invalid"),
+			want: true,
+		},
+		{
+			name: "short form",
+			err:  fmt.Errorf("base is invalid"),
+			want: true,
+		},
+		{
+			name: "wrapped error",
+			err:  fmt.Errorf("something went wrong: %w", fmt.Errorf("PullRequest.base is invalid")),
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isBaseBranchInvalidError(tt.err)
+			if got != tt.want {
+				t.Errorf("isBaseBranchInvalidError() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

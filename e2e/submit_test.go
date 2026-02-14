@@ -175,11 +175,30 @@ func TestSubmitRejectsUntrackedBranch(t *testing.T) {
 	env.Git("checkout", "-b", "untracked-branch")
 	env.CreateCommit("work")
 
-	// Submit should fail
+	// Default submit (entire stack) should fail because there are no stack branches
 	result := env.Run("submit", "--dry-run")
 
 	if result.Success() {
-		t.Error("expected submit to fail on untracked branch")
+		t.Error("expected submit to fail with no stack branches")
+	}
+	if !strings.Contains(result.Stderr, "no stack branches") {
+		t.Errorf("expected error about no stack branches, got: %s", result.Stderr)
+	}
+}
+
+func TestSubmitFromRejectsUntrackedBranch(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create an untracked branch
+	env.Git("checkout", "-b", "untracked-branch")
+	env.CreateCommit("work")
+
+	// Bare --from on untracked branch should report it's not tracked
+	result := env.Run("submit", "--dry-run", "--from")
+
+	if result.Success() {
+		t.Error("expected submit --from to fail on untracked branch")
 	}
 	if !strings.Contains(result.Stderr, "not tracked") {
 		t.Errorf("expected error about untracked branch, got: %s", result.Stderr)
@@ -317,5 +336,158 @@ func TestSubmitPushOnlyWithWebFails(t *testing.T) {
 	}
 	if !strings.Contains(result.Stderr, "--push-only and --web cannot be used together") {
 		t.Errorf("expected error about conflicting flags, got: %s", result.Stderr)
+	}
+}
+
+func TestSubmitEntireStackDryRun(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create 3-level stack: main -> feat-a -> feat-b -> feat-c
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("b work")
+
+	env.MustRun("create", "feat-c")
+	env.CreateCommit("c work")
+
+	// Checkout middle branch
+	env.Git("checkout", "feat-b")
+
+	// Submit without --from should process the entire stack
+	result := env.MustRun("submit", "--dry-run")
+
+	output := result.Stdout
+	if !strings.Contains(output, "Would push feat-a") {
+		t.Error("expected feat-a (ancestor) in push output")
+	}
+	if !strings.Contains(output, "Would push feat-b") {
+		t.Error("expected feat-b in push output")
+	}
+	if !strings.Contains(output, "Would push feat-c") {
+		t.Error("expected feat-c (descendant) in push output")
+	}
+}
+
+func TestSubmitFromFlagDryRun(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create 3-level stack: main -> feat-a -> feat-b -> feat-c
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("b work")
+
+	env.MustRun("create", "feat-c")
+	env.CreateCommit("c work")
+
+	// Stay on feat-c, but use --from=feat-a
+	result := env.MustRun("submit", "--dry-run", "--from=feat-a")
+
+	output := result.Stdout
+	if !strings.Contains(output, "Would push feat-a") {
+		t.Error("expected feat-a in push output")
+	}
+	if !strings.Contains(output, "Would push feat-b") {
+		t.Error("expected feat-b in push output")
+	}
+	if !strings.Contains(output, "Would push feat-c") {
+		t.Error("expected feat-c in push output")
+	}
+}
+
+func TestSubmitFromFlagCurrentBranchDryRun(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create 3-level stack: main -> feat-a -> feat-b -> feat-c
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("b work")
+
+	env.MustRun("create", "feat-c")
+	env.CreateCommit("c work")
+
+	// Checkout middle branch
+	env.Git("checkout", "feat-b")
+
+	// Bare --from should use current branch (feat-b) + descendants only
+	result := env.MustRun("submit", "--dry-run", "--from")
+
+	output := result.Stdout
+	if strings.Contains(output, "Would push feat-a") {
+		t.Error("feat-a should NOT be in output with bare --from on feat-b")
+	}
+	if !strings.Contains(output, "Would push feat-b") {
+		t.Error("expected feat-b in push output")
+	}
+	if !strings.Contains(output, "Would push feat-c") {
+		t.Error("expected feat-c in push output")
+	}
+}
+
+func TestSubmitFromFlagUntrackedBranch(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	result := env.Run("submit", "--dry-run", "--from=nonexistent")
+
+	if result.Success() {
+		t.Error("expected --from=nonexistent to fail")
+	}
+	if !strings.Contains(result.Stderr, "not tracked") {
+		t.Errorf("expected error about untracked branch, got: %s", result.Stderr)
+	}
+}
+
+func TestSubmitFromAndCurrentOnlyMutualExclusion(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	result := env.Run("submit", "--dry-run", "--from=feat-a", "--current-only")
+
+	if result.Success() {
+		t.Error("expected --from and --current-only to fail")
+	}
+	if !strings.Contains(result.Stderr, "--from and --current-only cannot be used together") {
+		t.Errorf("expected error about conflicting flags, got: %s", result.Stderr)
+	}
+}
+
+func TestSubmitFromTrunkFallback(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Create stack: main -> feat-a -> feat-b
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("b work")
+
+	// --from=main should behave like default (entire stack)
+	result := env.MustRun("submit", "--dry-run", "--from=main")
+
+	output := result.Stdout
+	if !strings.Contains(output, "Would push feat-a") {
+		t.Error("expected feat-a in push output")
+	}
+	if !strings.Contains(output, "Would push feat-b") {
+		t.Error("expected feat-b in push output")
+	}
+	if strings.Contains(output, "Would push main") {
+		t.Error("should not push trunk branch")
 	}
 }
