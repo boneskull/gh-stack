@@ -168,7 +168,11 @@ func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, 
 	}
 
 	// Check 5: fork point is ancestor of branch
-	isAnc, _ := g.IsAncestor(storedFP, branch)
+	isAnc, err := g.IsAncestor(storedFP, branch)
+	if err != nil {
+		result.issues = append(result.issues, fmt.Sprintf("Failed to check if stored fork point %s is an ancestor of %s: %v", git.AbbrevSHA(storedFP), branch, err))
+		return result
+	}
 	if !isAnc {
 		if fix {
 			newFP, fixErr := computeForkPoint(g, parent, branch)
