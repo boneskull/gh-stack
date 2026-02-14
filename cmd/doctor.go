@@ -195,8 +195,8 @@ func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, 
 	// Check 6: drift detection
 	mergeBase, err := g.GetMergeBase(parent, branch)
 	if err != nil {
-		// Can't compute merge-base; skip drift check
-		result.healthy = true
+		result.issues = append(result.issues,
+			fmt.Sprintf("Failed to compute merge-base for %s and %s: %v", parent, branch, err),
 		return result
 	}
 
