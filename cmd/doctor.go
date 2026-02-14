@@ -9,6 +9,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/health"
 	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/spf13/cobra"
 )
@@ -106,125 +107,98 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, fix bool) branchResult {
 	result := branchResult{name: branch}
 
-	// Check 1: branch exists locally
-	if !g.BranchExists(branch) {
-		result.issues = append(result.issues, s.Error("Branch does not exist locally"))
+	issues := health.CheckBranch(g, cfg, branch)
+	if len(issues) == 0 {
+		result.healthy = true
 		return result
 	}
 
-	// Check 2: parent exists locally
-	parent, err := cfg.GetParent(branch)
-	if err != nil {
-		result.issues = append(result.issues, s.Error("No parent configured"))
+	// If not fixing, format issues with styling and return.
+	if !fix {
+		for _, iss := range issues {
+			switch iss.Kind {
+			case health.KindBranchMissing, health.KindParentMissing, health.KindNoForkPoint:
+				result.issues = append(result.issues, s.Error(iss.Message))
+			default:
+				result.issues = append(result.issues, iss.Message)
+			}
+		}
 		return result
 	}
 
-	trunk, _ := cfg.GetTrunk() //nolint:errcheck // already validated in runDoctor
-	if parent == trunk {
-		if !g.BranchExists(trunk) {
-			result.issues = append(result.issues, s.Errorf("Trunk branch %s does not exist locally", trunk))
+	// Attempt to fix: dispatch based on the issue kind.
+	kind := issues[0].Kind
+	if !issues[0].Fixable && kind != health.KindDrift {
+		// Unfixable issues (missing branch, missing parent, check failures)
+		for _, iss := range issues {
+			result.issues = append(result.issues, s.Error(iss.Message))
+		}
+		return result
+	}
+
+	parent, _ := cfg.GetParent(branch)     //nolint:errcheck // health check validated parent exists
+	storedFP, _ := cfg.GetForkPoint(branch) //nolint:errcheck // may be empty for KindNoForkPoint
+
+	switch kind {
+	case health.KindNoForkPoint:
+		newFP, fixErr := computeForkPoint(g, parent, branch)
+		if fixErr != nil {
+			result.issues = append(result.issues, fmt.Sprintf("No fork point stored and could not compute one: %v", fixErr))
 			return result
 		}
-	} else if !g.BranchExists(parent) {
-		result.issues = append(result.issues, s.Errorf("Parent branch %s does not exist locally", parent))
-		return result
-	}
-
-	// Check 3: fork point is stored
-	storedFP, err := cfg.GetForkPoint(branch)
-	if err != nil {
-		if fix {
-			newFP, fixErr := computeForkPoint(g, parent, branch)
-			if fixErr != nil {
-				result.issues = append(result.issues, fmt.Sprintf("No fork point stored and could not compute one: %v", fixErr))
-				return result
-			}
-			if setErr := cfg.SetForkPoint(branch, newFP); setErr != nil {
-				result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-				return result
-			}
-			result.fixed = true
-			result.fixMsg = fmt.Sprintf("set fork point to %s", git.AbbrevSHA(newFP))
+		if setErr := cfg.SetForkPoint(branch, newFP); setErr != nil {
+			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
 			return result
 		}
-		result.issues = append(result.issues, s.Error("No fork point stored"))
-		return result
-	}
+		result.fixed = true
+		result.fixMsg = fmt.Sprintf("set fork point to %s", git.AbbrevSHA(newFP))
 
-	// Check 4: fork point commit exists
-	if !g.CommitExists(storedFP) {
-		if fix {
-			newFP, fixErr := computeForkPoint(g, parent, branch)
-			if fixErr != nil {
-				result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s does not exist and could not compute replacement: %v", git.AbbrevSHA(storedFP), fixErr))
-				return result
-			}
-			if setErr := setForkPointWithComment(g, cfg, branch, storedFP, newFP); setErr != nil {
-				result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-				return result
-			}
-			result.fixed = true
-			result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(newFP))
+	case health.KindForkPointMissing:
+		newFP, fixErr := computeForkPoint(g, parent, branch)
+		if fixErr != nil {
+			result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s does not exist and could not compute replacement: %v", git.AbbrevSHA(storedFP), fixErr))
 			return result
 		}
-		result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s does not exist", git.AbbrevSHA(storedFP)))
-		return result
-	}
-
-	// Check 5: fork point is ancestor of branch
-	isAnc, err := g.IsAncestor(storedFP, branch)
-	if err != nil {
-		result.issues = append(result.issues, fmt.Sprintf("Failed to check if stored fork point %s is an ancestor of %s: %v", git.AbbrevSHA(storedFP), branch, err))
-		return result
-	}
-	if !isAnc {
-		if fix {
-			newFP, fixErr := computeForkPoint(g, parent, branch)
-			if fixErr != nil {
-				result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s is not an ancestor of %s and could not compute replacement: %v", git.AbbrevSHA(storedFP), branch, fixErr))
-				return result
-			}
-			if setErr := setForkPointWithComment(g, cfg, branch, storedFP, newFP); setErr != nil {
-				result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-				return result
-			}
-			result.fixed = true
-			result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(newFP))
+		if setErr := setForkPointWithComment(g, cfg, branch, storedFP, newFP); setErr != nil {
+			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
 			return result
 		}
-		result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s is not an ancestor of %s", git.AbbrevSHA(storedFP), branch))
-		return result
-	}
+		result.fixed = true
+		result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(newFP))
 
-	// Check 6: drift detection
-	mergeBase, err := g.GetMergeBase(parent, branch)
-	if err != nil {
-		result.issues = append(result.issues,
-			fmt.Sprintf("Failed to compute merge-base for %s and %s: %v", parent, branch, err),
-		)
-		return result
-	}
-
-	if storedFP != mergeBase {
-		if fix {
-			if setErr := setForkPointWithComment(g, cfg, branch, storedFP, mergeBase); setErr != nil {
-				result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-				return result
-			}
-			result.fixed = true
-			result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(mergeBase))
+	case health.KindForkPointNotAncestor:
+		newFP, fixErr := computeForkPoint(g, parent, branch)
+		if fixErr != nil {
+			result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s is not an ancestor of %s and could not compute replacement: %v", git.AbbrevSHA(storedFP), branch, fixErr))
 			return result
 		}
-		result.issues = append(result.issues,
-			fmt.Sprintf("Stored parent: %s", parent),
-			fmt.Sprintf("Stored fork:   %s", git.AbbrevSHA(storedFP)),
-			fmt.Sprintf("Actual fork:   %s", git.AbbrevSHA(mergeBase)),
-			"Drift detected: stored fork point does not match merge-base",
-		)
-		return result
+		if setErr := setForkPointWithComment(g, cfg, branch, storedFP, newFP); setErr != nil {
+			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
+			return result
+		}
+		result.fixed = true
+		result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(newFP))
+
+	case health.KindDrift:
+		mergeBase, err := g.GetMergeBase(parent, branch)
+		if err != nil {
+			result.issues = append(result.issues, fmt.Sprintf("Failed to compute merge-base for fix: %v", err))
+			return result
+		}
+		if setErr := setForkPointWithComment(g, cfg, branch, storedFP, mergeBase); setErr != nil {
+			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
+			return result
+		}
+		result.fixed = true
+		result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(mergeBase))
+
+	default:
+		// Shouldn't happen, but surface issues if it does
+		for _, iss := range issues {
+			result.issues = append(result.issues, iss.Message)
+		}
 	}
 
-	result.healthy = true
 	return result
 }
 
