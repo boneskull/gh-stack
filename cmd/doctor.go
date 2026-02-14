@@ -120,7 +120,12 @@ func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, 
 	}
 
 	trunk, _ := cfg.GetTrunk() //nolint:errcheck // already validated in runDoctor
-	if parent != trunk && !g.BranchExists(parent) {
+	if parent == trunk {
+		if !g.BranchExists(trunk) {
+			result.issues = append(result.issues, s.Errorf("Trunk branch %s does not exist locally", trunk))
+			return result
+		}
+	} else if !g.BranchExists(parent) {
 		result.issues = append(result.issues, s.Errorf("Parent branch %s does not exist locally", parent))
 		return result
 	}

@@ -150,6 +150,22 @@ func TestDoctorFixUpdatesConfig(t *testing.T) {
 	}
 }
 
+func TestDoctorMissingTrunk(t *testing.T) {
+	env := NewTestEnv(t)
+
+	env.MustRun("init")
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("work on a")
+
+	// Delete the trunk branch (main) while on feature-a
+	env.Git("branch", "-D", "main")
+
+	result := env.Run("doctor")
+	if !result.ContainsStdout("Trunk branch") || !result.ContainsStdout("does not exist locally") {
+		t.Errorf("expected missing trunk report, got: %s", result.Stdout)
+	}
+}
+
 func TestDoctorNotInitialized(t *testing.T) {
 	env := NewTestEnv(t)
 
