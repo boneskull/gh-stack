@@ -285,3 +285,65 @@ func (e *TestEnv) AssertAncestor(ancestor, descendant string) {
 		e.t.Errorf("expected %q to be ancestor of %q", ancestor, descendant)
 	}
 }
+
+// CreateWorktree creates a linked worktree for the given branch at the given path.
+func (e *TestEnv) CreateWorktree(branch, wtPath string) {
+	e.t.Helper()
+	cmd := exec.Command("git", "worktree", "add", wtPath, branch)
+	cmd.Dir = e.WorkDir
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		e.t.Fatalf("git worktree add %s %s failed: %v\nstderr: %s", wtPath, branch, err, stderr.String())
+	}
+}
+
+// GitInWorktree executes a git command in a worktree directory.
+func (e *TestEnv) GitInWorktree(wtPath string, args ...string) string {
+	e.t.Helper()
+
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command("git", args...)
+	cmd.Dir = wtPath
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
+
+	if err := cmd.Run(); err != nil {
+		e.t.Fatalf("git (worktree %s) %s failed: %v\nstderr: %s", wtPath, strings.Join(args, " "), err, stderr.String())
+	}
+
+	return strings.TrimSpace(stdout.String())
+}
+
+// RunInDir executes gh-stack in a specific directory (e.g. a worktree).
+func (e *TestEnv) RunInDir(dir string, args ...string) *Result {
+	e.t.Helper()
+
+	var stdout, stderr bytes.Buffer
+	cmd := exec.Command(e.BinaryPath, args...)
+	cmd.Dir = dir
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	cmd.Env = append(os.Environ(), "GIT_EDITOR=cat")
+
+	err := cmd.Run()
+
+	result := &Result{
+		Stdout:   stdout.String(),
+		Stderr:   stderr.String(),
+		ExitCode: 0,
+	}
+
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			e.t.Fatalf("failed to run command in %s: %v", dir, err)
+		}
+	}
+
+	return result
+}

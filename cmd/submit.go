@@ -70,7 +70,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		return errors.New("--push-only and --web cannot be used together: --push-only skips all PR operations")
 	}
 	if submitFromFlag != "" && submitCurrentOnlyFlag {
-		return fmt.Errorf("--from and --current-only cannot be used together")
+		return errors.New("--from and --current-only cannot be used together")
 	}
 
 	cwd, err := os.Getwd()
@@ -126,19 +126,20 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	} else {
 		// Determine the starting node for branch collection
 		var startNode *tree.Node
-		if submitFromFlag == "HEAD" {
+		switch {
+		case submitFromFlag == "HEAD":
 			// --from without value: resolve to current branch (old behavior)
 			startNode = tree.FindNode(root, currentBranch)
 			if startNode == nil {
 				return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
 			}
-		} else if submitFromFlag != "" && submitFromFlag != trunk {
+		case submitFromFlag != "" && submitFromFlag != trunk:
 			// --from=<branch>: use specified branch
 			startNode = tree.FindNode(root, submitFromFlag)
 			if startNode == nil {
 				return fmt.Errorf("branch %q is not tracked in the stack", submitFromFlag)
 			}
-		} else {
+		default:
 			// Default (no --from, or --from=<trunk>): entire stack
 			startNode = root
 		}
@@ -173,7 +174,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Phase 1: Restack
 	fmt.Println(s.Bold("=== Phase 1: Restack ==="))
-	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag, branchNames, stashRef, s); cascadeErr != nil {
+	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag, branchNames, stashRef, nil, s); cascadeErr != nil {
 		// Stash is saved in state for conflicts; restore on other errors
 		if !errors.Is(cascadeErr, ErrConflict) && stashRef != "" {
 			fmt.Println("Restoring auto-stashed changes...")

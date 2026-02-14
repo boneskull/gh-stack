@@ -266,12 +266,99 @@ func (g *Git) RebaseAbort() error {
 }
 
 // IsRebaseInProgress checks if a rebase is in progress.
+// Uses GetResolvedGitDir so it works in linked worktrees where .git is a file,
+// not a directory.
 func (g *Git) IsRebaseInProgress() bool {
-	rebaseMerge := filepath.Join(g.repoPath, ".git", "rebase-merge")
-	rebaseApply := filepath.Join(g.repoPath, ".git", "rebase-apply")
+	gitDir, err := g.GetResolvedGitDir()
+	if err != nil {
+		// Fall back to the old approach if we can't resolve the git dir
+		gitDir = filepath.Join(g.repoPath, ".git")
+	}
+	rebaseMerge := filepath.Join(gitDir, "rebase-merge")
+	rebaseApply := filepath.Join(gitDir, "rebase-apply")
 	_, err1 := os.Stat(rebaseMerge)
 	_, err2 := os.Stat(rebaseApply)
 	return err1 == nil || err2 == nil
+}
+
+// GetResolvedGitDir returns the actual git directory for this repository.
+// In a main worktree this is typically <repo>/.git.
+// In a linked worktree this resolves to the per-worktree dir
+// (e.g. <main-repo>/.git/worktrees/<name>), which is where rebase state lives.
+func (g *Git) GetResolvedGitDir() (string, error) {
+	out, err := g.run("rev-parse", "--git-dir")
+	if err != nil {
+		return "", err
+	}
+	// git rev-parse --git-dir may return a relative path when using -C;
+	// resolve it relative to the repo path.
+	if !filepath.IsAbs(out) {
+		out = filepath.Join(g.repoPath, out)
+	}
+	return filepath.Clean(out), nil
+}
+
+// ListWorktrees parses `git worktree list --porcelain` and returns a map of
+// branch name to worktree path for all linked worktrees (the main worktree
+// is excluded).
+func (g *Git) ListWorktrees() (map[string]string, error) {
+	out, err := g.run("worktree", "list", "--porcelain")
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]string)
+	var currentPath string
+	first := true // skip the first entry (main worktree)
+
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+
+		if wtPath, ok := strings.CutPrefix(line, "worktree "); ok {
+			if first {
+				// Mark that we've seen the main worktree header; we'll skip
+				// its branch line below.
+				currentPath = ""
+			} else {
+				currentPath = wtPath
+			}
+			continue
+		}
+
+		if strings.HasPrefix(line, "branch ") && currentPath != "" {
+			ref := strings.TrimPrefix(line, "branch ")
+			// Strip refs/heads/ prefix to get the branch name
+			branch := strings.TrimPrefix(ref, "refs/heads/")
+			result[branch] = currentPath
+			currentPath = ""
+			continue
+		}
+
+		// Empty line separates worktree entries
+		if line == "" {
+			if first {
+				first = false
+			}
+			currentPath = ""
+		}
+	}
+
+	return result, nil
+}
+
+// RebaseHere rebases the already-checked-out HEAD onto the given branch.
+// This is semantically identical to Rebase but named explicitly to clarify
+// that no checkout is needed -- the caller is operating inside a worktree
+// that already has the target branch checked out.
+func (g *Git) RebaseHere(onto string) error {
+	return g.runInteractive("rebase", onto)
+}
+
+// RebaseOntoHere runs `git rebase --onto <newBase> <oldBase>` on the
+// already-checked-out HEAD. Needed for fork-point rebases in worktrees
+// where we cannot (and don't need to) checkout first.
+func (g *Git) RebaseOntoHere(newBase, oldBase string) error {
+	return g.runInteractive("rebase", "--onto", newBase, oldBase)
 }
 
 // GetGitDir returns the .git directory path.

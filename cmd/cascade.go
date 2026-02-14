@@ -27,13 +27,15 @@ var cascadeCmd = &cobra.Command{
 }
 
 var (
-	cascadeOnlyFlag   bool
-	cascadeDryRunFlag bool
+	cascadeOnlyFlag      bool
+	cascadeDryRunFlag    bool
+	cascadeWorktreesFlag bool
 )
 
 func init() {
 	cascadeCmd.Flags().BoolVar(&cascadeOnlyFlag, "only", false, "only restack current branch, not descendants")
 	cascadeCmd.Flags().BoolVar(&cascadeDryRunFlag, "dry-run", false, "show what would be done")
+	cascadeCmd.Flags().BoolVar(&cascadeWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
 	rootCmd.AddCommand(cascadeCmd)
 }
 
@@ -91,7 +93,17 @@ func runCascade(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, s)
+	// Build worktree map if --worktrees flag is set
+	var worktrees map[string]string
+	if cascadeWorktreesFlag {
+		var wtErr error
+		worktrees, wtErr = g.ListWorktrees()
+		if wtErr != nil {
+			return fmt.Errorf("failed to list worktrees: %w", wtErr)
+		}
+	}
+
+	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, worktrees, s)
 
 	// Restore auto-stashed changes after operation (unless conflict, which saves stash in state)
 	if stashRef != "" && !errors.Is(err, ErrConflict) {
@@ -107,7 +119,9 @@ func runCascade(cmd *cobra.Command, args []string) error {
 // doCascadeWithState performs cascade and saves state with the given operation type.
 // allBranches is the complete list of branches for submit operations (used for push/PR after continue).
 // stashRef is the commit hash of auto-stashed changes (if any), persisted to state on conflict.
-func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web, pushOnly bool, allBranches []string, stashRef string, s *style.Style) error {
+// worktrees maps branch names to linked worktree paths. When non-nil, branches in
+// the map are rebased directly in their worktree directory instead of being checked out.
+func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web, pushOnly bool, allBranches []string, stashRef string, worktrees map[string]string, s *style.Style) error {
 	originalBranch, err := g.CurrentBranch()
 	if err != nil {
 		return err
@@ -153,22 +167,44 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 			}
 		}
 
+		// Determine if this branch lives in a linked worktree
+		wtPath := ""
+		if worktrees != nil {
+			wtPath = worktrees[b.Name]
+		}
+
 		if useOnto {
 			fmt.Printf("Restacking %s onto %s %s...\n", s.Branch(b.Name), s.Branch(parent), s.Muted("(using fork point)"))
 		} else {
 			fmt.Printf("Restacking %s onto %s...\n", s.Branch(b.Name), s.Branch(parent))
 		}
 
-		// Checkout and rebase
-		if err := g.Checkout(b.Name); err != nil {
-			return err
-		}
-
 		var rebaseErr error
-		if useOnto {
-			rebaseErr = g.RebaseOnto(parent, storedForkPoint, b.Name)
+		if wtPath != "" {
+			// Branch is checked out in a linked worktree -- rebase there directly
+			fmt.Printf("  %s\n", s.Muted(fmt.Sprintf("Using worktree at %s for %s", wtPath, b.Name)))
+			gitWt := git.New(wtPath)
+			if useOnto {
+				rebaseErr = gitWt.RebaseOntoHere(parent, storedForkPoint)
+			} else {
+				rebaseErr = gitWt.RebaseHere(parent)
+			}
+			// If git failed for a non-conflict reason (e.g. worktree dir was removed),
+			// wrap the error with context so the user knows which worktree we tried.
+			if rebaseErr != nil && !gitWt.IsRebaseInProgress() {
+				return fmt.Errorf("rebase of %s in worktree at %s failed (was the worktree removed or moved?): %w", b.Name, wtPath, rebaseErr)
+			}
 		} else {
-			rebaseErr = g.Rebase(parent)
+			// Normal flow: checkout + rebase in the main repo
+			if err := g.Checkout(b.Name); err != nil {
+				return err
+			}
+
+			if useOnto {
+				rebaseErr = g.RebaseOnto(parent, storedForkPoint, b.Name)
+			} else {
+				rebaseErr = g.Rebase(parent)
+			}
 		}
 
 		if rebaseErr != nil {
@@ -188,10 +224,14 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 				PushOnly:     pushOnly,
 				Branches:     allBranches,
 				StashRef:     stashRef,
+				Worktrees:    worktrees,
 			}
 			_ = state.Save(g.GetGitDir(), st) //nolint:errcheck // best effort - user can recover manually
 
 			fmt.Printf("\n%s %s\n", s.FailureIcon(), s.Error("CONFLICT: Resolve conflicts and run 'gh stack continue', or 'gh stack abort' to cancel."))
+			if wtPath != "" {
+				fmt.Printf("Resolve conflicts in worktree: %s\n", wtPath)
+			}
 			fmt.Printf("Remaining branches: %v\n", remaining)
 			if stashRef != "" {
 				fmt.Println(s.Muted("Note: Your uncommitted changes are stashed and will be restored when you continue or abort."))

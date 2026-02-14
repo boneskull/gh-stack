@@ -596,6 +596,132 @@ func TestIsContentMergedSquash(t *testing.T) {
 	}
 }
 
+func TestListWorktrees(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// Create a branch for the worktree
+	g.CreateBranch("feature-wt")
+
+	// Create a linked worktree
+	wtPath := filepath.Join(t.TempDir(), "wt-feature")
+	cmd := exec.Command("git", "-C", dir, "worktree", "add", wtPath, "feature-wt")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add failed: %v", err)
+	}
+
+	wts, err := g.ListWorktrees()
+	if err != nil {
+		t.Fatalf("ListWorktrees failed: %v", err)
+	}
+
+	if len(wts) != 1 {
+		t.Fatalf("expected 1 linked worktree, got %d: %v", len(wts), wts)
+	}
+
+	gotPath, ok := wts["feature-wt"]
+	if !ok {
+		t.Fatalf("expected worktree for branch 'feature-wt', got: %v", wts)
+	}
+
+	// Resolve symlinks for comparison (macOS /var -> /private/var)
+	resolvedWtPath, _ := filepath.EvalSymlinks(wtPath)
+	resolvedGotPath, _ := filepath.EvalSymlinks(gotPath)
+	if resolvedGotPath != resolvedWtPath {
+		t.Errorf("expected worktree path %q, got %q", resolvedWtPath, resolvedGotPath)
+	}
+}
+
+func TestListWorktreesEmpty(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	wts, err := g.ListWorktrees()
+	if err != nil {
+		t.Fatalf("ListWorktrees failed: %v", err)
+	}
+
+	if len(wts) != 0 {
+		t.Errorf("expected 0 linked worktrees, got %d: %v", len(wts), wts)
+	}
+}
+
+func TestGetResolvedGitDir(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// In the main repo, resolved git dir should be <repo>/.git
+	gitDir, err := g.GetResolvedGitDir()
+	if err != nil {
+		t.Fatalf("GetResolvedGitDir failed: %v", err)
+	}
+	expected := filepath.Join(dir, ".git")
+	// Resolve symlinks for comparison (macOS /var -> /private/var)
+	resolvedExpected, _ := filepath.EvalSymlinks(expected)
+	resolvedGitDir, _ := filepath.EvalSymlinks(gitDir)
+	if resolvedGitDir != resolvedExpected {
+		t.Errorf("main repo: expected %q, got %q", resolvedExpected, resolvedGitDir)
+	}
+
+	// Create a linked worktree and verify its git dir is different
+	g.CreateBranch("wt-branch")
+	wtPath := filepath.Join(t.TempDir(), "wt-test")
+	wtCmd := exec.Command("git", "-C", dir, "worktree", "add", wtPath, "wt-branch")
+	if wtCmdErr := wtCmd.Run(); wtCmdErr != nil {
+		t.Fatalf("git worktree add failed: %v", wtCmdErr)
+	}
+
+	gWt := git.New(wtPath)
+	wtGitDir, wtErr := gWt.GetResolvedGitDir()
+	if wtErr != nil {
+		t.Fatalf("GetResolvedGitDir (worktree) failed: %v", wtErr)
+	}
+
+	// The worktree's git dir should be under <main-repo>/.git/worktrees/<name>
+	resolvedWtGitDir, _ := filepath.EvalSymlinks(wtGitDir)
+	if resolvedWtGitDir == resolvedExpected {
+		t.Errorf("worktree git dir should differ from main repo git dir")
+	}
+	// Should contain "worktrees" in the path
+	if !contains(resolvedWtGitDir, "worktrees") {
+		t.Errorf("expected worktree git dir to contain 'worktrees', got %q", resolvedWtGitDir)
+	}
+}
+
+func TestIsRebaseInProgressWorktree(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// Create a branch for the worktree
+	g.CreateBranch("wt-rebase")
+	wtPath := filepath.Join(t.TempDir(), "wt-rebase-test")
+	cmd := exec.Command("git", "-C", dir, "worktree", "add", wtPath, "wt-rebase")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git worktree add failed: %v", err)
+	}
+
+	gWt := git.New(wtPath)
+
+	// No rebase should be in progress
+	if gWt.IsRebaseInProgress() {
+		t.Error("expected no rebase in progress in worktree")
+	}
+}
+
+// contains checks if substr is in s (simple helper to avoid importing strings in test).
+func contains(s, substr string) bool {
+	return filepath.Base(s) == substr || len(s) >= len(substr) && searchString(s, substr)
+}
+
+func searchString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRemoteBranchExists(t *testing.T) {
 	// Create main repo
 	dir := setupTestRepo(t)

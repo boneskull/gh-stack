@@ -41,10 +41,22 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		return errors.New("no operation in progress")
 	}
 
+	// Determine the correct git instance for rebase operations.
+	// If the conflicting branch is in a linked worktree, operate there.
+	rebaseGit := g
+	wtPath := ""
+	if p, ok := st.Worktrees[st.Current]; ok && p != "" {
+		wtPath = p
+		rebaseGit = git.New(wtPath)
+	}
+
 	// Complete the in-progress rebase
-	if g.IsRebaseInProgress() {
+	if rebaseGit.IsRebaseInProgress() {
 		fmt.Println("Continuing rebase...")
-		if rebaseErr := g.RebaseContinue(); rebaseErr != nil {
+		if rebaseErr := rebaseGit.RebaseContinue(); rebaseErr != nil {
+			if wtPath != "" {
+				return fmt.Errorf("rebase --continue failed in worktree at %s for branch %s; resolve conflicts there first", wtPath, st.Current)
+			}
 			return errors.New("rebase --continue failed; resolve conflicts first")
 		}
 	}
@@ -74,7 +86,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		// Remove state file before continuing (will be recreated if conflict)
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
-		if cascadeErr := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.PushOnly, st.Branches, st.StashRef, s); cascadeErr != nil {
+		if cascadeErr := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.PushOnly, st.Branches, st.StashRef, st.Worktrees, s); cascadeErr != nil {
 			// Stash handling is done by doCascadeWithState (conflict saves in state, errors restore)
 			if !errors.Is(cascadeErr, ErrConflict) && st.StashRef != "" {
 				fmt.Println("Restoring auto-stashed changes...")

@@ -38,6 +38,10 @@ type CascadeState struct {
 	// StashRef is the commit hash of auto-stashed changes (if any).
 	// Used to restore working tree changes when operation completes or is aborted.
 	StashRef string `json:"stash_ref,omitempty"`
+	// Worktrees maps branch names to linked worktree paths.
+	// Persisted so that continue/abort can find the correct worktree
+	// directory for branches that were being rebased in a linked worktree.
+	Worktrees map[string]string `json:"worktrees,omitempty"`
 }
 
 // Save persists cascade state to .git/STACK_CASCADE_STATE.

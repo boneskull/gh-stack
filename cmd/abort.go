@@ -39,10 +39,22 @@ func runAbort(cmd *cobra.Command, args []string) error {
 		return errors.New("no operation in progress")
 	}
 
+	// Determine the correct git instance for rebase operations.
+	// If the conflicting branch is in a linked worktree, operate there.
+	rebaseGit := g
+	wtPath := ""
+	if p, ok := st.Worktrees[st.Current]; ok && p != "" {
+		wtPath = p
+		rebaseGit = git.New(wtPath)
+	}
+
 	// Abort rebase if in progress
-	if g.IsRebaseInProgress() {
+	if rebaseGit.IsRebaseInProgress() {
 		fmt.Println("Aborting rebase...")
-		if err := g.RebaseAbort(); err != nil {
+		if err := rebaseGit.RebaseAbort(); err != nil {
+			if wtPath != "" {
+				return fmt.Errorf("failed to abort rebase in worktree at %s for branch %s: %w", wtPath, st.Current, err)
+			}
 			return fmt.Errorf("failed to abort rebase: %w", err)
 		}
 	}
