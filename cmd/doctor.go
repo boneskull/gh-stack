@@ -250,6 +250,10 @@ func commentForkPointChange(g *git.Git, branch, oldSHA string) {
 	if err != nil {
 		return
 	}
+	info, err := os.Stat(configPath)
+	if err != nil {
+		return
+	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return
@@ -258,6 +262,7 @@ func commentForkPointChange(g *git.Git, branch, oldSHA string) {
 	lines := strings.Split(string(data), "\n")
 	sectionHeader := fmt.Sprintf("[branch %q]", branch)
 	inSection := false
+	modified := false
 	var result []string
 
 	for _, line := range lines {
@@ -282,11 +287,15 @@ func commentForkPointChange(g *git.Git, branch, oldSHA string) {
 				fmt.Sprintf("%s# doctor fix %s replaces previous value of:", indent, timestamp),
 				fmt.Sprintf("%s# %s", indent, oldSHA),
 			)
+			modified = true
 		}
 
 		result = append(result, line)
 	}
 
+	if !modified {
+		return
+	}
 	//nolint:errcheck // best-effort provenance
-	_ = os.WriteFile(configPath, []byte(strings.Join(result, "\n")), 0644)
+	_ = os.WriteFile(configPath, []byte(strings.Join(result, "\n")), info.Mode())
 }
