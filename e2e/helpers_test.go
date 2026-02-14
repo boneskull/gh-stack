@@ -53,7 +53,7 @@ func NewTestEnv(t *testing.T) *TestEnv {
 		BinaryPath: binaryPath,
 	}
 
-	env.Git("init")
+	env.Git("init", "-b", "main")
 	env.Git("config", "user.email", "test@example.com")
 	env.Git("config", "user.name", "Test User")
 	// Prevent git from opening an editor (for commits, rebases, etc.)
