@@ -546,9 +546,9 @@ func (g *Git) IsAncestor(ancestor, descendant string) (bool, error) {
 }
 
 // GetForkPoint returns the reflog-aware fork point of branch from parent.
-// This uses git merge-base --fork-point which inspects the reflog to find
-// where the branch originally diverged. Returns an error when reflogs have
-// expired (exit code 1), in which case the caller should fall back to GetMergeBase.
+// This uses `git merge-base --fork-point`, which inspects the reflog to find
+// where the branch originally diverged. If the underlying Git command fails
+// for any reason, an error is returned and callers may fall back to GetMergeBase.
 func (g *Git) GetForkPoint(parent, branch string) (string, error) {
 	return g.run("merge-base", "--fork-point", parent, branch)
 }
