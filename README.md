@@ -296,10 +296,11 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### restack Flags
 
-| Flag        | Description                                   |
-| ----------- | --------------------------------------------- |
-| `--only`    | Only restack current branch, not descendants  |
-| `--dry-run` | Show what would be done                       |
+| Flag          | Description                                              |
+| ------------- | -------------------------------------------------------- |
+| `--only`      | Only restack current branch, not descendants             |
+| `--dry-run`   | Show what would be done                                  |
+| `--worktrees` | Rebase branches checked out in linked worktrees in-place |
 
 ### continue
 
@@ -321,10 +322,11 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 
 #### sync Flags
 
-| Flag           | Description             |
-| -------------- | ----------------------- |
-| `--no-restack` | Skip restacking branches |
-| `--dry-run`    | Show what would be done |
+| Flag           | Description                                              |
+| -------------- | -------------------------------------------------------- |
+| `--no-restack` | Skip restacking branches                                 |
+| `--dry-run`    | Show what would be done                                  |
+| `--worktrees`  | Rebase branches checked out in linked worktrees in-place |
 
 ### undo
 
@@ -348,6 +350,26 @@ Snapshots are stored in `.git/stack-undo/` and archived to `.git/stack-undo/done
 | ----------- | -------------------------------------------- |
 | `--force`   | Skip confirmation prompt                     |
 | `--dry-run` | Show what would be restored without doing it |
+
+## Working with Git Worktrees
+
+If you use [git worktrees](https://git-scm.com/docs/git-worktree) to check out multiple stack branches simultaneously, `git checkout` will refuse to switch to a branch that's already checked out in another worktree. This means `restack` and `sync` will fail when they try to check out those branches.
+
+The `--worktrees` flag solves this. When set, **gh-stack** detects linked worktrees up front and rebases those branches directly in their worktree directories instead of checking them out:
+
+```bash
+# Restack with worktree-aware rebasing
+gh stack restack --worktrees
+
+# Sync with worktree-aware rebasing
+gh stack sync --worktrees
+```
+
+If a rebase conflict occurs in a worktree branch, **gh-stack** will tell you which worktree directory to resolve it in. After resolving, run `gh stack continue` from the main repository as usual—**gh-stack** remembers which worktree the conflict lives in.
+
+> [!NOTE]
+>
+> The `--worktrees` flag is opt-in. Without it, **gh-stack** behaves exactly as before. If none of your stack branches are checked out in linked worktrees, the flag is a harmless no-op.
 
 ## How It Works
 

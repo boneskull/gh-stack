@@ -7,6 +7,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -285,22 +286,22 @@ func TestIsBaseBranchInvalidError(t *testing.T) {
 		},
 		{
 			name: "unrelated error",
-			err:  fmt.Errorf("network timeout"),
+			err:  errors.New("network timeout"),
 			want: false,
 		},
 		{
 			name: "exact GitHub 422 error",
-			err:  fmt.Errorf("failed to create PR: HTTP 422: Validation Failed (https://api.github.com/repos/owner/repo/pulls)\nPullRequest.base is invalid"),
+			err:  errors.New("failed to create PR: HTTP 422: Validation Failed (https://api.github.com/repos/owner/repo/pulls)\nPullRequest.base is invalid"),
 			want: true,
 		},
 		{
 			name: "short form",
-			err:  fmt.Errorf("base is invalid"),
+			err:  errors.New("base is invalid"),
 			want: true,
 		},
 		{
 			name: "wrapped error",
-			err:  fmt.Errorf("something went wrong: %w", fmt.Errorf("PullRequest.base is invalid")),
+			err:  fmt.Errorf("something went wrong: %w", errors.New("PullRequest.base is invalid")),
 			want: true,
 		},
 	}

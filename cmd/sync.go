@@ -27,11 +27,13 @@ var syncCmd = &cobra.Command{
 var (
 	syncNoCascadeFlag bool
 	syncDryRunFlag    bool
+	syncWorktreesFlag bool
 )
 
 func init() {
 	syncCmd.Flags().BoolVar(&syncNoCascadeFlag, "no-restack", false, "skip restacking branches")
 	syncCmd.Flags().BoolVar(&syncDryRunFlag, "dry-run", false, "show what would be done")
+	syncCmd.Flags().BoolVar(&syncWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -348,11 +350,21 @@ func runSync(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
+		// Build worktree map if --worktrees flag is set
+		var worktrees map[string]string
+		if syncWorktreesFlag {
+			var wtErr error
+			worktrees, wtErr = g.ListWorktrees()
+			if wtErr != nil {
+				return fmt.Errorf("failed to list worktrees: %w", wtErr)
+			}
+		}
+
 		// Cascade from trunk's children
 		for _, child := range root.Children {
 			allBranches := []*tree.Node{child}
 			allBranches = append(allBranches, tree.GetDescendants(child)...)
-			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, s); err != nil {
+			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, worktrees, s); err != nil {
 				if errors.Is(err, ErrConflict) {
 					hitConflict = true
 				}
