@@ -20,15 +20,15 @@ var ErrDirtyWorkTree = errors.New("working tree has uncommitted changes")
 var (
 	gitPath     string
 	gitPathOnce sync.Once
-	gitPathErr  error
+	errGitPath  error
 )
 
 // resolveGitPath finds the git executable using safeexec to prevent PATH injection.
 func resolveGitPath() (string, error) {
 	gitPathOnce.Do(func() {
-		gitPath, gitPathErr = safeexec.LookPath("git")
+		gitPath, errGitPath = safeexec.LookPath("git")
 	})
-	return gitPath, gitPathErr
+	return gitPath, errGitPath
 }
 
 // Git provides git operations for a repository.
@@ -124,8 +124,8 @@ func (g *Git) IsDirty() (bool, error) {
 func (g *Git) HasStagedChanges() (bool, error) {
 	err := g.runSilent("diff", "--cached", "--quiet")
 	if err != nil {
-		// Exit code 1 means there are differences
-		return true, nil
+		// Exit code 1 means there are differences — this is expected, not a real error
+		return true, nil //nolint:nilerr // non-zero exit = staged changes exist
 	}
 	return false, nil
 }
@@ -197,7 +197,7 @@ func (g *Git) HasUnmergedCommits(branch, upstream string) (bool, error) {
 	}
 
 	// If any line starts with +, there are unmerged commits
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.HasPrefix(line, "+ ") {
 			return true, nil
 		}
@@ -212,8 +212,8 @@ func (g *Git) IsContentMerged(branch, upstream string) (bool, error) {
 	// git diff upstream branch --quiet exits 0 if no diff, 1 if diff exists
 	err := g.runSilent("diff", "--quiet", upstream, branch)
 	if err != nil {
-		// Exit code 1 means there are differences
-		return false, nil
+		// Exit code 1 means there are differences — this is expected, not a real error
+		return false, nil //nolint:nilerr // non-zero exit = content differs
 	}
 	// Exit code 0 means no differences - content is merged
 	return true, nil
@@ -234,7 +234,7 @@ func (g *Git) ListRemoteBranches() (map[string]bool, error) {
 		return nil, err
 	}
 	branches := make(map[string]bool)
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" && line != "HEAD" {
 			branches[line] = true
@@ -359,7 +359,7 @@ func (g *Git) StashPop(ref string) error {
 	stashRef, err := g.findStashByHash(ref)
 	if err != nil {
 		// Apply succeeded but we couldn't find stash to drop - not fatal
-		return nil
+		return nil //nolint:nilerr // apply already succeeded, drop failure is best-effort
 	}
 	if stashRef != "" {
 		// Silently drop; errors aren't critical since apply already succeeded

@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -37,14 +38,14 @@ func runContinue(cmd *cobra.Command, args []string) error {
 	// Check if operation in progress
 	st, err := state.Load(g.GetGitDir())
 	if err != nil {
-		return fmt.Errorf("no operation in progress")
+		return errors.New("no operation in progress")
 	}
 
 	// Complete the in-progress rebase
 	if g.IsRebaseInProgress() {
 		fmt.Println("Continuing rebase...")
 		if rebaseErr := g.RebaseContinue(); rebaseErr != nil {
-			return fmt.Errorf("rebase --continue failed; resolve conflicts first")
+			return errors.New("rebase --continue failed; resolve conflicts first")
 		}
 	}
 
@@ -75,7 +76,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 
 		if cascadeErr := doCascadeWithState(g, cfg, branches, false, st.Operation, st.UpdateOnly, st.Web, st.PushOnly, st.Branches, st.StashRef, s); cascadeErr != nil {
 			// Stash handling is done by doCascadeWithState (conflict saves in state, errors restore)
-			if cascadeErr != ErrConflict && st.StashRef != "" {
+			if !errors.Is(cascadeErr, ErrConflict) && st.StashRef != "" {
 				fmt.Println("Restoring auto-stashed changes...")
 				if popErr := g.StashPop(st.StashRef); popErr != nil {
 					fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(st.StashRef), popErr)

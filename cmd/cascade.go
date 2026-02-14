@@ -54,7 +54,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 
 	// Check if cascade already in progress
 	if state.Exists(g.GetGitDir()) {
-		return fmt.Errorf("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
+		return errors.New("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
 	}
 
 	currentBranch, err := g.CurrentBranch()
@@ -94,7 +94,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, s)
 
 	// Restore auto-stashed changes after operation (unless conflict, which saves stash in state)
-	if stashRef != "" && err != ErrConflict {
+	if stashRef != "" && !errors.Is(err, ErrConflict) {
 		fmt.Println("Restoring auto-stashed changes...")
 		if popErr := g.StashPop(stashRef); popErr != nil {
 			fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(stashRef), popErr)

@@ -2,8 +2,10 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
@@ -184,7 +186,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 	// Uses git diff to detect when a branch's content is already in trunk
 	for _, branch := range branches {
 		// Skip already detected via PR
-		if sliceContains(merged, branch) {
+		if slices.Contains(merged, branch) {
 			continue
 		}
 
@@ -215,7 +217,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 
 		// Skip if parent is already marked as merged (will be handled)
-		if sliceContains(merged, parent) {
+		if slices.Contains(merged, parent) {
 			continue
 		}
 
@@ -351,7 +353,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 			allBranches := []*tree.Node{child}
 			allBranches = append(allBranches, tree.GetDescendants(child)...)
 			if err := doCascadeWithState(g, cfg, allBranches, syncDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, s); err != nil {
-				if err == ErrConflict {
+				if errors.Is(err, ErrConflict) {
 					hitConflict = true
 				}
 				return err
@@ -371,16 +373,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 	fmt.Println(s.SuccessMessage("Sync complete!"))
 	// Stash restoration handled by defer
 	return nil
-}
-
-// sliceContains returns true if slice contains the given string.
-func sliceContains(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 // mergedAction represents the user's choice for handling a merged branch.

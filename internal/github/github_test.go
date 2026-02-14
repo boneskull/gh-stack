@@ -452,6 +452,7 @@ func TestClient_FindPRByHead(t *testing.T) {
 	}
 	if pr == nil {
 		t.Fatal("expected PR, got nil")
+		return
 	}
 	if pr.Number != 42 {
 		t.Errorf("expected PR number 42, got %d", pr.Number)
@@ -496,7 +497,7 @@ func TestClient_FindPRByHead_Error(t *testing.T) {
 }
 
 func TestClient_CreateSubmitPR(t *testing.T) {
-	var capturedBody map[string]interface{}
+	var capturedBody map[string]any
 	mock := &mockREST{
 		postFn: func(path string, body io.Reader, response any) error {
 			if path != "repos/owner/repo/pulls" {
@@ -538,7 +539,7 @@ func TestClient_CreateSubmitPR(t *testing.T) {
 }
 
 func TestClient_CreateSubmitPR_Draft(t *testing.T) {
-	var capturedBody map[string]interface{}
+	var capturedBody map[string]any
 	mock := &mockREST{
 		postFn: func(path string, body io.Reader, response any) error {
 			if err := json.NewDecoder(body).Decode(&capturedBody); err != nil {

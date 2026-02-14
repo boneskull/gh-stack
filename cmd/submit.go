@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -63,10 +64,10 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Validate flag combinations
 	if submitPushOnlyFlag && submitUpdateOnlyFlag {
-		return fmt.Errorf("--push-only and --update-only cannot be used together: --push-only skips all PR operations")
+		return errors.New("--push-only and --update-only cannot be used together: --push-only skips all PR operations")
 	}
 	if submitPushOnlyFlag && submitWebFlag {
-		return fmt.Errorf("--push-only and --web cannot be used together: --push-only skips all PR operations")
+		return errors.New("--push-only and --web cannot be used together: --push-only skips all PR operations")
 	}
 	if submitFromFlag != "" && submitCurrentOnlyFlag {
 		return fmt.Errorf("--from and --current-only cannot be used together")
@@ -86,7 +87,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Check if operation already in progress
 	if state.Exists(g.GetGitDir()) {
-		return fmt.Errorf("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
+		return errors.New("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
 	}
 
 	currentBranch, err := g.CurrentBranch()
@@ -174,7 +175,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	fmt.Println(s.Bold("=== Phase 1: Restack ==="))
 	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag, branchNames, stashRef, s); cascadeErr != nil {
 		// Stash is saved in state for conflicts; restore on other errors
-		if cascadeErr != ErrConflict && stashRef != "" {
+		if !errors.Is(cascadeErr, ErrConflict) && stashRef != "" {
 			fmt.Println("Restoring auto-stashed changes...")
 			if popErr := g.StashPop(stashRef); popErr != nil {
 				fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(stashRef), popErr)
@@ -266,7 +267,8 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 
 		existingPR, _ := cfg.GetPR(b.Name) //nolint:errcheck // 0 is fine
 
-		if existingPR > 0 {
+		switch {
+		case existingPR > 0:
 			// Update existing PR
 			if dryRun {
 				fmt.Printf("%s Would update PR #%d base to %s\n", s.Muted("dry-run:"), existingPR, s.Branch(parent))
@@ -289,27 +291,28 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 				// If PR is a draft and now targets trunk, offer to publish
 				maybeMarkPRReady(ghClient, existingPR, b.Name, parent, trunk, s)
 			}
-		} else if !updateOnly {
+		case !updateOnly:
 			// Create new PR
 			if dryRun {
 				fmt.Printf("%s Would create PR for %s (base: %s)\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(parent))
 			} else {
 				prNum, adopted, err := createPRForBranch(g, ghClient, cfg, root, b.Name, parent, trunk, remoteBranches, s)
-				if err != nil {
+				switch {
+				case err != nil:
 					fmt.Printf("%s failed to create PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), err)
-				} else if adopted {
+				case adopted:
 					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
 					if openWeb {
 						prURLs = append(prURLs, ghClient.PRURL(prNum))
 					}
-				} else {
+				default:
 					fmt.Printf("%s Created PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
 					if openWeb {
 						prURLs = append(prURLs, ghClient.PRURL(prNum))
 					}
 				}
 			}
-		} else {
+		default:
 			fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update-only)"))
 		}
 	}
@@ -447,7 +450,7 @@ func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style
 	}
 	title = strings.TrimSpace(title)
 	if title == "" {
-		return "", "", fmt.Errorf("PR title cannot be empty")
+		return "", "", errors.New("PR title cannot be empty")
 	}
 
 	// Show the generated body and ask if user wants to edit

@@ -79,11 +79,12 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	// Show branch changes
 	for name, bs := range snapshot.Branches {
 		currentSHA, tipErr := g.GetTip(name)
-		if tipErr != nil {
+		switch {
+		case tipErr != nil:
 			fmt.Printf("  - %s: %s → %s\n", s.Branch(name), s.Muted("(branch missing)"), git.AbbrevSHA(bs.SHA))
-		} else if currentSHA != bs.SHA {
+		case currentSHA != bs.SHA:
 			fmt.Printf("  - %s: %s → %s\n", s.Branch(name), git.AbbrevSHA(currentSHA), git.AbbrevSHA(bs.SHA))
-		} else {
+		default:
 			fmt.Printf("  - %s: %s\n", s.Branch(name), s.Muted("(unchanged)"))
 		}
 	}

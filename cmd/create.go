@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -76,7 +77,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 	if hasStaged && !createEmptyFlag {
 		if createMessageFlag == "" {
-			return fmt.Errorf("staged changes found but no commit message provided; use -m or --empty")
+			return errors.New("staged changes found but no commit message provided; use -m or --empty")
 		}
 	}
 

@@ -429,6 +429,7 @@ func getDefaultClient() (*Client, error) {
 }
 
 // CreatePR creates a new pull request using the default client.
+//
 // Deprecated: Use NewClient() and call methods directly for better error handling.
 func CreatePR(head, base, title, body string) (int, error) {
 	client, err := getDefaultClient()

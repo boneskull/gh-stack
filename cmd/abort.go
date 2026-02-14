@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -35,7 +36,7 @@ func runAbort(cmd *cobra.Command, args []string) error {
 	// Check if cascade in progress
 	st, err := state.Load(g.GetGitDir())
 	if err != nil {
-		return fmt.Errorf("no operation in progress")
+		return errors.New("no operation in progress")
 	}
 
 	// Abort rebase if in progress

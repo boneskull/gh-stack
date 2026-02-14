@@ -2,6 +2,7 @@
 package prompt
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -137,7 +138,7 @@ func EditInEditor(text string) (string, error) {
 // If not in an interactive terminal, returns the defaultIndex.
 func Select(prompt string, options []string, defaultIndex int) (int, error) {
 	if len(options) == 0 {
-		return 0, fmt.Errorf("no options provided")
+		return 0, errors.New("no options provided")
 	}
 
 	// Clamp defaultIndex to valid range

@@ -62,6 +62,7 @@ func TestFindNode(t *testing.T) {
 	node := tree.FindNode(root, "feature-a")
 	if node == nil {
 		t.Fatal("FindNode returned nil")
+		return
 	}
 	if node.Name != "feature-a" {
 		t.Errorf("expected 'feature-a', got %q", node.Name)

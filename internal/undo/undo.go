@@ -247,7 +247,7 @@ func pruneDir(dir string, max int) error {
 
 	// Delete oldest files until we're at or below max
 	toDelete := len(jsonFiles) - max
-	for i := 0; i < toDelete; i++ {
+	for i := range toDelete {
 		path := filepath.Join(dir, jsonFiles[i].Name())
 		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
 			return removeErr

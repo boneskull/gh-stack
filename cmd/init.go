@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -42,12 +43,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	trunk := trunkFlag
 	if trunk == "" {
 		// Try main, then master
-		if g.BranchExists("main") {
+		switch {
+		case g.BranchExists("main"):
 			trunk = "main"
-		} else if g.BranchExists("master") {
+		case g.BranchExists("master"):
 			trunk = "master"
-		} else {
-			return fmt.Errorf("could not determine trunk branch; use --trunk to specify")
+		default:
+			return errors.New("could not determine trunk branch; use --trunk to specify")
 		}
 	}
 
