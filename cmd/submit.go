@@ -623,11 +623,16 @@ func containsHTMLOutsideCode(text string) bool {
 	return false
 }
 
-// unwrapParagraphs removes hard line breaks within plain-text paragraphs while
-// preserving intentional structure: blank lines, markdown block-level syntax
-// (headers, lists, blockquotes, horizontal rules), and code blocks (both fenced
-// and indented). This converts the ~72-column convention used in commit messages
-// into flowing text suitable for GitHub's markdown renderer.
+// unwrapParagraphs removes hard line breaks within plain-text paragraphs and
+// list items while preserving intentional structure: blank lines, markdown
+// block-level syntax (headers, blockquotes, horizontal rules), and code blocks
+// (both fenced and indented). This converts the ~72-column convention used in
+// commit messages into flowing text suitable for GitHub's markdown renderer.
+//
+// List items are treated like paragraphs for unwrapping: a hard-wrapped list
+// item (with or without continuation indentation) is joined back into a single
+// line. Each new list marker starts a fresh accumulation group, so consecutive
+// items remain separate.
 //
 // If HTML tags are found in prose (outside code blocks and inline code spans),
 // the entire text is returned as-is — anyone writing raw HTML in a commit message
@@ -680,10 +685,28 @@ func unwrapParagraphs(text string) string {
 			continue
 		}
 
-		// Preserve lines that are markdown block-level elements
+		// List items start a new accumulation group so that hard-wrapped
+		// continuations are joined back into the item, just like paragraphs.
+		if isListItem(trimmed) {
+			flushParagraph()
+			paragraph = append(paragraph, trimmed)
+			continue
+		}
+
+		// Non-list block elements (headers, blockquotes, rules, tables)
 		if isBlockElement(trimmed) {
 			flushParagraph()
 			result = append(result, line)
+			continue
+		}
+
+		// Continuation of a list item: strip leading whitespace that may
+		// come from markdown continuation indentation (e.g. 2-space indent
+		// under a list marker). This must be checked before the indented
+		// code block rule — nested list continuations can easily reach 4+
+		// spaces (2 for nesting + 2 for continuation).
+		if len(paragraph) > 0 && isListItem(paragraph[0]) {
+			paragraph = append(paragraph, strings.TrimSpace(trimmed))
 			continue
 		}
 
@@ -701,6 +724,32 @@ func unwrapParagraphs(text string) string {
 	flushParagraph()
 
 	return strings.Join(result, "\n")
+}
+
+// isListItem returns true if the (possibly indented) line starts a markdown
+// list item: unordered ("- ", "* ", "+ ") or ordered ("1. ", "12. ", etc.).
+// Indented list items (nested lists) are also detected.
+func isListItem(line string) bool {
+	stripped := strings.TrimLeft(line, " \t")
+	if stripped == "" {
+		return false
+	}
+	// Unordered lists
+	if strings.HasPrefix(stripped, "- ") || strings.HasPrefix(stripped, "* ") || strings.HasPrefix(stripped, "+ ") ||
+		stripped == "-" || stripped == "*" || stripped == "+" {
+		return true
+	}
+	// Ordered lists (e.g. "1. ", "12. ")
+	for i, ch := range stripped {
+		if ch >= '0' && ch <= '9' {
+			continue
+		}
+		if ch == '.' && i > 0 && i+1 < len(stripped) && stripped[i+1] == ' ' {
+			return true
+		}
+		break
+	}
+	return false
 }
 
 // isBlockElement returns true if the line starts with markdown block-level syntax

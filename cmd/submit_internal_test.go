@@ -52,16 +52,34 @@ func TestUnwrapParagraphs(t *testing.T) {
 			want: "Some text.\n\n    indented code line 1\n    indented code line 2\n\nMore text.",
 		},
 		{
-			name: "unordered list items preserved",
+			name: "list continuation with indent is joined",
 			in:   "Changes:\n\n- First item\n- Second item that is\n  also long\n- Third item",
-			// The continuation line (2-space indent) is preserved as-is;
-			// GitHub's markdown renderer already handles this correctly.
-			want: "Changes:\n\n- First item\n- Second item that is\n  also long\n- Third item",
+			want: "Changes:\n\n- First item\n- Second item that is also long\n- Third item",
+		},
+		{
+			name: "list continuation without indent is joined",
+			in:   "Changes:\n\n- First item\n- Second item that is\nhard-wrapped here\n- Third item",
+			want: "Changes:\n\n- First item\n- Second item that is hard-wrapped here\n- Third item",
 		},
 		{
 			name: "ordered list items preserved",
 			in:   "Steps:\n\n1. First step\n2. Second step\n3. Third step",
 			want: "Steps:\n\n1. First step\n2. Second step\n3. Third step",
+		},
+		{
+			name: "hard-wrapped ordered list item is joined",
+			in:   "Steps:\n\n1. First step that is\nhard-wrapped here\n2. Second step",
+			want: "Steps:\n\n1. First step that is hard-wrapped here\n2. Second step",
+		},
+		{
+			name: "nested list items preserved",
+			in:   "- Item 1\n  - Nested item\n  - Another nested\n- Item 2",
+			want: "- Item 1\n  - Nested item\n  - Another nested\n- Item 2",
+		},
+		{
+			name: "hard-wrapped nested list item is joined",
+			in:   "- Item 1\n  - Nested item that is\n    also long\n- Item 2",
+			want: "- Item 1\n  - Nested item that is also long\n- Item 2",
 		},
 		{
 			name: "headers preserved",
@@ -168,6 +186,42 @@ func TestContainsHTMLOutsideCode(t *testing.T) {
 				t.Errorf("containsHTMLOutsideCode() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsListItem(t *testing.T) {
+	listLines := []string{
+		"- item",
+		"* item",
+		"+ item",
+		"-",
+		"*",
+		"+",
+		"1. ordered",
+		"12. multi-digit",
+		"  - indented unordered",
+		"  * indented star",
+		"  1. indented ordered",
+		"\t- tab indented",
+	}
+	for _, line := range listLines {
+		if !isListItem(line) {
+			t.Errorf("expected isListItem(%q) = true", line)
+		}
+	}
+
+	nonListLines := []string{
+		"just text",
+		"# Header",
+		"> blockquote",
+		"| table",
+		"2nd place finish",
+		"",
+	}
+	for _, line := range nonListLines {
+		if isListItem(line) {
+			t.Errorf("expected isListItem(%q) = false", line)
+		}
 	}
 }
 
