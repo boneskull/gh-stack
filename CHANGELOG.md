@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/boneskull/gh-stack/compare/v0.4.1...v0.5.0) (2026-02-14)
+
+
+### Features
+
+* add --worktrees flag for restack and sync ([#48](https://github.com/boneskull/gh-stack/issues/48)) ([6117a53](https://github.com/boneskull/gh-stack/commit/6117a53697d9f7eee6f5afa8d7ec9aa20b30907d)), closes [#33](https://github.com/boneskull/gh-stack/issues/33)
+
+
+### Bug Fixes
+
+* **submit:** submit the entire stack by default ([#42](https://github.com/boneskull/gh-stack/issues/42)) ([4b907b1](https://github.com/boneskull/gh-stack/commit/4b907b1edea69c855c093ff907d809fd1ba2e07b)), closes [#38](https://github.com/boneskull/gh-stack/issues/38)
+* **submit:** unwrap hard-wrapped list items in PR descriptions ([#43](https://github.com/boneskull/gh-stack/issues/43)) ([60366b2](https://github.com/boneskull/gh-stack/commit/60366b2345e77e31527705a7bb32fc04adcccb1f))
+
 ## [0.4.1](https://github.com/boneskull/gh-stack/compare/v0.4.0...v0.4.1) (2026-02-14)
 
 
