@@ -225,6 +225,24 @@ func (g *Git) RemoteBranchExists(branch string) bool {
 	return err == nil
 }
 
+// ListRemoteBranches returns the set of branch names that exist on origin,
+// based on locally-cached remote-tracking refs (no network call).
+// This is accurate as long as a fetch or push has been done recently.
+func (g *Git) ListRemoteBranches() (map[string]bool, error) {
+	out, err := g.run("for-each-ref", "--format=%(refname:strip=3)", "refs/remotes/origin/")
+	if err != nil {
+		return nil, err
+	}
+	branches := make(map[string]bool)
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && line != "HEAD" {
+			branches[line] = true
+		}
+	}
+	return branches, nil
+}
+
 // RebaseOnto rebases a branch onto a new base, replaying only commits after oldBase.
 // Checks out the branch first, then runs: git rebase --onto <newBase> <oldBase>
 // Useful when a parent branch was squash-merged and we need to replay only
