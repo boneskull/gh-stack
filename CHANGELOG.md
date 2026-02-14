@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.1](https://github.com/boneskull/gh-stack/compare/v0.4.0...v0.4.1) (2026-02-14)
+
+
+### Bug Fixes
+
+* **github:** omit local-only branches from PR stack comments ([#37](https://github.com/boneskull/gh-stack/issues/37)) ([f4afa45](https://github.com/boneskull/gh-stack/commit/f4afa455cfa51f4f8ac2cd4433a448730a8f19ac))
+* **github:** scope PR stack comment to current stack only ([#36](https://github.com/boneskull/gh-stack/issues/36)) ([c31fa5c](https://github.com/boneskull/gh-stack/commit/c31fa5cc30f45a96a58f55fc7ff19b8e6d18941e))
+* suppress help output on runtime errors ([#41](https://github.com/boneskull/gh-stack/issues/41)) ([07f807b](https://github.com/boneskull/gh-stack/commit/07f807b5c1a94b198717c8ec51726eb54c2e094a)), closes [#35](https://github.com/boneskull/gh-stack/issues/35)
+
 ## [0.4.0](https://github.com/boneskull/gh-stack/compare/v0.3.0...v0.4.0) (2026-02-12)
 
 
