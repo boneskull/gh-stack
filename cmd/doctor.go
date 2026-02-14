@@ -4,7 +4,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -197,6 +196,7 @@ func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, 
 	if err != nil {
 		result.issues = append(result.issues,
 			fmt.Sprintf("Failed to compute merge-base for %s and %s: %v", parent, branch, err),
+		)
 		return result
 	}
 
@@ -238,15 +238,18 @@ func setForkPointWithComment(g *git.Git, cfg *config.Config, branch, oldSHA, new
 	if err := cfg.SetForkPoint(branch, newSHA); err != nil {
 		return err
 	}
-	commentForkPointChange(g.GetGitDir(), branch, oldSHA)
+	commentForkPointChange(g, branch, oldSHA)
 	return nil
 }
 
-// commentForkPointChange inserts a comment above the stackForkPoint line in .git/config
+// commentForkPointChange inserts a comment above the stackForkPoint line in the git config
 // recording the previous value and a timestamp. This preserves provenance so old fork
 // points can be recovered if a fix goes wrong. Best-effort: errors are silently ignored.
-func commentForkPointChange(gitDir, branch, oldSHA string) {
-	configPath := filepath.Join(gitDir, "config")
+func commentForkPointChange(g *git.Git, branch, oldSHA string) {
+	configPath, err := g.GetConfigPath()
+	if err != nil {
+		return
+	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return
