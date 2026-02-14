@@ -525,6 +525,25 @@ func (g *Git) GetCommits(base, head string) ([]Commit, error) {
 	return commits, nil
 }
 
+// IsAncestor returns true if ancestor is an ancestor of descendant.
+// Both arguments must be valid commit references.
+func (g *Git) IsAncestor(ancestor, descendant string) (bool, error) {
+	err := g.runSilent("merge-base", "--is-ancestor", ancestor, descendant)
+	if err != nil {
+		// Non-zero exit means not an ancestor (assuming both commits exist).
+		return false, nil
+	}
+	return true, nil
+}
+
+// GetForkPoint returns the reflog-aware fork point of branch from parent.
+// This uses git merge-base --fork-point which inspects the reflog to find
+// where the branch originally diverged. Returns an error when reflogs have
+// expired (exit code 1), in which case the caller should fall back to GetMergeBase.
+func (g *Git) GetForkPoint(parent, branch string) (string, error) {
+	return g.run("merge-base", "--fork-point", parent, branch)
+}
+
 // AbbrevSHA safely abbreviates a SHA to 7 characters.
 // Returns the full string if it's shorter than 7 characters.
 func AbbrevSHA(sha string) string {

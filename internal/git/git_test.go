@@ -709,6 +709,102 @@ func TestIsRebaseInProgressWorktree(t *testing.T) {
 	}
 }
 
+// contains checks if substr is in s (simple helper to avoid importing strings in test).
+func contains(s, substr string) bool {
+	return filepath.Base(s) == substr || len(s) >= len(substr) && searchString(s, substr)
+}
+
+func searchString(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+func TestIsAncestor(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	// Record the initial commit SHA
+	initial, _ := g.GetTip("HEAD")
+
+	// Create a linear chain: initial -> A -> B
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "commit A").Run()
+	shaA, _ := g.GetTip("HEAD")
+
+	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "commit B").Run()
+	shaB, _ := g.GetTip("HEAD")
+
+	// initial is ancestor of B
+	isAnc, err := g.IsAncestor(initial, shaB)
+	if err != nil {
+		t.Fatalf("IsAncestor failed: %v", err)
+	}
+	if !isAnc {
+		t.Error("expected initial to be ancestor of B")
+	}
+
+	// A is ancestor of B
+	isAnc, err = g.IsAncestor(shaA, shaB)
+	if err != nil {
+		t.Fatalf("IsAncestor failed: %v", err)
+	}
+	if !isAnc {
+		t.Error("expected A to be ancestor of B")
+	}
+
+	// B is NOT ancestor of A
+	isAnc, err = g.IsAncestor(shaB, shaA)
+	if err != nil {
+		t.Fatalf("IsAncestor failed: %v", err)
+	}
+	if isAnc {
+		t.Error("expected B to NOT be ancestor of A")
+	}
+
+	// A commit is always its own ancestor
+	isAnc, err = g.IsAncestor(shaA, shaA)
+	if err != nil {
+		t.Fatalf("IsAncestor failed: %v", err)
+	}
+	if !isAnc {
+		t.Error("expected A to be ancestor of itself")
+	}
+}
+
+func TestGetForkPoint(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Record the divergence point
+	diverge, _ := g.GetTip(trunk)
+
+	// Create child branch from trunk
+	g.CreateAndCheckout("child")
+
+	// Add commits on child
+	os.WriteFile(filepath.Join(dir, "child.txt"), []byte("child"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "child commit").Run()
+
+	// GetForkPoint should return the divergence point
+	fp, err := g.GetForkPoint(trunk, "child")
+	if err != nil {
+		t.Fatalf("GetForkPoint failed: %v", err)
+	}
+	if fp != diverge {
+		t.Errorf("expected fork point %s, got %s", diverge, fp)
+	}
+}
+
 func TestRemoteBranchExists(t *testing.T) {
 	// Create main repo
 	dir := setupTestRepo(t)
