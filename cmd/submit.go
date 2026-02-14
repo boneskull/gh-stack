@@ -693,7 +693,8 @@ func unwrapParagraphs(text string) string {
 			continue
 		}
 
-		// Non-list block elements (headers, blockquotes, rules, tables)
+		// Non-list block elements (headers, blockquotes, rules, tables). Lists
+		// are handled above via isListItem so they accumulate continuations.
 		if isBlockElement(trimmed) {
 			flushParagraph()
 			result = append(result, line)
