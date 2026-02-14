@@ -114,13 +114,19 @@ What it _won't_ do is push back up to the remote; see the [next section](#creati
 
 ### Creating & Updating PRs
 
-To create PRs for the `feature-auth` and `feature-auth-tests` branches, execute this from the `feature-auth` branch:
+To create PRs for the entire stack, run from any branch:
 
 ```bash
 gh stack submit
 ```
 
-Whenever you need to push these branches again, or update the PRs, you can run `gh stack submit` again.
+This pushes every branch in the stack (in parent-to-child order) and creates or updates their PRs. You can run it again whenever you need to push changes or update PRs.
+
+To submit only the current branch and its descendants (the old default), use `--from`:
+
+```bash
+gh stack submit --from
+```
 
 > [!TIP]
 >
@@ -254,26 +260,31 @@ The PR itself is not affected; this only removes the local tracking.
 
 ### submit
 
-Restack, push, and create/update PRs for current branch and descendants.
+Restack, push, and create/update PRs for the entire stack.
 
-This is the primary workflow command. It performs three phases:
+This is the primary workflow command. By default it processes **every tracked branch** in parent-before-child order. It performs three phases:
 
-1. **Restack**: Rebase current branch and descendants onto their parents
+1. **Restack**: Rebase affected branches onto their parents
 2. **Push**: Force-push all affected branches (using `--force-with-lease`)
 3. **PR**: Create PRs for branches without them; update PR bases for existing PRs
 
 PRs targeting non-trunk branches are created as drafts. When a PR's base changes to trunk (after its parent merges), you'll be prompted to mark it ready for review.
 
+Use `--from` to limit the scope to a subtree instead of the full stack. A bare `--from` (no value) starts from the current branch, preserving the pre-v0.x behavior.
+
 If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### submit Flags
 
-| Flag             | Description                                     |
-| ---------------- | ----------------------------------------------- |
-| `--dry-run`      | Show what would happen without doing it         |
-| `--current-only` | Only submit the current branch, not descendants |
-| `--update-only`  | Only update existing PRs, don't create new ones |
-| `--push-only`    | Skip PR creation/update, only restack and push  |
+| Flag             | Description                                                              |
+| ---------------- | ------------------------------------------------------------------------ |
+| `--dry-run`      | Show what would happen without doing it                                  |
+| `--from [branch]` | Submit from this branch toward leaves (bare `--from` = current branch) |
+| `--current-only` | Only submit the current branch, not descendants                          |
+| `--update-only`  | Only update existing PRs, don't create new ones                          |
+| `--push-only`    | Skip PR creation/update, only restack and push                           |
+| `-y, --yes`      | Skip interactive prompts; use auto-generated PR title/description        |
+| `-w, --web`      | Open created/updated PRs in web browser                                  |
 
 ### restack
 
