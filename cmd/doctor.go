@@ -4,7 +4,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/boneskull/gh-stack/internal/config"
@@ -68,40 +67,53 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	fmt.Println(s.Bold("Stack Health Report"))
 	fmt.Println()
 
-	var healthy, issues int
+	var issueCount int
 	for _, branch := range branches {
 		result := checkBranch(g, cfg, s, branch, doctorFixFlag)
-		if result.healthy {
-			fmt.Printf("%s %s %s\n", s.SuccessIcon(), s.Branch(result.name), s.Muted("(healthy)"))
-			healthy++
-		} else if result.fixed {
-			fmt.Printf("%s %s: %s\n", s.SuccessIcon(), s.Branch(result.name), result.fixMsg)
-			healthy++
-		} else {
-			fmt.Printf("%s %s\n", s.FailureIcon(), s.Branch(result.name))
-			for _, issue := range result.issues {
-				fmt.Printf("    %s\n", issue)
-			}
-			issues++
+		if !printResult(s, result) {
+			issueCount++
 		}
 	}
 
 	fmt.Println()
-	if issues > 0 {
-		noun := "issue"
-		if issues > 1 {
-			noun = "issues"
-		}
-		fmt.Printf("%d %s found.", issues, noun)
-		if !doctorFixFlag {
-			fmt.Printf(" Run 'gh stack doctor --fix' to repair.")
-		}
-		fmt.Println()
-	} else {
-		fmt.Println(s.SuccessMessage("All branches healthy."))
-	}
+	printSummary(s, issueCount, doctorFixFlag)
 
 	return nil
+}
+
+// printResult prints the outcome of a single branch check.
+// Returns true if the branch is healthy (or was fixed), false if issues remain.
+func printResult(s *style.Style, r branchResult) bool {
+	if r.healthy {
+		fmt.Printf("%s %s %s\n", s.SuccessIcon(), s.Branch(r.name), s.Muted("(healthy)"))
+		return true
+	}
+	if r.fixed {
+		fmt.Printf("%s %s: %s\n", s.SuccessIcon(), s.Branch(r.name), r.fixMsg)
+		return true
+	}
+	fmt.Printf("%s %s\n", s.FailureIcon(), s.Branch(r.name))
+	for _, issue := range r.issues {
+		fmt.Printf("    %s\n", issue)
+	}
+	return false
+}
+
+// printSummary prints the final summary line after all branches have been checked.
+func printSummary(s *style.Style, issueCount int, fix bool) {
+	if issueCount == 0 {
+		fmt.Println(s.SuccessMessage("All branches healthy."))
+		return
+	}
+	noun := "issue"
+	if issueCount > 1 {
+		noun = "issues"
+	}
+	fmt.Printf("%d %s found.", issueCount, noun)
+	if !fix {
+		fmt.Printf(" Run 'gh stack doctor --fix' to repair.")
+	}
+	fmt.Println()
 }
 
 func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, fix bool) branchResult {
@@ -113,26 +125,35 @@ func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, 
 		return result
 	}
 
-	// If not fixing, format issues with styling and return.
 	if !fix {
-		for _, iss := range issues {
-			switch iss.Kind {
-			case health.KindBranchMissing, health.KindParentMissing, health.KindNoForkPoint:
-				result.issues = append(result.issues, s.Error(iss.Message))
-			default:
-				result.issues = append(result.issues, iss.Message)
-			}
-		}
+		result.issues = formatIssues(s, issues)
 		return result
 	}
 
-	// Attempt to fix: dispatch based on the issue kind.
+	return fixBranch(g, cfg, s, branch, issues)
+}
+
+// formatIssues converts health issues into styled display strings.
+func formatIssues(s *style.Style, issues []health.Issue) []string {
+	out := make([]string, 0, len(issues))
+	for _, iss := range issues {
+		switch iss.Kind {
+		case health.KindBranchMissing, health.KindParentMissing, health.KindNoForkPoint:
+			out = append(out, s.Error(iss.Message))
+		default:
+			out = append(out, iss.Message)
+		}
+	}
+	return out
+}
+
+// fixBranch attempts to repair the first issue found by health.CheckBranch.
+func fixBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, issues []health.Issue) branchResult {
+	result := branchResult{name: branch}
+
 	kind := issues[0].Kind
 	if !issues[0].Fixable && kind != health.KindDrift {
-		// Unfixable issues (missing branch, missing parent, check failures)
-		for _, iss := range issues {
-			result.issues = append(result.issues, s.Error(iss.Message))
-		}
+		result.issues = formatIssues(s, issues)
 		return result
 	}
 
@@ -141,64 +162,67 @@ func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, 
 
 	switch kind {
 	case health.KindNoForkPoint:
-		newFP, fixErr := computeForkPoint(g, parent, branch)
-		if fixErr != nil {
-			result.issues = append(result.issues, fmt.Sprintf("No fork point stored and could not compute one: %v", fixErr))
-			return result
-		}
-		if setErr := cfg.SetForkPoint(branch, newFP); setErr != nil {
-			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-			return result
-		}
-		result.fixed = true
-		result.fixMsg = fmt.Sprintf("set fork point to %s", git.AbbrevSHA(newFP))
-
-	case health.KindForkPointMissing:
-		newFP, fixErr := computeForkPoint(g, parent, branch)
-		if fixErr != nil {
-			result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s does not exist and could not compute replacement: %v", git.AbbrevSHA(storedFP), fixErr))
-			return result
-		}
-		if setErr := setForkPointWithComment(g, cfg, branch, storedFP, newFP); setErr != nil {
-			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-			return result
-		}
-		result.fixed = true
-		result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(newFP))
-
-	case health.KindForkPointNotAncestor:
-		newFP, fixErr := computeForkPoint(g, parent, branch)
-		if fixErr != nil {
-			result.issues = append(result.issues, fmt.Sprintf("Stored fork point %s is not an ancestor of %s and could not compute replacement: %v", git.AbbrevSHA(storedFP), branch, fixErr))
-			return result
-		}
-		if setErr := setForkPointWithComment(g, cfg, branch, storedFP, newFP); setErr != nil {
-			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-			return result
-		}
-		result.fixed = true
-		result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(newFP))
-
+		return fixMissingForkPoint(g, cfg, branch, parent)
+	case health.KindForkPointMissing, health.KindForkPointNotAncestor:
+		return fixStaleForkPoint(g, cfg, s, branch, parent, storedFP, issues[0].Message)
 	case health.KindDrift:
-		mergeBase, err := g.GetMergeBase(parent, branch)
-		if err != nil {
-			result.issues = append(result.issues, fmt.Sprintf("Failed to compute merge-base for fix: %v", err))
-			return result
-		}
-		if setErr := setForkPointWithComment(g, cfg, branch, storedFP, mergeBase); setErr != nil {
-			result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", setErr))
-			return result
-		}
-		result.fixed = true
-		result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(mergeBase))
-
+		return fixDrift(g, cfg, s, branch, parent, storedFP)
 	default:
-		// Shouldn't happen, but surface issues if it does
 		for _, iss := range issues {
 			result.issues = append(result.issues, iss.Message)
 		}
+		return result
 	}
+}
 
+// fixMissingForkPoint computes and sets a fork point when none is stored.
+func fixMissingForkPoint(g *git.Git, cfg *config.Config, branch, parent string) branchResult {
+	result := branchResult{name: branch}
+	newFP, err := computeForkPoint(g, parent, branch)
+	if err != nil {
+		result.issues = append(result.issues, fmt.Sprintf("No fork point stored and could not compute one: %v", err))
+		return result
+	}
+	if err := cfg.SetForkPoint(branch, newFP); err != nil {
+		result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", err))
+		return result
+	}
+	result.fixed = true
+	result.fixMsg = fmt.Sprintf("set fork point to %s", git.AbbrevSHA(newFP))
+	return result
+}
+
+// fixStaleForkPoint recomputes and replaces a fork point that is missing or not an ancestor.
+func fixStaleForkPoint(g *git.Git, cfg *config.Config, s *style.Style, branch, parent, storedFP, context string) branchResult {
+	result := branchResult{name: branch}
+	newFP, err := computeForkPoint(g, parent, branch)
+	if err != nil {
+		result.issues = append(result.issues, fmt.Sprintf("%s and could not compute replacement: %v", context, err))
+		return result
+	}
+	if err := setForkPointWithComment(s, cfg, branch, storedFP, newFP); err != nil {
+		result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", err))
+		return result
+	}
+	result.fixed = true
+	result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(newFP))
+	return result
+}
+
+// fixDrift replaces a stored fork point that doesn't match the computed merge-base.
+func fixDrift(g *git.Git, cfg *config.Config, s *style.Style, branch, parent, storedFP string) branchResult {
+	result := branchResult{name: branch}
+	mergeBase, err := g.GetMergeBase(parent, branch)
+	if err != nil {
+		result.issues = append(result.issues, fmt.Sprintf("Failed to compute merge-base for fix: %v", err))
+		return result
+	}
+	if err := setForkPointWithComment(s, cfg, branch, storedFP, mergeBase); err != nil {
+		result.issues = append(result.issues, fmt.Sprintf("Failed to set fork point: %v", err))
+		return result
+	}
+	result.fixed = true
+	result.fixMsg = fmt.Sprintf("updated fork point %s \u2192 %s", git.AbbrevSHA(storedFP), git.AbbrevSHA(mergeBase))
 	return result
 }
 
@@ -211,70 +235,36 @@ func computeForkPoint(g *git.Git, parent, branch string) (string, error) {
 	return g.GetMergeBase(parent, branch)
 }
 
-// setForkPointWithComment updates the fork point and inserts a comment preserving the old value.
-// The comment is best-effort; if it fails, the fork point is still updated.
-func setForkPointWithComment(g *git.Git, cfg *config.Config, branch, oldSHA, newSHA string) error {
-	if err := cfg.SetForkPoint(branch, newSHA); err != nil {
-		return err
+// setForkPointWithComment updates the fork point and records the old value
+// as an inline git config comment for provenance. Falls back to a plain
+// SetForkPoint if the git version doesn't support --comment (requires 2.45+).
+func setForkPointWithComment(s *style.Style, cfg *config.Config, branch, oldSHA, newSHA string) error {
+	comment := fmt.Sprintf("replaces %s (%s)",
+		git.AbbrevSHA(oldSHA),
+		time.Now().UTC().Format(time.RFC3339),
+	)
+	err := cfg.SetForkPointWithComment(branch, newSHA, comment)
+	if err == nil {
+		return nil
 	}
-	commentForkPointChange(g, branch, oldSHA)
+
+	// --comment likely unsupported; fall back to plain set and warn once.
+	if setErr := cfg.SetForkPoint(branch, newSHA); setErr != nil {
+		return setErr
+	}
+	warnOldGit(s)
 	return nil
 }
 
-// commentForkPointChange inserts a comment above the stackForkPoint line in the git config
-// recording the previous value and a timestamp. This preserves provenance so old fork
-// points can be recovered if a fix goes wrong. Best-effort: errors are silently ignored.
-func commentForkPointChange(g *git.Git, branch, oldSHA string) {
-	configPath, err := g.GetConfigPath()
-	if err != nil {
+var oldGitWarned bool
+
+// warnOldGit prints a one-time warning that the user's git version is too old
+// for inline config comments.
+func warnOldGit(s *style.Style) {
+	if oldGitWarned {
 		return
 	}
-	info, err := os.Stat(configPath)
-	if err != nil {
-		return
-	}
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return
-	}
-
-	lines := strings.Split(string(data), "\n")
-	sectionHeader := fmt.Sprintf("[branch %q]", branch)
-	inSection := false
-	modified := false
-	var result []string
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		if trimmed == sectionHeader {
-			inSection = true
-			result = append(result, line)
-			continue
-		}
-
-		// New section starts; we've left the target section
-		if inSection && strings.HasPrefix(trimmed, "[") {
-			inSection = false
-		}
-
-		// Insert comment before the stackForkPoint line
-		if inSection && strings.HasPrefix(strings.ToLower(trimmed), "stackforkpoint") {
-			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-			timestamp := time.Now().UTC().Format(time.RFC3339)
-			result = append(result,
-				fmt.Sprintf("%s# doctor fix %s replaces previous value of:", indent, timestamp),
-				fmt.Sprintf("%s# %s", indent, oldSHA),
-			)
-			modified = true
-		}
-
-		result = append(result, line)
-	}
-
-	if !modified {
-		return
-	}
-	//nolint:errcheck // best-effort provenance
-	_ = os.WriteFile(configPath, []byte(strings.Join(result, "\n")), info.Mode())
+	oldGitWarned = true
+	fmt.Printf("%s git config --comment not supported; fix provenance will be missing.\n", s.WarningIcon())
+	fmt.Println(s.Muted("  gh-stack works best with git 2.45 or newer."))
 }

@@ -136,17 +136,20 @@ func TestDoctorFixUpdatesConfig(t *testing.T) {
 		t.Errorf("expected new fork point %s to match merge-base %s", newFP, mergeBase)
 	}
 
-	// Verify provenance comment was written to the config file
+	// Verify inline provenance comment was written to the config value line.
+	// git config --comment (Git 2.45+) appends "# replaces <abbrev> (<timestamp>)"
+	// on the same line as the stackForkPoint value.
 	configData, err := os.ReadFile(filepath.Join(env.WorkDir, ".git", "config"))
 	if err != nil {
 		t.Fatalf("failed to read .git/config: %v", err)
 	}
 	configStr := string(configData)
-	if !strings.Contains(configStr, "# doctor fix") {
-		t.Error("expected provenance comment '# doctor fix ...' in .git/config")
+	if !strings.Contains(configStr, "# replaces") {
+		t.Error("expected inline provenance comment '# replaces ...' in .git/config")
 	}
-	if !strings.Contains(configStr, "# "+originalFP) {
-		t.Errorf("expected old fork point %s preserved in config comment", originalFP)
+	abbrevOld := originalFP[:7]
+	if !strings.Contains(configStr, abbrevOld) {
+		t.Errorf("expected abbreviated old fork point %s in config comment", abbrevOld)
 	}
 }
 

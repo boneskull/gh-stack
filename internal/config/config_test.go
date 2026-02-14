@@ -3,7 +3,10 @@ package config_test
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/config"
@@ -189,5 +192,37 @@ func TestForkPoint(t *testing.T) {
 	_, err = cfg.GetForkPoint("feature")
 	if !errors.Is(err, config.ErrNoForkPoint) {
 		t.Errorf("after remove, GetForkPoint = %v, want ErrNoForkPoint", err)
+	}
+}
+
+func TestSetForkPointWithComment(t *testing.T) {
+	dir := setupTestRepo(t)
+	cfg, _ := config.Load(dir)
+
+	sha := "abc123def456"
+	comment := "replaces deadbee (2026-02-14T00:00:00Z)"
+
+	if err := cfg.SetForkPointWithComment("feature", sha, comment); err != nil {
+		t.Fatalf("SetForkPointWithComment failed: %v", err)
+	}
+
+	// Value should be readable via GetForkPoint (git config ignores inline comments)
+	got, err := cfg.GetForkPoint("feature")
+	if err != nil {
+		t.Fatalf("GetForkPoint after SetForkPointWithComment failed: %v", err)
+	}
+	if got != sha {
+		t.Errorf("GetForkPoint = %q, want %q", got, sha)
+	}
+
+	// The raw config file should contain the inline comment
+	configPath := filepath.Join(dir, ".git", "config")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read .git/config: %v", err)
+	}
+	configStr := string(data)
+	if !strings.Contains(configStr, "# "+comment) {
+		t.Errorf("expected inline comment in config, got:\n%s", configStr)
 	}
 }
