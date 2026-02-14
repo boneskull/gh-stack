@@ -77,7 +77,7 @@ func (s *Style) Success(t string) string {
 }
 
 // Successf styles formatted text for success messages (green).
-func (s *Style) Successf(format string, args ...interface{}) string {
+func (s *Style) Successf(format string, args ...any) string {
 	return s.Success(fmt.Sprintf(format, args...))
 }
 
@@ -90,7 +90,7 @@ func (s *Style) Warning(t string) string {
 }
 
 // Warningf styles formatted text for warning messages (yellow).
-func (s *Style) Warningf(format string, args ...interface{}) string {
+func (s *Style) Warningf(format string, args ...any) string {
 	return s.Warning(fmt.Sprintf(format, args...))
 }
 
@@ -103,7 +103,7 @@ func (s *Style) Error(t string) string {
 }
 
 // Errorf styles formatted text for error messages (red).
-func (s *Style) Errorf(format string, args ...interface{}) string {
+func (s *Style) Errorf(format string, args ...any) string {
 	return s.Error(fmt.Sprintf(format, args...))
 }
 
@@ -116,7 +116,7 @@ func (s *Style) Branch(t string) string {
 }
 
 // Branchf styles formatted branch names (cyan).
-func (s *Style) Branchf(format string, args ...interface{}) string {
+func (s *Style) Branchf(format string, args ...any) string {
 	return s.Branch(fmt.Sprintf(format, args...))
 }
 
@@ -129,7 +129,7 @@ func (s *Style) Merged(t string) string {
 }
 
 // Mergedf styles formatted merged PR references (magenta).
-func (s *Style) Mergedf(format string, args ...interface{}) string {
+func (s *Style) Mergedf(format string, args ...any) string {
 	return s.Merged(fmt.Sprintf(format, args...))
 }
 
@@ -142,7 +142,7 @@ func (s *Style) Muted(t string) string {
 }
 
 // Mutedf styles formatted secondary/hint text (gray).
-func (s *Style) Mutedf(format string, args ...interface{}) string {
+func (s *Style) Mutedf(format string, args ...any) string {
 	return s.Muted(fmt.Sprintf(format, args...))
 }
 
@@ -155,7 +155,7 @@ func (s *Style) Bold(t string) string {
 }
 
 // Boldf styles formatted text with bold weight.
-func (s *Style) Boldf(format string, args ...interface{}) string {
+func (s *Style) Boldf(format string, args ...any) string {
 	return s.Bold(fmt.Sprintf(format, args...))
 }
 

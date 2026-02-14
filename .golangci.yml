@@ -5,12 +5,22 @@ run:
 
 linters:
   enable:
+    - copyloopvar
+    - dupword
     - errcheck
+    - errname
+    - errorlint
+    - gocritic
     - govet
-    - staticcheck
-    - unused
     - ineffassign
+    - intrange
     - misspell
+    - modernize
+    - nilerr
+    - perfsprint
+    - staticcheck
+    - unconvert
+    - unused
     # gosec disabled - false positives for CLI tools that shell out to git
   settings:
     errcheck:

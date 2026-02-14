@@ -98,6 +98,7 @@ func TestLogMultipleBranches(t *testing.T) {
 
 	if featureA == nil {
 		t.Fatal("feature-a not found")
+		return
 	}
 
 	if len(featureA.Children) != 1 {

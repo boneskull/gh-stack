@@ -2,6 +2,7 @@
 package undo_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -112,7 +113,7 @@ func TestNoSnapshot(t *testing.T) {
 	}
 
 	_, _, err := undo.LoadLatest(gitDir)
-	if err != undo.ErrNoSnapshot {
+	if !errors.Is(err, undo.ErrNoSnapshot) {
 		t.Errorf("Expected ErrNoSnapshot, got %v", err)
 	}
 }
@@ -158,7 +159,7 @@ func TestArchive(t *testing.T) {
 
 	// LoadLatest should now return ErrNoSnapshot
 	_, _, err = undo.LoadLatest(gitDir)
-	if err != undo.ErrNoSnapshot {
+	if !errors.Is(err, undo.ErrNoSnapshot) {
 		t.Errorf("Expected ErrNoSnapshot after archive, got %v", err)
 	}
 }
@@ -329,7 +330,7 @@ func TestSavePrunesOldSnapshots(t *testing.T) {
 	}
 
 	// Create 55 snapshots (exceeds the 50 limit)
-	for i := 0; i < 55; i++ {
+	for i := range 55 {
 		snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
 		// Use distinct timestamps to ensure unique filenames
 		snapshot.Timestamp = time.Date(2024, 1, 1, 0, 0, i, 0, time.UTC)
@@ -371,7 +372,7 @@ func TestArchivePrunesOldSnapshots(t *testing.T) {
 	}
 
 	// Create and archive 55 snapshots (exceeds the 50 limit)
-	for i := 0; i < 55; i++ {
+	for i := range 55 {
 		snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
 		snapshot.Timestamp = time.Date(2024, 1, 1, 0, 0, i, 0, time.UTC)
 		snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}

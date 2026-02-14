@@ -128,8 +128,8 @@ func (c *Config) ListTrackedBranches() ([]string, error) {
 	// Note: git normalizes config keys to lowercase, so stackParent becomes stackparent
 	out, err := exec.Command("git", "-C", c.repoPath, "config", "--get-regexp", "^branch\\..*\\.stackparent$").Output()
 	if err != nil {
-		// No matches is not an error
-		return []string{}, nil
+		// No matches is not an error — git config exits non-zero when no keys match
+		return []string{}, nil //nolint:nilerr // non-zero exit = no matching config keys
 	}
 
 	var branches []string

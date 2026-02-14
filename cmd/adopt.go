@@ -2,6 +2,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -88,7 +89,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	if parentNode != nil {
 		for _, ancestor := range tree.GetAncestors(parentNode) {
 			if ancestor.Name == branchName {
-				return fmt.Errorf("cannot adopt: would create a cycle")
+				return errors.New("cannot adopt: would create a cycle")
 			}
 		}
 	}

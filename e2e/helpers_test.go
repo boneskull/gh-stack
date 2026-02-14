@@ -3,6 +3,7 @@ package e2e_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -108,7 +109,8 @@ func (e *TestEnv) Run(args ...string) *Result {
 	}
 
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			result.ExitCode = exitErr.ExitCode()
 		} else {
 			e.t.Fatalf("failed to run command: %v", err)
