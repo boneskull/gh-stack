@@ -124,8 +124,10 @@ func renderTree(sb *strings.Builder, node *tree.Node, currentBranch, repoURL str
 	isCurrent := node.Name == currentBranch
 
 	// Skip branches that have no PR and don't exist on the remote.
+	// The current branch is never skipped (defensive: it should always have
+	// a PR since we're generating a comment for it, but just in case).
 	// When remoteBranches is nil, no filtering is applied.
-	skipNode := node.PR == 0 && remoteBranches != nil && !remoteBranches[node.Name]
+	skipNode := node.PR == 0 && !isCurrent && remoteBranches != nil && !remoteBranches[node.Name]
 
 	nextDepth := depth
 	if !skipNode {

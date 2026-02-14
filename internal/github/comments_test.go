@@ -337,6 +337,9 @@ func TestGenerateStackComment_RemoteBranchFiltering(t *testing.T) {
 		if !strings.Contains(comment, "My feature #1") {
 			t.Error("feature PR should still be shown")
 		}
+		if strings.Contains(comment, "[!WARNING]") {
+			t.Error("should not have warning when local-only parent is filtered and effective parent is trunk")
+		}
 	})
 
 	t.Run("local-only branch children are promoted", func(t *testing.T) {
@@ -387,6 +390,12 @@ func TestGenerateStackComment_RemoteBranchFiltering(t *testing.T) {
 		if !strings.Contains(comment, "branch: `wip-branch`") {
 			t.Error("remote branch without PR should still be shown")
 		}
+		if !strings.Contains(comment, "[!WARNING]") {
+			t.Error("warning should be present when PR targets a non-trunk remote branch")
+		}
+		if !strings.Contains(comment, "targets branch `wip-branch`") {
+			t.Error("warning should mention that PR targets branch wip-branch")
+		}
 	})
 
 	t.Run("nil remoteBranches disables filtering", func(t *testing.T) {
@@ -408,6 +417,43 @@ func TestGenerateStackComment_RemoteBranchFiltering(t *testing.T) {
 
 		if !strings.Contains(comment, "branch: `local-only`") {
 			t.Error("with nil remoteBranches, all branches should be shown")
+		}
+	})
+
+	t.Run("multiple consecutive local-only branches are filtered", func(t *testing.T) {
+		// Tree: main -> local1 (no PR, not on remote) -> local2 (no PR, not on remote) -> feature (#1)
+		root := &tree.Node{Name: "main"}
+		local1 := &tree.Node{Name: "local1", PR: 0, Parent: root}
+		local2 := &tree.Node{Name: "local2", PR: 0, Parent: local1}
+		feature := &tree.Node{Name: "feature", PR: 1, Parent: local2}
+
+		root.Children = []*tree.Node{local1}
+		local1.Children = []*tree.Node{local2}
+		local2.Children = []*tree.Node{feature}
+
+		prInfo := makePRInfo(struct {
+			num   int
+			title string
+		}{1, "My feature"})
+
+		remoteBranches := map[string]bool{"main": true, "feature": true}
+		comment := GenerateStackComment(root, "feature", "main", testRepoURL, prInfo, remoteBranches)
+
+		if strings.Contains(comment, "local1") {
+			t.Error("local1 should be filtered out")
+		}
+		if strings.Contains(comment, "local2") {
+			t.Error("local2 should be filtered out")
+		}
+		if !strings.Contains(comment, "branch: `main`") {
+			t.Error("trunk should still be shown")
+		}
+		if !strings.Contains(comment, "My feature #1") {
+			t.Error("feature should still be shown")
+		}
+		// Effective parent is main (trunk), so no warning
+		if strings.Contains(comment, "[!WARNING]") {
+			t.Error("should not have warning when effective parent is trunk after filtering multiple local-only ancestors")
 		}
 	})
 
