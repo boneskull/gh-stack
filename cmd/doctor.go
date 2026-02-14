@@ -147,7 +147,7 @@ func checkBranch(g *git.Git, cfg *config.Config, s *style.Style, branch string, 
 			result.fixMsg = fmt.Sprintf("set fork point to %s", git.AbbrevSHA(newFP))
 			return result
 		}
-		result.issues = append(result.issues, "No fork point stored")
+		result.issues = append(result.issues, s.Error("No fork point stored"))
 		return result
 	}
 
