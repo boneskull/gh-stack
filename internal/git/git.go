@@ -529,11 +529,20 @@ func (g *Git) GetCommits(base, head string) ([]Commit, error) {
 // Both arguments must be valid commit references.
 func (g *Git) IsAncestor(ancestor, descendant string) (bool, error) {
 	err := g.runSilent("merge-base", "--is-ancestor", ancestor, descendant)
-	if err != nil {
-		// Non-zero exit means not an ancestor (assuming both commits exist).
-		return false, nil
+	if err == nil {
+		return true, nil
 	}
-	return true, nil
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		// Exit status 1 means "not ancestor" when both commits exist.
+		if exitErr.ExitCode() == 1 {
+			return false, nil
+		}
+	}
+
+	// Propagate other failures (e.g., invalid refs, repo errors).
+	return false, err
 }
 
 // GetForkPoint returns the reflog-aware fork point of branch from parent.

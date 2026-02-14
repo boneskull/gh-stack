@@ -776,6 +776,17 @@ func TestIsAncestor(t *testing.T) {
 	if !isAnc {
 		t.Error("expected A to be ancestor of itself")
 	}
+
+	// Invalid ref should return an error, not (false, nil)
+	_, err = g.IsAncestor("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", shaA)
+	if err == nil {
+		t.Error("expected error for invalid ancestor ref, got nil")
+	}
+
+	_, err = g.IsAncestor(shaA, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	if err == nil {
+		t.Error("expected error for invalid descendant ref, got nil")
+	}
 }
 
 func TestGetForkPoint(t *testing.T) {
