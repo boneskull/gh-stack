@@ -12,8 +12,8 @@ import (
 func TestOrphanBranch(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -41,8 +41,8 @@ func TestOrphanBranch(t *testing.T) {
 func TestOrphanRejectsWithChildren(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -66,8 +66,8 @@ func TestOrphanRejectsWithChildren(t *testing.T) {
 func TestOrphanForceWithDescendants(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -114,8 +114,8 @@ func TestOrphanForceWithDescendants(t *testing.T) {
 func TestOrphanRemovesPR(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -145,8 +145,8 @@ func TestOrphanRemovesPR(t *testing.T) {
 func TestOrphanRemovesForkPoint(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)

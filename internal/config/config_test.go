@@ -3,13 +3,17 @@ package config_test
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/git"
 )
 
-func setupTestRepo(t *testing.T) string {
+func setupTestRepo(t *testing.T) *git.Git {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -24,15 +28,15 @@ func setupTestRepo(t *testing.T) string {
 	exec.Command("git", "-C", dir, "config", "user.email", "test@test.com").Run()
 	exec.Command("git", "-C", dir, "config", "user.name", "Test").Run()
 
-	return dir
+	return git.New(dir)
 }
 
 func TestGetTrunk_NotInitialized(t *testing.T) {
-	dir := setupTestRepo(t)
+	g := setupTestRepo(t)
 
-	cfg, err := config.Load(dir)
+	cfg, err := config.New(g)
 	if err != nil {
-		t.Fatalf("Load failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	_, err = cfg.GetTrunk()
@@ -42,11 +46,11 @@ func TestGetTrunk_NotInitialized(t *testing.T) {
 }
 
 func TestSetTrunk(t *testing.T) {
-	dir := setupTestRepo(t)
+	g := setupTestRepo(t)
 
-	cfg, err := config.Load(dir)
+	cfg, err := config.New(g)
 	if err != nil {
-		t.Fatalf("Load failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	if setErr := cfg.SetTrunk("main"); setErr != nil {
@@ -63,9 +67,9 @@ func TestSetTrunk(t *testing.T) {
 }
 
 func TestGetParent_NotTracked(t *testing.T) {
-	dir := setupTestRepo(t)
+	g := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
+	cfg, _ := config.New(g)
 
 	_, err := cfg.GetParent("feature-a")
 	if !errors.Is(err, config.ErrBranchNotTracked) {
@@ -74,9 +78,9 @@ func TestGetParent_NotTracked(t *testing.T) {
 }
 
 func TestSetAndGetParent(t *testing.T) {
-	dir := setupTestRepo(t)
+	g := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
+	cfg, _ := config.New(g)
 	cfg.SetTrunk("main")
 
 	if err := cfg.SetParent("feature-a", "main"); err != nil {
@@ -93,9 +97,9 @@ func TestSetAndGetParent(t *testing.T) {
 }
 
 func TestPRNumber(t *testing.T) {
-	dir := setupTestRepo(t)
+	g := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
+	cfg, _ := config.New(g)
 
 	// No PR set initially
 	_, err := cfg.GetPR("feature-a")
@@ -129,9 +133,9 @@ func TestPRNumber(t *testing.T) {
 }
 
 func TestListTrackedBranches(t *testing.T) {
-	dir := setupTestRepo(t)
+	g := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
+	cfg, _ := config.New(g)
 	cfg.SetTrunk("main")
 	cfg.SetParent("feature-a", "main")
 	cfg.SetParent("feature-b", "feature-a")
@@ -156,8 +160,8 @@ func TestListTrackedBranches(t *testing.T) {
 }
 
 func TestForkPoint(t *testing.T) {
-	dir := setupTestRepo(t)
-	cfg, _ := config.Load(dir)
+	g := setupTestRepo(t)
+	cfg, _ := config.New(g)
 
 	// Initially no fork point
 	_, err := cfg.GetForkPoint("feature")
@@ -189,5 +193,42 @@ func TestForkPoint(t *testing.T) {
 	_, err = cfg.GetForkPoint("feature")
 	if !errors.Is(err, config.ErrNoForkPoint) {
 		t.Errorf("after remove, GetForkPoint = %v, want ErrNoForkPoint", err)
+	}
+}
+
+func TestSetForkPointWithComment(t *testing.T) {
+	g := setupTestRepo(t)
+	cfg, _ := config.New(g)
+
+	sha := "abc123def456"
+	comment := "replaces deadbee (2026-02-14T00:00:00Z)"
+
+	if err := cfg.SetForkPointWithComment("feature", sha, comment); err != nil {
+		// git config --comment requires Git 2.45+; skip on older versions.
+		t.Skipf("SetForkPointWithComment not supported (git too old?): %v", err)
+	}
+
+	// Value should be readable via GetForkPoint (git config ignores inline comments)
+	got, err := cfg.GetForkPoint("feature")
+	if err != nil {
+		t.Fatalf("GetForkPoint after SetForkPointWithComment failed: %v", err)
+	}
+	if got != sha {
+		t.Errorf("GetForkPoint = %q, want %q", got, sha)
+	}
+
+	// The raw config file should contain the inline comment
+	gitDir, err := g.GetResolvedGitDir()
+	if err != nil {
+		t.Fatalf("failed to resolve git dir: %v", err)
+	}
+	configPath := filepath.Join(gitDir, "config")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("failed to read .git/config: %v", err)
+	}
+	configStr := string(data)
+	if !strings.Contains(configStr, "# "+comment) {
+		t.Errorf("expected inline comment in config, got:\n%s", configStr)
 	}
 }

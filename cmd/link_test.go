@@ -11,8 +11,8 @@ import (
 func TestLinkPR(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -40,8 +40,8 @@ func TestLinkPR(t *testing.T) {
 func TestLinkRejectsUntrackedBranch(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -59,8 +59,8 @@ func TestLinkRejectsUntrackedBranch(t *testing.T) {
 func TestLinkOverwritesPR(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)

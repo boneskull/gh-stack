@@ -47,12 +47,12 @@ func runCascade(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, err := config.Load(cwd)
+	g := git.New(cwd)
+
+	cfg, err := config.New(g)
 	if err != nil {
 		return err
 	}
-
-	g := git.New(cwd)
 
 	// Check if cascade already in progress
 	if state.Exists(g.GetGitDir()) {

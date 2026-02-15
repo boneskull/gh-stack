@@ -5,13 +5,15 @@ import (
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/tree"
 )
 
 func TestLogBuildTree(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
+	g := git.New(dir)
+	cfg, _ := config.New(g)
 	cfg.SetTrunk("main")
 	cfg.SetParent("feature-a", "main")
 	cfg.SetParent("feature-b", "feature-a")
@@ -50,7 +52,8 @@ func TestLogBuildTree(t *testing.T) {
 func TestLogEmptyStack(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
+	g := git.New(dir)
+	cfg, _ := config.New(g)
 	cfg.SetTrunk("main")
 
 	// No branches tracked, just trunk
@@ -70,7 +73,8 @@ func TestLogEmptyStack(t *testing.T) {
 func TestLogMultipleBranches(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
+	g := git.New(dir)
+	cfg, _ := config.New(g)
 	cfg.SetTrunk("main")
 	// Two branches off main
 	cfg.SetParent("feature-a", "main")

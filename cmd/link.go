@@ -35,12 +35,12 @@ func runLink(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, err := config.Load(cwd)
+	g := git.New(cwd)
+
+	cfg, err := config.New(g)
 	if err != nil {
 		return err
 	}
-
-	g := git.New(cwd)
 	branch, err := g.CurrentBranch()
 	if err != nil {
 		return err

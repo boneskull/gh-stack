@@ -11,8 +11,8 @@ import (
 func TestUnlinkPR(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -41,8 +41,8 @@ func TestUnlinkPR(t *testing.T) {
 func TestUnlinkIdempotent(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
