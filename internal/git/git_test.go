@@ -731,15 +731,33 @@ func TestIsAncestor(t *testing.T) {
 	initial, _ := g.GetTip("HEAD")
 
 	// Create a linear chain: initial -> A -> B
-	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0644)
-	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "commit A").Run()
-	shaA, _ := g.GetTip("HEAD")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", ".").CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "commit A").CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %v\n%s", err, out)
+	}
+	shaA, err := g.GetTip("HEAD")
+	if err != nil {
+		t.Fatalf("GetTip failed: %v", err)
+	}
 
-	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0644)
-	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "commit B").Run()
-	shaB, _ := g.GetTip("HEAD")
+	if err := os.WriteFile(filepath.Join(dir, "b.txt"), []byte("b"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", ".").CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "commit B").CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %v\n%s", err, out)
+	}
+	shaB, err := g.GetTip("HEAD")
+	if err != nil {
+		t.Fatalf("GetTip failed: %v", err)
+	}
 
 	// initial is ancestor of B
 	isAnc, err := g.IsAncestor(initial, shaB)
@@ -802,9 +820,15 @@ func TestGetForkPoint(t *testing.T) {
 	g.CreateAndCheckout("child")
 
 	// Add commits on child
-	os.WriteFile(filepath.Join(dir, "child.txt"), []byte("child"), 0644)
-	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "child commit").Run()
+	if err := os.WriteFile(filepath.Join(dir, "child.txt"), []byte("child"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "add", ".").CombinedOutput(); err != nil {
+		t.Fatalf("git add failed: %v\n%s", err, out)
+	}
+	if out, err := exec.Command("git", "-C", dir, "commit", "-m", "child commit").CombinedOutput(); err != nil {
+		t.Fatalf("git commit failed: %v\n%s", err, out)
+	}
 
 	// GetForkPoint should return the divergence point
 	fp, err := g.GetForkPoint(trunk, "child")

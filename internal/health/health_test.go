@@ -128,9 +128,13 @@ func TestCheckBranch_MissingParent(t *testing.T) {
 
 	// Now create "middle" as parent, point child at it, then delete it
 	run := func(args ...string) {
+		t.Helper()
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
-		cmd.Run()
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
 	}
 	run("checkout", trunk)
 	run("checkout", "-b", "middle")

@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/boneskull/gh-stack/internal/config"
@@ -248,12 +249,22 @@ func setForkPointWithComment(s *style.Style, cfg *config.Config, branch, oldSHA,
 		return nil
 	}
 
-	// --comment likely unsupported; fall back to plain set and warn once.
+	// Only fall back for unsupported --comment flag; propagate real errors.
+	if !isUnsupportedCommentErr(err) {
+		return err
+	}
 	if setErr := cfg.SetForkPoint(branch, newSHA); setErr != nil {
 		return setErr
 	}
 	warnOldGit(s)
 	return nil
+}
+
+// isUnsupportedCommentErr returns true if the error indicates that
+// git config --comment is not recognized (git < 2.45).
+func isUnsupportedCommentErr(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "unknown option")
 }
 
 var oldGitWarned bool

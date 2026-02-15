@@ -363,13 +363,6 @@ func (g *Git) GetGitDir() string {
 	return filepath.Join(g.repoPath, ".git")
 }
 
-// GetConfigPath returns the path to the repo's git config file,
-// resolved via `git rev-parse --git-path config` so it works
-// correctly in linked worktrees and submodules.
-func (g *Git) GetConfigPath() (string, error) {
-	return g.run("rev-parse", "--git-path", "config")
-}
-
 // Fetch fetches from origin.
 func (g *Git) Fetch() error {
 	return g.runInteractive("fetch", "origin")

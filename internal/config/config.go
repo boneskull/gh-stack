@@ -118,9 +118,20 @@ func (c *Config) SetForkPoint(branch, sha string) error {
 
 // SetForkPointWithComment stores the fork point SHA with an inline comment.
 // Requires Git 2.45+. The comment appears after the value on the same line.
+// Returns an error with stderr content on failure, so callers can distinguish
+// "unknown option" (old git) from other failures.
 func (c *Config) SetForkPointWithComment(branch, sha, comment string) error {
 	key := "branch." + branch + ".stackForkPoint"
-	return exec.Command("git", "-C", c.repoPath, "config", "--comment", comment, key, sha).Run()
+	cmd := exec.Command("git", "-C", c.repoPath, "config", "--comment", comment, key, sha)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return errors.New(strings.TrimSpace(stderr.String()))
+		}
+		return err
+	}
+	return nil
 }
 
 // RemoveForkPoint removes the stored fork point for a branch.
