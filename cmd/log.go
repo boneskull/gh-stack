@@ -40,7 +40,9 @@ func runLog(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cfg, err := config.Load(cwd)
+	g := git.New(cwd)
+
+	cfg, err := config.New(g)
 	if err != nil {
 		return err
 	}
@@ -49,8 +51,6 @@ func runLog(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	g := git.New(cwd)
 	currentBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine for display
 
 	// Try to get GitHub client for PR URLs (optional - may fail if not in a GitHub repo)

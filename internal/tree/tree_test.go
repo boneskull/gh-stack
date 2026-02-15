@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/tree"
 )
 
@@ -17,7 +18,8 @@ func setupTestRepo(t *testing.T) (*config.Config, string) {
 	exec.Command("git", "-C", dir, "config", "user.email", "test@test.com").Run()
 	exec.Command("git", "-C", dir, "config", "user.name", "Test").Run()
 
-	cfg, _ := config.Load(dir)
+	g := git.New(dir)
+	cfg, _ := config.New(g)
 	return cfg, dir
 }
 

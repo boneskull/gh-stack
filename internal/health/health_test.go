@@ -39,9 +39,9 @@ func setupTestRepo(t *testing.T) (string, *git.Git, *config.Config) {
 	run("commit", "-m", "initial")
 
 	g := git.New(dir)
-	cfg, err := config.Load(dir)
+	cfg, err := config.New(g)
 	if err != nil {
-		t.Fatalf("config.Load failed: %v", err)
+		t.Fatalf("config.New failed: %v", err)
 	}
 
 	trunk, err := g.CurrentBranch()

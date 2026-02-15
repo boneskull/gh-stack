@@ -553,6 +553,35 @@ func (g *Git) GetForkPoint(parent, branch string) (string, error) {
 	return g.run("merge-base", "--fork-point", parent, branch)
 }
 
+// ConfigGet returns the value of a git config key.
+// Returns an error if the key does not exist.
+func (g *Git) ConfigGet(key string) (string, error) {
+	return g.run("config", "--get", key)
+}
+
+// ConfigSet sets a git config key to a value.
+func (g *Git) ConfigSet(key, value string) error {
+	return g.runSilent("config", key, value)
+}
+
+// ConfigSetWithComment sets a git config key to a value with an inline comment.
+// Requires Git 2.45+. Returns an error with stderr content on failure, so
+// callers can distinguish "unknown option" (old git) from other failures.
+func (g *Git) ConfigSetWithComment(key, value, comment string) error {
+	return g.runSilent("config", "--comment", comment, key, value)
+}
+
+// ConfigUnset removes a git config key. Returns an error if the key does not exist.
+func (g *Git) ConfigUnset(key string) error {
+	return g.runSilent("config", "--unset", key)
+}
+
+// ConfigGetRegexp returns the raw output of `git config --get-regexp`.
+// Returns an error if no keys match.
+func (g *Git) ConfigGetRegexp(pattern string) (string, error) {
+	return g.run("config", "--get-regexp", pattern)
+}
+
 // AbbrevSHA safely abbreviates a SHA to 7 characters.
 // Returns the full string if it's shorter than 7 characters.
 func AbbrevSHA(sha string) string {

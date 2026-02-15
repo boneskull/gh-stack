@@ -14,10 +14,9 @@ import (
 func TestCreateFromTrunk(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
-	cfg.SetTrunk("main")
-
 	g := git.New(dir)
+	cfg, _ := config.New(g)
+	cfg.SetTrunk("main")
 
 	// Simulate what create command does
 	currentBranch, _ := g.CurrentBranch()
@@ -57,8 +56,8 @@ func TestCreateFromTrunk(t *testing.T) {
 func TestCreateFromTrackedBranch(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	currentBranch, _ := g.CurrentBranch()
 	cfg.SetTrunk(currentBranch)
@@ -86,8 +85,8 @@ func TestCreateFromTrackedBranch(t *testing.T) {
 func TestCreateRejectsUntrackedBranch(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -119,8 +118,8 @@ func TestCreateRejectsUntrackedBranch(t *testing.T) {
 func TestCreateWithStagedChanges(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -151,8 +150,8 @@ func TestCreateWithStagedChanges(t *testing.T) {
 func TestCreateEmptyWithStagedChanges(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -197,8 +196,8 @@ func TestBranchAlreadyExists(t *testing.T) {
 func TestCreateStoresForkPoint(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)

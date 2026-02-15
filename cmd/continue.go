@@ -63,7 +63,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("%s Completed %s\n", s.SuccessIcon(), s.Branch(st.Current))
 
-	cfg, err := config.Load(cwd)
+	cfg, err := config.New(g)
 	if err != nil {
 		return err
 	}

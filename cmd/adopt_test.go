@@ -12,8 +12,8 @@ import (
 func TestAdoptBranch(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -40,8 +40,8 @@ func TestAdoptBranch(t *testing.T) {
 func TestAdoptRejectsAlreadyTracked(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -60,8 +60,8 @@ func TestAdoptRejectsAlreadyTracked(t *testing.T) {
 func TestAdoptRejectsUntrackedParent(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -81,8 +81,8 @@ func TestAdoptRejectsUntrackedParent(t *testing.T) {
 func TestAdoptDetectsCycle(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
@@ -117,8 +117,8 @@ func TestAdoptDetectsCycle(t *testing.T) {
 func TestAdoptStoresForkPoint(t *testing.T) {
 	dir := setupTestRepo(t)
 
-	cfg, _ := config.Load(dir)
 	g := git.New(dir)
+	cfg, _ := config.New(g)
 
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)

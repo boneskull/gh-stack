@@ -124,7 +124,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load config for restoring stack metadata
-	cfg, err := config.Load(cwd)
+	cfg, err := config.New(g)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

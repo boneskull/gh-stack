@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/git"
 )
 
 func setupTestRepo(t *testing.T) string {
@@ -37,9 +38,10 @@ func TestInitCommand(t *testing.T) {
 	dir := setupTestRepo(t)
 
 	// Verify the config package works for init
-	cfg, err := config.Load(dir)
+	g := git.New(dir)
+	cfg, err := config.New(g)
 	if err != nil {
-		t.Fatalf("Load failed: %v", err)
+		t.Fatalf("New failed: %v", err)
 	}
 
 	err = cfg.SetTrunk("main")
