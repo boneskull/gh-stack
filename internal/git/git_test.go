@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/git"
@@ -683,7 +684,7 @@ func TestGetResolvedGitDir(t *testing.T) {
 		t.Errorf("worktree git dir should differ from main repo git dir")
 	}
 	// Should contain "worktrees" in the path
-	if !contains(resolvedWtGitDir, "worktrees") {
+	if !strings.Contains(resolvedWtGitDir, "worktrees") {
 		t.Errorf("expected worktree git dir to contain 'worktrees', got %q", resolvedWtGitDir)
 	}
 }
@@ -706,20 +707,6 @@ func TestIsRebaseInProgressWorktree(t *testing.T) {
 	if gWt.IsRebaseInProgress() {
 		t.Error("expected no rebase in progress in worktree")
 	}
-}
-
-// contains checks if substr is in s (simple helper to avoid importing strings in test).
-func contains(s, substr string) bool {
-	return filepath.Base(s) == substr || len(s) >= len(substr) && searchString(s, substr)
-}
-
-func searchString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func TestRemoteBranchExists(t *testing.T) {

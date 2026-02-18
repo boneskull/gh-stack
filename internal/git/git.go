@@ -316,8 +316,8 @@ func (g *Git) ListWorktrees() (map[string]string, error) {
 
 		if wtPath, ok := strings.CutPrefix(line, "worktree "); ok {
 			if first {
-				// Mark that we've seen the main worktree header; we'll skip
-				// its branch line below.
+				// Skip the main worktree entry entirely.
+				first = false
 				currentPath = ""
 			} else {
 				currentPath = wtPath
@@ -336,9 +336,6 @@ func (g *Git) ListWorktrees() (map[string]string, error) {
 
 		// Empty line separates worktree entries
 		if line == "" {
-			if first {
-				first = false
-			}
 			currentPath = ""
 		}
 	}
