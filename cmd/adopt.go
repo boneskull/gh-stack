@@ -7,19 +7,26 @@ import (
 	"os"
 
 	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/detect"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/github"
+	"github.com/boneskull/gh-stack/internal/prompt"
 	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
 
 var adoptCmd = &cobra.Command{
-	Use:   "adopt <parent>",
+	Use:   "adopt [parent]",
 	Short: "Start tracking an existing branch",
 	Long: `Start tracking an existing branch by setting its parent.
 
+When no parent is specified, the parent is auto-detected using PR base branch
+and merge-base analysis. If the result is ambiguous, you will be prompted to
+choose (interactive) or an error is returned (non-interactive).
+
 By default, adopts the current branch. Use --branch to specify a different branch.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: runAdopt,
 }
 
@@ -42,9 +49,7 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	}
 
 	g := git.New(cwd)
-
-	// Parent is the required positional argument
-	parent := args[0]
+	s := style.New()
 
 	// Determine branch to adopt (from flag or current branch)
 	var branchName string
@@ -71,6 +76,52 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 	trunk, err := cfg.GetTrunk()
 	if err != nil {
 		return err
+	}
+
+	var parent string
+	var detectedPRNumber int
+
+	if len(args) > 0 {
+		// Explicit parent provided
+		parent = args[0]
+	} else {
+		// Auto-detect parent
+		tracked, listErr := cfg.ListTrackedBranches()
+		if listErr != nil {
+			return fmt.Errorf("list tracked branches: %w", listErr)
+		}
+
+		// Try to get GitHub client (may fail if no auth -- that's ok)
+		gh, _ := github.NewClient() //nolint:errcheck // nil client is fine for local-only detection
+
+		result, detectErr := detect.DetectParent(branchName, tracked, trunk, g, gh)
+		if detectErr != nil {
+			return fmt.Errorf("auto-detect parent: %w", detectErr)
+		}
+
+		switch result.Confidence {
+		case detect.High, detect.Medium:
+			parent = result.Parent
+			fmt.Printf("%s Detected parent %s %s\n",
+				s.SuccessIcon(), s.Branch(parent), s.Muted("("+result.Confidence.String()+" confidence)"))
+		case detect.Ambiguous:
+			if len(result.Candidates) == 0 {
+				return fmt.Errorf("could not detect parent for %s; specify one explicitly", s.Branch(branchName))
+			}
+			if !prompt.IsInteractive() {
+				return fmt.Errorf("ambiguous parent for %s (candidates: %v); specify one explicitly",
+					s.Branch(branchName), result.Candidates)
+			}
+			idx, promptErr := prompt.Select(
+				fmt.Sprintf("Multiple parent candidates for %s:", branchName),
+				result.Candidates, 0)
+			if promptErr != nil {
+				return fmt.Errorf("prompt: %w", promptErr)
+			}
+			parent = result.Candidates[idx]
+		}
+
+		detectedPRNumber = result.PRNumber
 	}
 
 	if parent != trunk {
@@ -105,7 +156,11 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		_ = cfg.SetForkPoint(branchName, forkPoint) //nolint:errcheck // best effort
 	}
 
-	s := style.New()
+	// Store PR number if detected
+	if detectedPRNumber > 0 {
+		_ = cfg.SetPR(branchName, detectedPRNumber) //nolint:errcheck // best effort
+	}
+
 	fmt.Printf("%s Adopted branch %s with parent %s\n", s.SuccessIcon(), s.Branch(branchName), s.Branch(parent))
 	return nil
 }

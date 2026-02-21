@@ -31,6 +31,7 @@ func setupInternalTestRepo(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@test.com")
 	run("config", "user.name", "Test")
+	run("config", "commit.gpgsign", "false")
 
 	f := filepath.Join(dir, "README.md")
 	os.WriteFile(f, []byte("# Test"), 0644)
