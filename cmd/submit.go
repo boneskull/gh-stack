@@ -335,6 +335,18 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 // If a PR already exists for the branch, it adopts the existing PR instead.
 // Returns (prNumber, adopted, error) where adopted is true if we adopted an existing PR.
 func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, remoteBranches map[string]bool, s *style.Style) (int, bool, error) {
+	// Check for existing PR on GitHub BEFORE prompting user for title/description.
+	// This avoids the confusing UX where we prompt then immediately say "oh, PR already exists".
+	existingPR, err := ghClient.FindPRByHead(branch)
+	if err != nil {
+		// Non-fatal: proceed with creation attempt which will give clearer error if needed
+		fmt.Printf("%s could not check for existing PR: %v\n", s.WarningIcon(), err)
+	} else if existingPR != nil {
+		// PR exists on GitHub but wasn't in local config - adopt it without prompting
+		prNum, adoptErr := adoptExistingPRDirect(ghClient, cfg, root, branch, base, trunk, remoteBranches, existingPR, s)
+		return prNum, true, adoptErr
+	}
+
 	// Determine if draft (not targeting trunk = middle of stack)
 	draft := base != trunk
 
@@ -500,6 +512,12 @@ func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Nod
 		return 0, fmt.Errorf("PR creation failed but no existing PR found for branch %q", branch)
 	}
 
+	return adoptExistingPRDirect(ghClient, cfg, root, branch, base, trunk, remoteBranches, existingPR, s)
+}
+
+// adoptExistingPRDirect adopts an already-fetched PR into the stack.
+// This is the implementation shared by adoptExistingPR and the early-detection path in createPRForBranch.
+func adoptExistingPRDirect(ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, remoteBranches map[string]bool, existingPR *github.PR, s *style.Style) (int, error) {
 	// Store PR number in config
 	if err := cfg.SetPR(branch, existingPR.Number); err != nil {
 		return existingPR.Number, fmt.Errorf("failed to store PR number: %w", err)
