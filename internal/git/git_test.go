@@ -2,6 +2,7 @@
 package git_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -779,5 +780,48 @@ func TestRemoteBranchExists(t *testing.T) {
 	// Non-existent branch should return false
 	if g.RemoteBranchExists("nonexistent-branch-xyz") {
 		t.Error("RemoteBranchExists(nonexistent) = true, want false")
+	}
+}
+
+func TestRevListCount(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch with 3 commits
+	g.CreateAndCheckout("feature")
+	for i := range 3 {
+		fname := filepath.Join(dir, fmt.Sprintf("file%d.txt", i))
+		os.WriteFile(fname, fmt.Appendf(nil, "content%d", i), 0644)
+		exec.Command("git", "-C", dir, "add", ".").Run()
+		exec.Command("git", "-C", dir, "commit", "-m", fmt.Sprintf("commit %d", i)).Run()
+	}
+
+	// Count commits from trunk to feature (should be 3)
+	count, err := g.RevListCount(trunk, "feature")
+	if err != nil {
+		t.Fatalf("RevListCount failed: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("expected 3 commits, got %d", count)
+	}
+
+	// Count from feature to trunk (should be 0 since trunk is behind)
+	count, err = g.RevListCount("feature", trunk)
+	if err != nil {
+		t.Fatalf("RevListCount failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 commits, got %d", count)
+	}
+
+	// Count from same ref (should be 0)
+	count, err = g.RevListCount(trunk, trunk)
+	if err != nil {
+		t.Fatalf("RevListCount failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 commits, got %d", count)
 	}
 }
