@@ -108,8 +108,11 @@ func autoDetectAndAdopt(cfg *config.Config, g *git.Git, gh *github.Client, s *st
 		fmt.Printf("%s Auto-adopted %s with parent %s%s\n",
 			s.SuccessIcon(), s.Branch(branch), s.Branch(parent), confidenceLabel)
 
-		// Update tracked list for subsequent detections
+		// Update tracked list and rebuild tree for subsequent detections
 		tracked = append(tracked, branch)
+		if newRoot, buildErr := tree.Build(cfg); buildErr == nil {
+			root = newRoot
+		}
 	}
 
 	return nil
