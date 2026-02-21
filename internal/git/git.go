@@ -243,6 +243,22 @@ func (g *Git) ListRemoteBranches() (map[string]bool, error) {
 	return branches, nil
 }
 
+// ListLocalBranches returns the names of all local branches.
+func (g *Git) ListLocalBranches() ([]string, error) {
+	out, err := g.run("for-each-ref", "--format=%(refname:short)", "refs/heads/")
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			branches = append(branches, line)
+		}
+	}
+	return branches, nil
+}
+
 // RebaseOnto rebases a branch onto a new base, replaying only commits after oldBase.
 // Checks out the branch first, then runs: git rebase --onto <newBase> <oldBase>
 // Useful when a parent branch was squash-merged and we need to replay only

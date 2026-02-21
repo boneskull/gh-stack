@@ -709,6 +709,39 @@ func TestIsRebaseInProgressWorktree(t *testing.T) {
 	}
 }
 
+func TestListLocalBranches(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create some branches
+	g.CreateBranch("feature-a")
+	g.CreateBranch("feature-b")
+	g.CreateBranch("feature-c")
+
+	branches, err := g.ListLocalBranches()
+	if err != nil {
+		t.Fatalf("ListLocalBranches failed: %v", err)
+	}
+
+	// Should contain trunk + 3 feature branches
+	if len(branches) != 4 {
+		t.Errorf("expected 4 branches, got %d: %v", len(branches), branches)
+	}
+
+	// Check all expected branches are present
+	branchSet := make(map[string]bool)
+	for _, b := range branches {
+		branchSet[b] = true
+	}
+	for _, expected := range []string{trunk, "feature-a", "feature-b", "feature-c"} {
+		if !branchSet[expected] {
+			t.Errorf("expected branch %q in list, got %v", expected, branches)
+		}
+	}
+}
+
 func TestRemoteBranchExists(t *testing.T) {
 	// Create main repo
 	dir := setupTestRepo(t)
