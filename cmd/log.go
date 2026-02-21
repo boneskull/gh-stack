@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/detect"
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/style"
@@ -26,11 +27,13 @@ var logCmd = &cobra.Command{
 var (
 	logAllFlag       bool
 	logPorcelainFlag bool
+	logNoDetectFlag  bool
 )
 
 func init() {
 	logCmd.Flags().BoolVar(&logAllFlag, "all", false, "show all branches")
 	logCmd.Flags().BoolVar(&logPorcelainFlag, "porcelain", false, "machine-readable output")
+	logCmd.Flags().BoolVar(&logNoDetectFlag, "no-detect", false, "skip auto-detection of untracked branches")
 	rootCmd.AddCommand(logCmd)
 }
 
@@ -51,6 +54,12 @@ func runLog(cmd *cobra.Command, args []string) error {
 	}
 
 	g := git.New(cwd)
+
+	// Auto-detect untracked branches (read-only — injects virtual nodes)
+	if !logNoDetectFlag {
+		injectDetectedNodes(root, cfg, g)
+	}
+
 	currentBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine for display
 
 	// Try to get GitHub client for PR URLs (optional - may fail if not in a GitHub repo)
@@ -72,6 +81,50 @@ func runLog(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// injectDetectedNodes discovers untracked branches via merge-base analysis
+// and injects them as virtual (Detected) nodes in the tree. This is strictly
+// read-only — no git config is modified.
+func injectDetectedNodes(root *tree.Node, cfg *config.Config, g *git.Git) {
+	trunk := root.Name
+	tracked, err := cfg.ListTrackedBranches()
+	if err != nil {
+		return // silent failure for read-only preview
+	}
+
+	candidates, err := detect.FindUntrackedCandidates(g, tracked, trunk)
+	if err != nil {
+		return
+	}
+
+	for _, branch := range candidates {
+		result, detectErr := detect.DetectParentLocal(branch, tracked, trunk, g)
+		if detectErr != nil || result.Confidence == detect.Ambiguous {
+			continue
+		}
+
+		parentNode := tree.FindNode(root, result.Parent)
+		if parentNode == nil {
+			continue
+		}
+
+		var cl tree.ConfidenceLevel
+		switch result.Confidence {
+		case detect.Medium:
+			cl = tree.ConfidenceMedium
+		case detect.High:
+			cl = tree.ConfidenceHigh
+		}
+
+		node := &tree.Node{
+			Name:       branch,
+			Parent:     parentNode,
+			Detected:   true,
+			Confidence: cl,
+		}
+		parentNode.Children = append(parentNode.Children, node)
+	}
 }
 
 // printPorcelain outputs stack information in table format.
