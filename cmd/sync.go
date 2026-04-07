@@ -113,6 +113,9 @@ func runSync(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Capture the starting branch to return to after sync completes
+	startingBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine
+
 	// Save undo snapshot of all tracked branches (unless dry-run)
 	// This captures state before any modifications (fetch, delete, rebase)
 	var stashRef string
@@ -378,6 +381,22 @@ func runSync(cmd *cobra.Command, args []string) error {
 		fmt.Println("\nUpdating stack comments...")
 		if err := updateStackComments(cfg, g, gh, s); err != nil {
 			fmt.Printf("%s failed to update some comments: %v\n", s.WarningIcon(), err)
+		}
+	}
+
+	// Return to the starting branch
+	if !syncDryRunFlag && startingBranch != "" {
+		// Only switch if we're not already there
+		currentBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine
+		if currentBranch != startingBranch {
+			// Check if the starting branch still exists (it may have been deleted during sync)
+			if g.BranchExists(startingBranch) {
+				if checkoutErr := g.Checkout(startingBranch); checkoutErr != nil {
+					fmt.Printf("%s could not return to starting branch %s: %v\n", s.WarningIcon(), s.Branch(startingBranch), checkoutErr)
+				}
+			} else {
+				fmt.Printf("%s starting branch %s no longer exists, staying on %s\n", s.WarningIcon(), s.Branch(startingBranch), s.Branch(currentBranch))
+			}
 		}
 	}
 
