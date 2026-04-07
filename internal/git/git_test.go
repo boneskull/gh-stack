@@ -717,9 +717,15 @@ func TestListLocalBranches(t *testing.T) {
 	trunk, _ := g.CurrentBranch()
 
 	// Create some branches
-	g.CreateBranch("feature-a")
-	g.CreateBranch("feature-b")
-	g.CreateBranch("feature-c")
+	if err := g.CreateBranch("feature-a"); err != nil {
+		t.Fatalf("CreateBranch(feature-a): %v", err)
+	}
+	if err := g.CreateBranch("feature-b"); err != nil {
+		t.Fatalf("CreateBranch(feature-b): %v", err)
+	}
+	if err := g.CreateBranch("feature-c"); err != nil {
+		t.Fatalf("CreateBranch(feature-c): %v", err)
+	}
 
 	branches, err := g.ListLocalBranches()
 	if err != nil {
@@ -793,9 +799,15 @@ func TestRevListCount(t *testing.T) {
 	g.CreateAndCheckout("feature")
 	for i := range 3 {
 		fname := filepath.Join(dir, fmt.Sprintf("file%d.txt", i))
-		os.WriteFile(fname, fmt.Appendf(nil, "content%d", i), 0644)
-		exec.Command("git", "-C", dir, "add", ".").Run()
-		exec.Command("git", "-C", dir, "commit", "-m", fmt.Sprintf("commit %d", i)).Run()
+		if err := os.WriteFile(fname, fmt.Appendf(nil, "content%d", i), 0644); err != nil {
+			t.Fatalf("WriteFile file%d.txt: %v", i, err)
+		}
+		if err := exec.Command("git", "-C", dir, "add", ".").Run(); err != nil {
+			t.Fatalf("git add (commit %d): %v", i, err)
+		}
+		if err := exec.Command("git", "-C", dir, "commit", "-m", fmt.Sprintf("commit %d", i)).Run(); err != nil {
+			t.Fatalf("git commit %d: %v", i, err)
+		}
 	}
 
 	// Count commits from trunk to feature (should be 3)

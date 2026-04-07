@@ -10,7 +10,6 @@ import (
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/detect"
 	"github.com/boneskull/gh-stack/internal/git"
-	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 )
 
@@ -254,16 +253,5 @@ func TestAdoptAutoDetect(t *testing.T) {
 	}
 	if nodeB.Parent.Name != "feature-a" {
 		t.Errorf("expected parent node 'feature-a', got %q", nodeB.Parent.Name)
-	}
-}
-
-// TestAdoptAutoDetect_PrintsConfidence verifies that the detection message
-// includes the confidence level.
-func TestAdoptAutoDetect_PrintsConfidence(t *testing.T) {
-	// Verify the style.New().Muted() call matches what adopt.go uses
-	s := style.New()
-	msg := s.Muted("(medium confidence)")
-	if msg == "" {
-		t.Error("expected non-empty muted confidence string")
 	}
 }

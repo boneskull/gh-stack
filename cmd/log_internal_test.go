@@ -25,7 +25,9 @@ func setupInternalTestRepo(t *testing.T) string {
 	run := func(args ...string) {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = dir
-		cmd.Run()
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("git %v failed: %v", args, err)
+		}
 	}
 
 	run("init")
@@ -34,7 +36,9 @@ func setupInternalTestRepo(t *testing.T) string {
 	run("config", "commit.gpgsign", "false")
 
 	f := filepath.Join(dir, "README.md")
-	os.WriteFile(f, []byte("# Test"), 0644)
+	if err := os.WriteFile(f, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("WriteFile README.md: %v", err)
+	}
 	run("add", ".")
 	run("commit", "-m", "initial")
 
@@ -44,11 +48,15 @@ func setupInternalTestRepo(t *testing.T) string {
 // addCommit creates a file and commits it in the given repo directory.
 func addCommit(t *testing.T, dir, filename, content string) {
 	t.Helper()
-	os.WriteFile(filepath.Join(dir, filename), []byte(content), 0644)
-	cmd := exec.Command("git", "-C", dir, "add", ".")
-	cmd.Run()
-	cmd = exec.Command("git", "-C", dir, "commit", "-m", "add "+filename)
-	cmd.Run()
+	if err := os.WriteFile(filepath.Join(dir, filename), []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile %s: %v", filename, err)
+	}
+	if err := exec.Command("git", "-C", dir, "add", ".").Run(); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := exec.Command("git", "-C", dir, "commit", "-m", "add "+filename).Run(); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
 }
 
 func TestLogDetectsUntrackedBranches(t *testing.T) {

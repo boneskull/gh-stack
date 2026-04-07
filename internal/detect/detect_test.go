@@ -28,7 +28,9 @@ func setupTestRepo(t *testing.T) string {
 	run("config", "commit.gpgsign", "false")
 
 	f := filepath.Join(dir, "README.md")
-	os.WriteFile(f, []byte("# Test"), 0644)
+	if err := os.WriteFile(f, []byte("# Test"), 0644); err != nil {
+		t.Fatalf("WriteFile README.md: %v", err)
+	}
 	run("add", ".")
 	run("commit", "-m", "initial")
 
@@ -37,9 +39,15 @@ func setupTestRepo(t *testing.T) string {
 
 func addCommit(t *testing.T, dir, filename, content string) {
 	t.Helper()
-	os.WriteFile(filepath.Join(dir, filename), []byte(content), 0644)
-	exec.Command("git", "-C", dir, "add", ".").Run()
-	exec.Command("git", "-C", dir, "commit", "-m", "add "+filename).Run()
+	if err := os.WriteFile(filepath.Join(dir, filename), []byte(content), 0644); err != nil {
+		t.Fatalf("WriteFile %s: %v", filename, err)
+	}
+	if err := exec.Command("git", "-C", dir, "add", ".").Run(); err != nil {
+		t.Fatalf("git add: %v", err)
+	}
+	if err := exec.Command("git", "-C", dir, "commit", "-m", "add "+filename).Run(); err != nil {
+		t.Fatalf("git commit: %v", err)
+	}
 }
 
 // Linear stack: main -> A -> B -> C (untracked)

@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 
 	"github.com/boneskull/gh-stack/internal/config"
@@ -98,6 +99,7 @@ func injectDetectedNodes(root *tree.Node, cfg *config.Config, g *git.Git) {
 		return
 	}
 
+	modified := make(map[*tree.Node]bool)
 	for _, branch := range candidates {
 		result, detectErr := detect.DetectParentLocal(branch, tracked, trunk, g)
 		if detectErr != nil || result.Confidence == detect.Ambiguous {
@@ -124,6 +126,13 @@ func injectDetectedNodes(root *tree.Node, cfg *config.Config, g *git.Git) {
 			Confidence: cl,
 		}
 		parentNode.Children = append(parentNode.Children, node)
+		modified[parentNode] = true
+	}
+
+	for parent := range modified {
+		sort.Slice(parent.Children, func(i, j int) bool {
+			return parent.Children[i].Name < parent.Children[j].Name
+		})
 	}
 }
 

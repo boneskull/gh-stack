@@ -88,6 +88,7 @@ func rankCandidates(branch string, tracked []string, trunk string, g *git.Git) (
 	// Build candidate set: trunk + all tracked branches
 	seen := make(map[string]bool)
 	var candidates []candidate
+	var firstErr error
 
 	allCandidates := append([]string{trunk}, tracked...)
 	for _, name := range allCandidates {
@@ -98,11 +99,17 @@ func rankCandidates(branch string, tracked []string, trunk string, g *git.Git) (
 
 		mergeBase, err := g.GetMergeBase(branch, name)
 		if err != nil {
-			continue // skip candidates we can't compare
+			if firstErr == nil {
+				firstErr = fmt.Errorf("merge-base %s..%s: %w", branch, name, err)
+			}
+			continue
 		}
 
 		distance, err := g.RevListCount(mergeBase, branch)
 		if err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("rev-list %s..%s: %w", mergeBase, branch, err)
+			}
 			continue
 		}
 
@@ -110,12 +117,19 @@ func rankCandidates(branch string, tracked []string, trunk string, g *git.Git) (
 	}
 
 	if len(candidates) == 0 {
+		if firstErr != nil {
+			return nil, fmt.Errorf("no candidates could be scored: %w", firstErr)
+		}
 		return &Result{Confidence: Ambiguous}, nil
 	}
 
-	// Sort by distance ascending (closest fork = most likely parent)
+	// Sort by distance ascending (closest fork = most likely parent),
+	// breaking ties by name for deterministic ordering.
 	slices.SortFunc(candidates, func(a, b candidate) int {
-		return cmp.Compare(a.distance, b.distance)
+		if d := cmp.Compare(a.distance, b.distance); d != 0 {
+			return d
+		}
+		return cmp.Compare(a.name, b.name)
 	})
 
 	best := candidates[0]
@@ -129,6 +143,7 @@ func rankCandidates(branch string, tracked []string, trunk string, g *git.Git) (
 				tied = append(tied, c.name)
 			}
 		}
+		slices.Sort(tied)
 		return &Result{
 			Confidence: Ambiguous,
 			Candidates: tied,
