@@ -47,6 +47,9 @@ var (
 	submitFromFlag        string
 )
 
+// ErrPRSkipped is returned when a user skips PR creation by pressing ESC.
+var ErrPRSkipped = errors.New("PR creation skipped by user")
+
 func init() {
 	submitCmd.Flags().BoolVar(&submitDryRunFlag, "dry-run", false, "show what would be done without doing it")
 	submitCmd.Flags().BoolVar(&submitCurrentOnlyFlag, "current-only", false, "only submit current branch, not descendants")
@@ -299,6 +302,8 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 			} else {
 				prNum, adopted, err := createPRForBranch(g, ghClient, cfg, root, b.Name, parent, trunk, remoteBranches, s)
 				switch {
+				case errors.Is(err, ErrPRSkipped):
+					fmt.Printf("Skipped PR for %s %s\n", s.Branch(b.Name), s.Muted("(user pressed ESC)"))
 				case err != nil:
 					fmt.Printf("%s failed to create PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), err)
 				case adopted:
@@ -362,9 +367,12 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 	}
 
 	// Get title and body (prompt if interactive and --yes not set)
-	title, body, err := promptForPRDetails(branch, defaultTitle, defaultBody, s)
+	title, body, skipped, err := promptForPRDetails(branch, defaultTitle, defaultBody, s)
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to get PR details: %w", err)
+	}
+	if skipped {
+		return 0, false, ErrPRSkipped
 	}
 
 	pr, err := ghClient.CreateSubmitPR(branch, base, title, body, draft)
@@ -443,27 +451,31 @@ func toTitleCase(s string) string {
 
 // promptForPRDetails prompts the user for PR title and body.
 // If --yes flag is set or stdin is not a TTY, returns the defaults without prompting.
-func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style) (title, body string, err error) {
+// Returns (title, body, skipped, error) where skipped is true if user pressed ESC.
+func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style) (title, body string, skipped bool, err error) {
 	// Skip prompts if --yes flag is set
 	if submitYesFlag {
-		return defaultTitle, defaultBody, nil
+		return defaultTitle, defaultBody, false, nil
 	}
 
 	// Skip prompts if not interactive
 	if !prompt.IsInteractive() {
-		return defaultTitle, defaultBody, nil
+		return defaultTitle, defaultBody, false, nil
 	}
 
-	fmt.Printf("\n--- Creating PR for %s %s ---\n", s.Branch(branch), s.Muted("(use --yes to skip prompts)"))
+	fmt.Printf("\n--- Creating PR for %s %s ---\n", s.Branch(branch), s.Muted("(ESC to skip, --yes to skip prompts)"))
 
-	// Prompt for title
-	title, err = prompt.Input("PR title", defaultTitle)
+	// Prompt for title with skip support
+	title, skipped, err = prompt.InputWithSkip("PR title", "Press ESC to skip creating this PR", defaultTitle)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
+	}
+	if skipped {
+		return "", "", true, nil
 	}
 	title = strings.TrimSpace(title)
 	if title == "" {
-		return "", "", errors.New("PR title cannot be empty")
+		return "", "", false, errors.New("PR title cannot be empty")
 	}
 
 	// Show the generated body and ask if user wants to edit
@@ -485,7 +497,7 @@ func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style
 
 	editBody, err := prompt.Confirm("Edit description in editor?", false)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 
 	if editBody {
@@ -499,7 +511,7 @@ func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style
 	}
 
 	fmt.Println()
-	return title, body, nil
+	return title, body, false, nil
 }
 
 // adoptExistingPR finds an existing PR for the branch and adopts it into the stack.

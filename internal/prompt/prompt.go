@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/cli/go-gh/v2/pkg/prompter"
 	"github.com/cli/go-gh/v2/pkg/term"
 	"github.com/cli/safeexec"
@@ -46,6 +47,38 @@ func Input(prompt, defaultValue string) (string, error) {
 		return defaultValue, fmt.Errorf("failed to read input: %w", err)
 	}
 	return result, nil
+}
+
+// InputWithSkip prompts the user for a single line of input with a default value,
+// allowing the user to skip by pressing ESC. Returns (value, skipped, error).
+//
+// When the user presses ESC (or otherwise aborts via huh.ErrUserAborted),
+// skipped is true and err is nil. Ctrl+C will typically terminate the process
+// via SIGINT rather than returning here.
+//
+// If not in an interactive terminal, the default is returned without prompting.
+func InputWithSkip(title, description, defaultValue string) (string, bool, error) {
+	if !IsInteractive() {
+		return defaultValue, false, nil
+	}
+
+	value := defaultValue
+
+	err := huh.NewInput().
+		Title(title).
+		Description(description).
+		Value(&value).
+		Run()
+
+	if errors.Is(err, huh.ErrUserAborted) {
+		// User pressed ESC to skip
+		return "", true, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("failed to read input: %w", err)
+	}
+
+	return value, false, nil
 }
 
 // Confirm prompts the user for a yes/no confirmation.
