@@ -2,6 +2,8 @@
 package cmd
 
 import (
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -178,4 +180,72 @@ func TestResolvePrefix_ExactMatchTakesPrecedenceOverPrefix(t *testing.T) {
 	if ambiguous != nil {
 		t.Errorf("exact takes precedence: got ambiguous=%v, want nil", ambiguous)
 	}
+}
+
+// withArgs temporarily replaces os.Args for the duration of fn, then restores
+// the original value.
+func withArgs(args []string, fn func()) {
+	orig := os.Args
+	os.Args = args
+	defer func() { os.Args = orig }()
+	fn()
+}
+
+func TestExpandCommandShortcut_RewritesUnambiguousPrefix(t *testing.T) {
+	withArgs([]string{"gh-stack", "re"}, func() {
+		if err := expandCommandShortcut(rootCmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if os.Args[1] != "restack" {
+			t.Errorf("os.Args[1] = %q, want %q", os.Args[1], "restack")
+		}
+	})
+}
+
+func TestExpandCommandShortcut_ExactMatchUnchanged(t *testing.T) {
+	withArgs([]string{"gh-stack", "init"}, func() {
+		if err := expandCommandShortcut(rootCmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if os.Args[1] != "init" {
+			t.Errorf("os.Args[1] = %q, want %q", os.Args[1], "init")
+		}
+	})
+}
+
+func TestExpandCommandShortcut_FlagPassthrough(t *testing.T) {
+	withArgs([]string{"gh-stack", "-h"}, func() {
+		if err := expandCommandShortcut(rootCmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if os.Args[1] != "-h" {
+			t.Errorf("os.Args[1] = %q, want %q", os.Args[1], "-h")
+		}
+	})
+}
+
+func TestExpandCommandShortcut_EmptyArgsNoop(t *testing.T) {
+	withArgs([]string{"gh-stack"}, func() {
+		if err := expandCommandShortcut(rootCmd); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestExpandCommandShortcut_AmbiguousPrefixReturnsError(t *testing.T) {
+	withArgs([]string{"gh-stack", "a"}, func() {
+		err := expandCommandShortcut(rootCmd)
+		if err == nil {
+			t.Fatal("expected error for ambiguous prefix, got nil")
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, "ambiguous") {
+			t.Errorf("error %q should contain %q", msg, "ambiguous")
+		}
+		for _, want := range []string{"abort", "adopt"} {
+			if !strings.Contains(msg, want) {
+				t.Errorf("error %q should list candidate %q", msg, want)
+			}
+		}
+	})
 }
