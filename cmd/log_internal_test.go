@@ -62,17 +62,39 @@ func addCommit(t *testing.T, dir, filename, content string) {
 func TestLogDetectsUntrackedBranches(t *testing.T) {
 	dir := setupInternalTestRepo(t)
 	g := git.New(dir)
-	cfg, _ := config.Load(dir)
-	trunk, _ := g.CurrentBranch()
-	cfg.SetTrunk(trunk)
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("Load config: %v", err)
+	}
+
+	trunk, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+
+	err = cfg.SetTrunk(trunk)
+	if err != nil {
+		t.Fatalf("SetTrunk: %v", err)
+	}
 
 	// Create tracked branch A off main
-	g.CreateAndCheckout("feature-a")
+	err = g.CreateAndCheckout("feature-a")
+	if err != nil {
+		t.Fatalf("CreateAndCheckout feature-a: %v", err)
+	}
 	addCommit(t, dir, "a.txt", "a")
-	cfg.SetParent("feature-a", trunk)
+
+	err = cfg.SetParent("feature-a", trunk)
+	if err != nil {
+		t.Fatalf("SetParent feature-a: %v", err)
+	}
 
 	// Create untracked branch B off A
-	g.CreateAndCheckout("feature-b")
+	err = g.CreateAndCheckout("feature-b")
+	if err != nil {
+		t.Fatalf("CreateAndCheckout feature-b: %v", err)
+	}
 	addCommit(t, dir, "b.txt", "b")
 
 	// Build tree WITHOUT detection -- B should not appear

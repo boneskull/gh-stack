@@ -174,21 +174,44 @@ func TestAdoptStoresForkPoint(t *testing.T) {
 func TestAdoptAutoDetect(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	cfg, _ := config.Load(dir)
-	trunk, _ := g.CurrentBranch()
-	cfg.SetTrunk(trunk)
+
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("Load config: %v", err)
+	}
+
+	trunk, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+
+	err = cfg.SetTrunk(trunk)
+	if err != nil {
+		t.Fatalf("SetTrunk: %v", err)
+	}
 
 	// Create tracked branch A
-	g.CreateAndCheckout("feature-a")
+	err = g.CreateAndCheckout("feature-a")
+	if err != nil {
+		t.Fatalf("CreateAndCheckout feature-a: %v", err)
+	}
 	addCommit(t, dir, "a.txt", "a")
-	cfg.SetParent("feature-a", trunk)
+
+	err = cfg.SetParent("feature-a", trunk)
+	if err != nil {
+		t.Fatalf("SetParent feature-a: %v", err)
+	}
 
 	// Create untracked branch B off A
-	g.CreateAndCheckout("feature-b")
+	err = g.CreateAndCheckout("feature-b")
+	if err != nil {
+		t.Fatalf("CreateAndCheckout feature-b: %v", err)
+	}
 	addCommit(t, dir, "b.txt", "b")
 
 	// feature-b should not be tracked yet
-	if _, err := cfg.GetParent("feature-b"); err == nil {
+	_, getErr := cfg.GetParent("feature-b")
+	if getErr == nil {
 		t.Fatal("feature-b should not be tracked yet")
 	}
 
@@ -214,7 +237,8 @@ func TestAdoptAutoDetect(t *testing.T) {
 	}
 
 	// 3. Set parent (same as runAdopt)
-	if err := cfg.SetParent("feature-b", result.Parent); err != nil {
+	err = cfg.SetParent("feature-b", result.Parent)
+	if err != nil {
 		t.Fatalf("SetParent failed: %v", err)
 	}
 

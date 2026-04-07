@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"slices"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/detect"
@@ -10,7 +9,6 @@ import (
 	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/prompt"
 	"github.com/boneskull/gh-stack/internal/style"
-	"github.com/boneskull/gh-stack/internal/tree"
 )
 
 // autoDetectAndAdopt finds untracked branches and adopts them using full detection
@@ -33,12 +31,6 @@ func autoDetectAndAdopt(cfg *config.Config, g *git.Git, gh *github.Client, s *st
 
 	if len(candidates) == 0 {
 		return nil
-	}
-
-	// Build tree for cycle checking
-	root, err := tree.Build(cfg)
-	if err != nil {
-		return err
 	}
 
 	// Loop until no progress: untracked chains (e.g., C based on untracked B)
@@ -77,19 +69,15 @@ func autoDetectAndAdopt(cfg *config.Config, g *git.Git, gh *github.Client, s *st
 				}
 			}
 
-			// Cycle check: if branch is already an ancestor of the detected parent,
-			// adopting it as a child would create a cycle.
-			parentNode := tree.FindNode(root, parent)
-			if parentNode != nil {
-				ancestors := tree.GetAncestors(parentNode)
-				if slices.ContainsFunc(ancestors, func(n *tree.Node) bool {
-					return n.Name == branch
-				}) {
-					fmt.Printf("%s skipping %s: would create a cycle\n",
-						s.WarningIcon(), s.Branch(branch))
-					adopted[branch] = true
-					continue
-				}
+			// Cycle check via config: walk GetParent from parent upward and
+			// ensure we never reach branch. This catches cycles that the tree
+			// model might miss (e.g., when nodes with broken parent links are
+			// omitted from tree.Build).
+			if wouldCycle(cfg, branch, parent) {
+				fmt.Printf("%s skipping %s: would create a cycle\n",
+					s.WarningIcon(), s.Branch(branch))
+				adopted[branch] = true
+				continue
 			}
 
 			// Commit adoption
@@ -118,13 +106,9 @@ func autoDetectAndAdopt(cfg *config.Config, g *git.Git, gh *github.Client, s *st
 			fmt.Printf("%s Auto-adopted %s with parent %s%s\n",
 				s.SuccessIcon(), s.Branch(branch), s.Branch(parent), confidenceLabel)
 
-			// Update tracked list and rebuild tree for subsequent passes
 			tracked = append(tracked, branch)
 			adopted[branch] = true
 			progress = true
-			if newRoot, buildErr := tree.Build(cfg); buildErr == nil {
-				root = newRoot
-			}
 		}
 
 		if !progress {
@@ -141,4 +125,26 @@ func autoDetectAndAdopt(cfg *config.Config, g *git.Git, gh *github.Client, s *st
 	}
 
 	return nil
+}
+
+// wouldCycle returns true if setting branch's parent to parent would create a
+// cycle in the config-based parent chain. It walks cfg.GetParent from parent
+// upward; if it ever reaches branch, adopting would create a loop.
+func wouldCycle(cfg *config.Config, branch, parent string) bool {
+	visited := make(map[string]bool)
+	cur := parent
+	for {
+		if cur == branch {
+			return true
+		}
+		if visited[cur] {
+			return false
+		}
+		visited[cur] = true
+		next, err := cfg.GetParent(cur)
+		if err != nil {
+			return false
+		}
+		cur = next
+	}
 }

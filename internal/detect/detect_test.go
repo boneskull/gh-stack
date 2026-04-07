@@ -50,20 +50,54 @@ func addCommit(t *testing.T, dir, filename, content string) {
 	}
 }
 
+// mustCreateAndCheckout is a test helper that creates+checks out a branch or fails.
+func mustCreateAndCheckout(t *testing.T, g *git.Git, name string) {
+	t.Helper()
+	if err := g.CreateAndCheckout(name); err != nil {
+		t.Fatalf("CreateAndCheckout %s: %v", name, err)
+	}
+}
+
+// mustCreateBranch is a test helper that creates a branch or fails.
+func mustCreateBranch(t *testing.T, g *git.Git, name string) {
+	t.Helper()
+	if err := g.CreateBranch(name); err != nil {
+		t.Fatalf("CreateBranch %s: %v", name, err)
+	}
+}
+
+// mustCheckout is a test helper that checks out a branch or fails.
+func mustCheckout(t *testing.T, g *git.Git, name string) {
+	t.Helper()
+	if err := g.Checkout(name); err != nil {
+		t.Fatalf("Checkout %s: %v", name, err)
+	}
+}
+
+// mustCurrentBranch returns the current branch name or fails.
+func mustCurrentBranch(t *testing.T, g *git.Git) string {
+	t.Helper()
+	name, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+	return name
+}
+
 // Linear stack: main -> A -> B -> C (untracked)
 // C should detect B as parent with Medium confidence
 func TestDetectParentLocal_LinearStack(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	trunk, _ := g.CurrentBranch()
+	trunk := mustCurrentBranch(t, g)
 
-	g.CreateAndCheckout("feature-a")
+	mustCreateAndCheckout(t, g, "feature-a")
 	addCommit(t, dir, "a.txt", "a")
 
-	g.CreateAndCheckout("feature-b")
+	mustCreateAndCheckout(t, g, "feature-b")
 	addCommit(t, dir, "b.txt", "b")
 
-	g.CreateAndCheckout("feature-c")
+	mustCreateAndCheckout(t, g, "feature-c")
 	addCommit(t, dir, "c.txt", "c")
 
 	tracked := []string{"feature-a", "feature-b"}
@@ -83,12 +117,12 @@ func TestDetectParentLocal_LinearStack(t *testing.T) {
 func TestDetectParentLocal_Ambiguous(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	trunk, _ := g.CurrentBranch()
+	trunk := mustCurrentBranch(t, g)
 
-	g.CreateBranch("feature-a")
-	g.CreateBranch("feature-b")
+	mustCreateBranch(t, g, "feature-a")
+	mustCreateBranch(t, g, "feature-b")
 
-	g.CreateAndCheckout("feature-c")
+	mustCreateAndCheckout(t, g, "feature-c")
 	addCommit(t, dir, "c.txt", "c")
 
 	tracked := []string{"feature-a", "feature-b"}
@@ -108,15 +142,15 @@ func TestDetectParentLocal_Ambiguous(t *testing.T) {
 func TestDetectParentLocal_TrunkIsParent(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	trunk, _ := g.CurrentBranch()
+	trunk := mustCurrentBranch(t, g)
 
-	g.CreateAndCheckout("feature-a")
+	mustCreateAndCheckout(t, g, "feature-a")
 	addCommit(t, dir, "a.txt", "a")
 
-	g.Checkout(trunk)
+	mustCheckout(t, g, trunk)
 	addCommit(t, dir, "main1.txt", "main1")
 
-	g.CreateAndCheckout("feature-x")
+	mustCreateAndCheckout(t, g, "feature-x")
 	addCommit(t, dir, "x.txt", "x")
 
 	tracked := []string{"feature-a"}
@@ -136,9 +170,9 @@ func TestDetectParentLocal_TrunkIsParent(t *testing.T) {
 func TestDetectParentLocal_NoTrackedBranches(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	trunk, _ := g.CurrentBranch()
+	trunk := mustCurrentBranch(t, g)
 
-	g.CreateAndCheckout("feature-x")
+	mustCreateAndCheckout(t, g, "feature-x")
 	addCommit(t, dir, "x.txt", "x")
 
 	result, err := detect.DetectParentLocal("feature-x", nil, trunk, g)
@@ -157,12 +191,12 @@ func TestDetectParentLocal_NoTrackedBranches(t *testing.T) {
 func TestDetectParent_NilGitHub(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	trunk, _ := g.CurrentBranch()
+	trunk := mustCurrentBranch(t, g)
 
-	g.CreateAndCheckout("feature-a")
+	mustCreateAndCheckout(t, g, "feature-a")
 	addCommit(t, dir, "a.txt", "a")
 
-	g.CreateAndCheckout("feature-b")
+	mustCreateAndCheckout(t, g, "feature-b")
 	addCommit(t, dir, "b.txt", "b")
 
 	tracked := []string{"feature-a"}
@@ -185,12 +219,12 @@ func TestDetectParent_NilGitHub(t *testing.T) {
 func TestFindUntrackedCandidates(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	trunk, _ := g.CurrentBranch()
+	trunk := mustCurrentBranch(t, g)
 
-	g.CreateBranch("tracked-a")
-	g.CreateBranch("tracked-b")
-	g.CreateBranch("untracked-x")
-	g.CreateBranch("untracked-y")
+	mustCreateBranch(t, g, "tracked-a")
+	mustCreateBranch(t, g, "tracked-b")
+	mustCreateBranch(t, g, "untracked-x")
+	mustCreateBranch(t, g, "untracked-y")
 
 	tracked := []string{"tracked-a", "tracked-b"}
 	candidates, err := detect.FindUntrackedCandidates(g, tracked, trunk)
@@ -222,9 +256,9 @@ func TestFindUntrackedCandidates(t *testing.T) {
 func TestFindUntrackedCandidates_EmptyTracked(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
-	trunk, _ := g.CurrentBranch()
+	trunk := mustCurrentBranch(t, g)
 
-	g.CreateBranch("some-branch")
+	mustCreateBranch(t, g, "some-branch")
 
 	candidates, err := detect.FindUntrackedCandidates(g, nil, trunk)
 	if err != nil {
