@@ -26,13 +26,11 @@ var logCmd = &cobra.Command{
 }
 
 var (
-	logAllFlag       bool
 	logPorcelainFlag bool
 	logNoDetectFlag  bool
 )
 
 func init() {
-	logCmd.Flags().BoolVar(&logAllFlag, "all", false, "show all branches")
 	logCmd.Flags().BoolVar(&logPorcelainFlag, "porcelain", false, "machine-readable output")
 	logCmd.Flags().BoolVar(&logNoDetectFlag, "no-detect", false, "skip auto-detection of untracked branches")
 	rootCmd.AddCommand(logCmd)
@@ -56,8 +54,10 @@ func runLog(cmd *cobra.Command, args []string) error {
 
 	g := git.New(cwd)
 
-	// Auto-detect untracked branches (read-only — injects virtual nodes)
-	if !logNoDetectFlag {
+	// Auto-detect untracked branches (read-only — injects virtual nodes).
+	// Skip detection in porcelain mode so machine-readable output only contains
+	// tracked/configured nodes (porcelain has no column to mark detected ones).
+	if !logNoDetectFlag && !logPorcelainFlag {
 		injectDetectedNodes(root, cfg, g)
 	}
 

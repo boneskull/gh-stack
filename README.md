@@ -168,12 +168,16 @@ By default, `init` auto-detects the trunk branch (`main` or `master`). If neithe
 
 Display the branch tree showing the stack hierarchy, current branch, and associated PR numbers.
 
+By default, `log` also shows untracked local branches in the tree if it can detect their likely parent via merge-base analysis. These "detected" branches are annotated but not persisted. Use `--no-detect` to disable this.
+
+Detection is automatically skipped in `--porcelain` mode since the porcelain format has no column to distinguish detected branches from tracked ones.
+
 #### log Flags
 
-| Flag          | Description                           |
-| ------------- | ------------------------------------- |
-| `--all`       | Show all branches                     |
-| `--porcelain` | Machine-readable tab-separated output |
+| Flag            | Description                                    |
+| --------------- | ---------------------------------------------- |
+| `--porcelain`   | Machine-readable tab-separated output          |
+| `--no-detect`   | Skip auto-detection of untracked branches      |
 
 #### Porcelain Format
 
@@ -208,10 +212,12 @@ Start tracking an existing branch by setting its parent.
 
 By default, adopts the current branch. The parent must be either the trunk or another tracked branch.
 
+When no parent is specified, `adopt` auto-detects the parent using PR base branch data (if available) and local merge-base analysis. If the result is ambiguous in interactive mode, you'll be prompted to choose; in non-interactive mode an error is returned.
+
 #### adopt Usage
 
 ```bash
-gh stack adopt <parent>
+gh stack adopt [parent]
 ```
 
 #### adopt Flags

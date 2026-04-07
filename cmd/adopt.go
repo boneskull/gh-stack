@@ -12,7 +12,6 @@ import (
 	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/prompt"
 	"github.com/boneskull/gh-stack/internal/style"
-	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
 
@@ -130,19 +129,10 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Check for cycles (branch can't be ancestor of parent)
-	root, err := tree.Build(cfg)
-	if err != nil {
-		return err
-	}
-
-	parentNode := tree.FindNode(root, parent)
-	if parentNode != nil {
-		for _, ancestor := range tree.GetAncestors(parentNode) {
-			if ancestor.Name == branchName {
-				return errors.New("cannot adopt: would create a cycle")
-			}
-		}
+	// Check for cycles via config parent chain walk (catches cases the tree
+	// model misses when nodes with broken parent links are omitted).
+	if wouldCycle(cfg, branchName, parent) {
+		return errors.New("cannot adopt: would create a cycle")
 	}
 
 	// Set parent
