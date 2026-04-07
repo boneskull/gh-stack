@@ -25,6 +25,8 @@ var rootCmd = &cobra.Command{
 
 // Execute runs the root command.
 func Execute() error {
-	expandCommandShortcut(rootCmd)
+	if err := expandCommandShortcut(rootCmd); err != nil {
+		return err
+	}
 	return rootCmd.Execute()
 }
