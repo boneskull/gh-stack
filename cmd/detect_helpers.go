@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"cmp"
 	"fmt"
+	"slices"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/detect"
@@ -32,6 +34,12 @@ func autoDetectAndAdopt(cfg *config.Config, g *git.Git, gh *github.Client, s *st
 	if len(candidates) == 0 {
 		return nil
 	}
+
+	// Sort candidates by merge-base distance from trunk (ascending) so that
+	// branches closer to trunk (parents) are processed before their children.
+	// Without this, alphabetical ordering can cause a child to be adopted with
+	// the wrong parent when both it and its true parent are untracked.
+	sortCandidatesByTrunkDistance(candidates, trunk, g)
 
 	// Loop until no progress: untracked chains (e.g., C based on untracked B)
 	// may require multiple passes since a branch can only be detected once its
@@ -125,6 +133,34 @@ func autoDetectAndAdopt(cfg *config.Config, g *git.Git, gh *github.Client, s *st
 	}
 
 	return nil
+}
+
+// sortCandidatesByTrunkDistance sorts branches by their merge-base distance
+// from trunk (ascending). Branches closer to trunk are processed first, which
+// ensures parents are adopted before their children in untracked chains.
+// Branches whose distance can't be computed are sorted to the end.
+func sortCandidatesByTrunkDistance(candidates []string, trunk string, g *git.Git) {
+	const maxDist = 1<<31 - 1
+	dist := make(map[string]int, len(candidates))
+	for _, b := range candidates {
+		mb, err := g.GetMergeBase(b, trunk)
+		if err != nil {
+			dist[b] = maxDist
+			continue
+		}
+		n, err := g.RevListCount(mb, b)
+		if err != nil {
+			dist[b] = maxDist
+			continue
+		}
+		dist[b] = n
+	}
+	slices.SortFunc(candidates, func(a, b string) int {
+		if d := cmp.Compare(dist[a], dist[b]); d != 0 {
+			return d
+		}
+		return cmp.Compare(a, b)
+	})
 }
 
 // wouldCycle returns true if setting branch's parent to parent would create a

@@ -302,11 +302,12 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### restack Flags
 
-| Flag          | Description                                              |
-| ------------- | -------------------------------------------------------- |
-| `--only`      | Only restack current branch, not descendants             |
-| `--dry-run`   | Show what would be done                                  |
-| `--worktrees` | Rebase branches checked out in linked worktrees in-place |
+| Flag            | Description                                              |
+| --------------- | -------------------------------------------------------- |
+| `--only`        | Only restack current branch, not descendants             |
+| `--dry-run`     | Show what would be done                                  |
+| `--worktrees`   | Rebase branches checked out in linked worktrees in-place |
+| `--no-detect`   | Skip auto-detection and adoption of untracked branches   |
 
 ### continue
 
@@ -333,6 +334,7 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 | `--no-restack` | Skip restacking branches                                 |
 | `--dry-run`    | Show what would be done                                  |
 | `--worktrees`  | Rebase branches checked out in linked worktrees in-place |
+| `--no-detect`  | Skip auto-detection and adoption of untracked branches   |
 
 ### undo
 
