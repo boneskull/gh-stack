@@ -14,6 +14,7 @@ import "testing"
 //    - TestSyncStartingBranchCapture - normal branch detection
 //    - TestSyncStartingBranchDetachedHEAD - "HEAD" normalization for detached state
 //    - TestSyncReturnsToBranchAfterOperations - successful return to starting branch
+//    - TestSyncCheckoutFailure - checkout failure while returning to starting branch
 //    - TestSyncStartingBranchDeleted - handling when branch is deleted during sync
 //    - TestSyncEmptyStartingBranchSkipsReturn - empty starting branch skips return
 
