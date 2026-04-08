@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/boneskull/gh-stack/compare/v0.6.0...v0.6.1) (2026-04-08)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/cli/safeexec to v1.0.1 ([#66](https://github.com/boneskull/gh-stack/issues/66)) ([39c1565](https://github.com/boneskull/gh-stack/commit/39c1565fb4a9968419463df4d5e88529af705458))
+
 ## [0.6.0](https://github.com/boneskull/gh-stack/compare/v0.5.0...v0.6.0) (2026-04-08)
 
 
