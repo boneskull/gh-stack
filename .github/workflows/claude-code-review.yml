@@ -9,37 +9,6 @@ jobs:
     # only run when PR is from this repository (fork PRs don't receive secrets)
     if: |
       github.event.pull_request.head.repo.full_name == github.repository
-    concurrency:
-      group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-      id-token: write
-
-    steps:
-      - name: Harden-Runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
-        with:
-          egress-policy: audit
-
-      - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          fetch-depth: 1
-
-      - name: Run Claude Code Review
-        id: claude-review
-        # Pinned to v1 for supply-chain safety
-        uses: anthropics/claude-code-action@398370690eb38623ea077e8ccc687d81c9afe15d
-        with:
-          allowed_bots: 'renovate[bot]'
-          claude_args: |
-            --max-turns 10
-          track_progress: true
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Uses vendored code-review skill from .claude/commands/code-review.md
-          prompt: '/project:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-
+    # Job body always comes from main so edits to these workflows on a PR cannot break the check.
+    uses: boneskull/gh-stack/.github/workflows/claude-code-review-reusable.yml@main
+    secrets: inherit
