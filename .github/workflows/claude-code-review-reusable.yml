@@ -31,7 +31,7 @@ jobs:
       - name: Run Claude Code Review
         id: claude-review
         # Pinned to v1 for supply-chain safety
-        uses: anthropics/claude-code-action@398370690eb38623ea077e8ccc687d81c9afe15d
+        uses: anthropics/claude-code-action@b2fdd80112e5f140e097b11d7a3d9edf0b226fd0
         with:
           allowed_bots: 'renovate[bot]'
           claude_args: |
