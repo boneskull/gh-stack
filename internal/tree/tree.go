@@ -10,12 +10,28 @@ import (
 	"github.com/boneskull/gh-stack/internal/style"
 )
 
+// ConfidenceLevel represents how certain a detection is.
+type ConfidenceLevel int
+
+const (
+	// ConfidenceNone is the zero value for tracked (non-detected) nodes.
+	ConfidenceNone ConfidenceLevel = iota
+	// ConfidenceAmbiguous means multiple candidates tied.
+	ConfidenceAmbiguous
+	// ConfidenceMedium means a unique merge-base winner was found.
+	ConfidenceMedium
+	// ConfidenceHigh means a PR base branch matched.
+	ConfidenceHigh
+)
+
 // Node represents a branch in the stack tree.
 type Node struct {
-	Name     string
-	PR       int // 0 if no PR
-	Parent   *Node
-	Children []*Node
+	Name       string
+	PR         int // 0 if no PR
+	Parent     *Node
+	Children   []*Node
+	Detected   bool            // true for auto-detected, not yet persisted
+	Confidence ConfidenceLevel // detection confidence (only meaningful if Detected)
 }
 
 // Build constructs the stack tree from config.
@@ -161,11 +177,28 @@ func formatNode(sb *strings.Builder, node *Node, prefix string, isLast bool, opt
 		}
 	}
 
+	// Detected branch annotation
+	detectedInfo := ""
+	if node.Detected {
+		switch node.Confidence {
+		case ConfidenceHigh:
+			detectedInfo = " (detected, via PR)"
+		case ConfidenceAmbiguous:
+			detectedInfo = " (detected, ambiguous)"
+		default:
+			detectedInfo = " (detected)"
+		}
+		if opts.Style != nil {
+			detectedInfo = opts.Style.Muted(detectedInfo)
+		}
+	}
+
 	sb.WriteString(prefix)
 	sb.WriteString(connector)
 	sb.WriteString(marker)
 	sb.WriteString(branchDisplay)
 	sb.WriteString(prInfo)
+	sb.WriteString(detectedInfo)
 	sb.WriteString("\n")
 
 	// Prepare prefix for children

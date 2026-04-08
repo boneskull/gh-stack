@@ -149,6 +149,20 @@ func (g *Git) GetMergeBase(a, b string) (string, error) {
 	return g.run("merge-base", a, b)
 }
 
+// RevListCount returns the number of commits reachable from 'to' but not from 'from'.
+// Equivalent to `git rev-list --count from..to`.
+func (g *Git) RevListCount(from, to string) (int, error) {
+	out, err := g.run("rev-list", "--count", from+".."+to)
+	if err != nil {
+		return 0, err
+	}
+	var count int
+	if _, scanErr := fmt.Sscanf(out, "%d", &count); scanErr != nil {
+		return 0, fmt.Errorf("parse rev-list count %q: %w", out, scanErr)
+	}
+	return count, nil
+}
+
 // GetTip returns the commit SHA at the tip of a branch.
 func (g *Git) GetTip(branch string) (string, error) {
 	return g.run("rev-parse", branch)
@@ -238,6 +252,22 @@ func (g *Git) ListRemoteBranches() (map[string]bool, error) {
 		line = strings.TrimSpace(line)
 		if line != "" && line != "HEAD" {
 			branches[line] = true
+		}
+	}
+	return branches, nil
+}
+
+// ListLocalBranches returns the names of all local branches.
+func (g *Git) ListLocalBranches() ([]string, error) {
+	out, err := g.run("for-each-ref", "--format=%(refname:short)", "refs/heads/")
+	if err != nil {
+		return nil, err
+	}
+	var branches []string
+	for line := range strings.SplitSeq(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			branches = append(branches, line)
 		}
 	}
 	return branches, nil
