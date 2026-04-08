@@ -49,7 +49,7 @@ jobs:
       - name: Run Claude Code
         id: claude
         # Pinned to v1 for supply-chain safety
-        uses: anthropics/claude-code-action@f2accb9a171bd71f4b5c93bcea23876aa5244edb
+        uses: anthropics/claude-code-action@398370690eb38623ea077e8ccc687d81c9afe15d
         with:
           claude_args: |
             --max-turns 10
