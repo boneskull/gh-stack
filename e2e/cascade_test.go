@@ -107,3 +107,36 @@ func TestCascadeContinue(t *testing.T) {
 
 	env.AssertNoRebaseInProgress()
 }
+
+func TestCascadeReturnsToOriginalBranch(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	// Create a 3-branch stack
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("feature a work")
+
+	env.MustRun("create", "feature-b")
+	env.CreateCommit("feature b work")
+
+	env.MustRun("create", "feature-c")
+	env.CreateCommit("feature c work")
+
+	// Move main forward
+	env.Git("checkout", "main")
+	env.CreateCommit("main moved forward")
+
+	// Start cascade from feature-a (not the deepest branch)
+	env.Git("checkout", "feature-a")
+	env.AssertBranch("feature-a")
+
+	env.MustRun("cascade")
+
+	// Verify we returned to feature-a, not feature-c (the last restacked branch)
+	env.AssertBranch("feature-a")
+
+	// Verify all branches were restacked
+	env.AssertAncestor("main", "feature-a")
+	env.AssertAncestor("feature-a", "feature-b")
+	env.AssertAncestor("feature-b", "feature-c")
+}
