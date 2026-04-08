@@ -10,7 +10,12 @@ import "testing"
 //
 // The fix for issue #58 (sync leaving user on wrong branch) is validated by:
 // 1. TestCascadeReturnsToOriginalBranch - tests the shared restack infrastructure
-// 2. Unit tests in cmd/sync_test.go - test sync-specific starting branch capture
+// 2. cmd/sync_test.go unit tests - test sync-specific starting branch capture:
+//    - TestSyncStartingBranchCapture - normal branch detection
+//    - TestSyncStartingBranchDetachedHEAD - "HEAD" normalization for detached state
+//    - TestSyncReturnsToBranchAfterOperations - successful return to starting branch
+//    - TestSyncStartingBranchDeleted - handling when branch is deleted during sync
+//    - TestSyncEmptyStartingBranchSkipsReturn - empty starting branch skips return
 
 func TestSyncAcceptsDryRunFlag(t *testing.T) {
 	// Verify --dry-run flag is recognized by sync
