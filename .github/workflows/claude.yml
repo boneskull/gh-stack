@@ -25,12 +25,16 @@ jobs:
       (github.event_name == 'issues' &&
         (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+      # NOTE: For issues:edited, author_association refers to the issue author, not
+      # the actor who performed the edit. This means an edit by a non-collaborator
+      # could re-trigger Claude if the original author is a collaborator. In practice,
+      # only users with write access can edit others' issues, so the risk is limited.
     concurrency:
       group: claude-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number || github.run_id }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
-      contents: read # TODO unclear if needed
+      contents: read
       pull-requests: write # for progress tracking
       issues: write # for progress tracking
       id-token: write # needed for OAUTH token
