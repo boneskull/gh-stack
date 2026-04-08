@@ -2,7 +2,6 @@
 package cmd_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/config"
@@ -107,40 +106,5 @@ func TestLogMultipleBranches(t *testing.T) {
 	}
 	if featureA.Children[0].Name != "feature-a-sub" {
 		t.Errorf("expected 'feature-a-sub', got %q", featureA.Children[0].Name)
-	}
-}
-
-func TestLogTreeWithDetectedNode(t *testing.T) {
-	dir := setupTestRepo(t)
-	cfg, _ := config.Load(dir)
-	cfg.SetTrunk("main")
-	cfg.SetParent("feature-a", "main")
-
-	root, err := tree.Build(cfg)
-	if err != nil {
-		t.Fatalf("Build failed: %v", err)
-	}
-
-	// Manually inject a detected node (simulating what log would do)
-	featureA := tree.FindNode(root, "feature-a")
-	if featureA == nil {
-		t.Fatal("feature-a not found")
-	}
-
-	detected := &tree.Node{
-		Name:       "feature-b",
-		Parent:     featureA,
-		Detected:   true,
-		Confidence: tree.ConfidenceMedium,
-	}
-	featureA.Children = append(featureA.Children, detected)
-
-	// Verify FormatTree includes the detected node with annotation
-	output := tree.FormatTree(root, tree.FormatOptions{})
-	if !strings.Contains(output, "feature-b") {
-		t.Errorf("expected output to contain 'feature-b', got:\n%s", output)
-	}
-	if !strings.Contains(output, "detected") {
-		t.Errorf("expected output to contain 'detected' annotation, got:\n%s", output)
 	}
 }

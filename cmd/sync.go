@@ -28,14 +28,12 @@ var (
 	syncNoCascadeFlag bool
 	syncDryRunFlag    bool
 	syncWorktreesFlag bool
-	syncNoDetectFlag  bool
 )
 
 func init() {
 	syncCmd.Flags().BoolVar(&syncNoCascadeFlag, "no-restack", false, "skip restacking branches")
 	syncCmd.Flags().BoolVar(&syncDryRunFlag, "dry-run", false, "show what would be done")
 	syncCmd.Flags().BoolVar(&syncWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
-	syncCmd.Flags().BoolVar(&syncNoDetectFlag, "no-detect", false, "skip auto-detection of untracked branches")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -167,13 +165,6 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 		// Return to original branch
 		_ = g.Checkout(currentBranch) //nolint:errcheck // best effort
-	}
-
-	// Auto-detect and adopt untracked branches
-	if !syncNoDetectFlag {
-		if adoptErr := autoDetectAndAdopt(cfg, g, gh, s); adoptErr != nil {
-			fmt.Printf("%s auto-detection: %v\n", s.WarningIcon(), adoptErr)
-		}
 	}
 
 	// Check for merged PRs

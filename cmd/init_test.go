@@ -23,7 +23,6 @@ func setupTestRepo(t *testing.T) string {
 	run("init")
 	run("config", "user.email", "test@test.com")
 	run("config", "user.name", "Test")
-	run("config", "commit.gpgsign", "false")
 
 	// Create main branch with initial commit
 	f := filepath.Join(dir, "README.md")
