@@ -796,7 +796,9 @@ func TestRevListCount(t *testing.T) {
 	trunk, _ := g.CurrentBranch()
 
 	// Create feature branch with 3 commits
-	g.CreateAndCheckout("feature")
+	if err := g.CreateAndCheckout("feature"); err != nil {
+		t.Fatalf("CreateAndCheckout(feature): %v", err)
+	}
 	for i := range 3 {
 		fname := filepath.Join(dir, fmt.Sprintf("file%d.txt", i))
 		if err := os.WriteFile(fname, fmt.Appendf(nil, "content%d", i), 0644); err != nil {

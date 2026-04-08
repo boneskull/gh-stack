@@ -181,12 +181,12 @@ func formatNode(sb *strings.Builder, node *Node, prefix string, isLast bool, opt
 	detectedInfo := ""
 	if node.Detected {
 		switch node.Confidence {
-		case ConfidenceMedium:
-			detectedInfo = " (detected)"
-		case ConfidenceAmbiguous:
-			detectedInfo = " (detected, ambiguous)"
 		case ConfidenceHigh:
 			detectedInfo = " (detected, via PR)"
+		case ConfidenceAmbiguous:
+			detectedInfo = " (detected, ambiguous)"
+		default:
+			detectedInfo = " (detected)"
 		}
 		if opts.Style != nil {
 			detectedInfo = opts.Style.Muted(detectedInfo)
