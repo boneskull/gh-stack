@@ -90,6 +90,12 @@ func rankCandidates(branch string, tracked []string, trunk string, g *git.Git) (
 	var candidates []candidate
 	var firstErr error
 
+	// Resolve branch tip once so we can filter out descendants.
+	branchTip, tipErr := g.GetTip(branch)
+	if tipErr != nil {
+		return nil, fmt.Errorf("resolve tip of %s: %w", branch, tipErr)
+	}
+
 	allCandidates := append([]string{trunk}, tracked...)
 	for _, name := range allCandidates {
 		if seen[name] || name == branch {
@@ -103,6 +109,17 @@ func rankCandidates(branch string, tracked []string, trunk string, g *git.Git) (
 				firstErr = fmt.Errorf("merge-base %s..%s: %w", branch, name, err)
 			}
 			continue
+		}
+
+		// If merge-base equals branch tip AND name has commits ahead,
+		// then branch is an ancestor of name — name is a descendant, not
+		// a valid parent. Skip it to avoid inverted parent relationships.
+		// (When they're at the same commit, name is still a valid parent.)
+		if mergeBase == branchTip {
+			ahead, aErr := g.RevListCount(branchTip, name)
+			if aErr == nil && ahead > 0 {
+				continue
+			}
 		}
 
 		distance, err := g.RevListCount(mergeBase, branch)
