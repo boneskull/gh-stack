@@ -21,11 +21,12 @@ func init() {
 	termState = term.FromEnv()
 }
 
-// IsInteractive returns true if stdout is connected to a terminal.
+// IsInteractive returns true if both stdin and stdout are connected to a terminal.
+// This ensures prompts that require user input (like huh) won't hang when stdin is piped.
 // Respects GH_FORCE_TTY, NO_COLOR, CLICOLOR, and CLICOLOR_FORCE environment variables
 // for consistency with the gh CLI.
 func IsInteractive() bool {
-	return termState.IsTerminalOutput()
+	return termState.IsTerminalOutput() && term.IsTerminal(os.Stdin)
 }
 
 // newPrompter creates a prompter instance for interactive input.
@@ -98,7 +99,7 @@ func Confirm(prompt string, defaultValue bool) (bool, error) {
 
 // EditInEditor opens the given text in the user's preferred editor and returns
 // the edited content. Uses $VISUAL, then $EDITOR, then falls back to "vi".
-// If stdin is not a TTY, returns the original text without editing.
+// If not in an interactive terminal, returns the original text without editing.
 func EditInEditor(text string) (string, error) {
 	if !IsInteractive() {
 		return text, nil

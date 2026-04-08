@@ -450,7 +450,8 @@ func toTitleCase(s string) string {
 }
 
 // promptForPRDetails prompts the user for PR title and body.
-// If --yes flag is set or stdin is not a TTY, returns the defaults without prompting.
+// If --yes flag is set or not in an interactive terminal (stdin/stdout not TTYs),
+// returns the defaults without prompting.
 // Returns (title, body, skipped, error) where skipped is true if user pressed ESC.
 func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style) (title, body string, skipped bool, err error) {
 	// Skip prompts if --yes flag is set
