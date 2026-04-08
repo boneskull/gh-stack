@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0](https://github.com/boneskull/gh-stack/compare/v0.5.0...v0.6.0) (2026-04-08)
+
+
+### Features
+
+* auto-detect parent branches for untracked local branches ([#53](https://github.com/boneskull/gh-stack/issues/53)) ([0f62bdf](https://github.com/boneskull/gh-stack/commit/0f62bdf8b9d2941dca38c0bc0d103b91a6cc598c))
+* **cmd:** add unambiguous prefix shortcut expansion for subcommands ([#56](https://github.com/boneskull/gh-stack/issues/56)) ([6e7329f](https://github.com/boneskull/gh-stack/commit/6e7329f7332ecaf39785a082fa68507bfe8afe79))
+* **submit:** allow ESC to skip PR creation for individual branches ([#60](https://github.com/boneskull/gh-stack/issues/60)) ([94dd6d7](https://github.com/boneskull/gh-stack/commit/94dd6d7b2afc7b2bb47e8bcd42ca225f58709314))
+
+
+### Bug Fixes
+
+* **ci:** address review comments on Claude workflows ([bccc2d2](https://github.com/boneskull/gh-stack/commit/bccc2d20a37783edea3836e47ec1076cd35f0104))
+* **git:** flip `first` flag immediately in `ListWorktrees` ([1d1cd6a](https://github.com/boneskull/gh-stack/commit/1d1cd6a114f81c67a5f7123733de7e9e3b8ab5ae))
+* **submit:** check for existing PR before prompting for details ([#52](https://github.com/boneskull/gh-stack/issues/52)) ([9d01b0c](https://github.com/boneskull/gh-stack/commit/9d01b0c3b99d9be1ede392fea6824149b39a2b1e))
+* **sync:** return to original branch after sync completes ([#61](https://github.com/boneskull/gh-stack/issues/61)) ([e9a3f7a](https://github.com/boneskull/gh-stack/commit/e9a3f7aacd12fd1da27153d27b4613bd727768ae))
+
 ## [0.5.0](https://github.com/boneskull/gh-stack/compare/v0.4.1...v0.5.0) (2026-02-14)
 
 
