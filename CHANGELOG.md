@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.2](https://github.com/boneskull/gh-stack/compare/v0.6.1...v0.6.2) (2026-04-08)
+
+
+### Bug Fixes
+
+* **git:** auto-accept commit message when continuing rebase ([#71](https://github.com/boneskull/gh-stack/issues/71)) ([4e4fbb8](https://github.com/boneskull/gh-stack/commit/4e4fbb8ac7ab3b9bcf48991125101ce24e7fbb3b)), closes [#49](https://github.com/boneskull/gh-stack/issues/49)
+* revert "feat: auto-detect parent branches for untracked local branches ([#53](https://github.com/boneskull/gh-stack/issues/53))" ([f436da4](https://github.com/boneskull/gh-stack/commit/f436da47c82af2129e02d36db5f2877d454bf8fa))
+
 ## [0.6.1](https://github.com/boneskull/gh-stack/compare/v0.6.0...v0.6.1) (2026-04-08)
 
 
