@@ -114,7 +114,11 @@ func runSync(cmd *cobra.Command, args []string) error {
 	}
 
 	// Capture the starting branch to return to after sync completes
+	// Note: CurrentBranch() returns "HEAD" when in detached HEAD state
 	startingBranch, _ := g.CurrentBranch() //nolint:errcheck // empty string is fine
+	if startingBranch == "HEAD" {
+		startingBranch = "" // Treat detached HEAD as "no starting branch"
+	}
 
 	// Save undo snapshot of all tracked branches (unless dry-run)
 	// This captures state before any modifications (fetch, delete, rebase)
@@ -395,7 +399,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 					fmt.Printf("%s could not return to starting branch %s: %v\n", s.WarningIcon(), s.Branch(startingBranch), checkoutErr)
 				}
 			} else {
-				fmt.Printf("%s starting branch %s no longer exists, staying on %s\n", s.WarningIcon(), s.Branch(startingBranch), s.Branch(currentBranch))
+				fmt.Printf("%s starting ref %s is not a local branch or no longer exists, staying on %s\n", s.WarningIcon(), s.Branch(startingBranch), s.Branch(currentBranch))
 			}
 		}
 	}
