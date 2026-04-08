@@ -287,7 +287,7 @@ func (g *Git) RebaseOnto(newBase, oldBase, branch string) error {
 
 // RebaseContinue continues an in-progress rebase.
 func (g *Git) RebaseContinue() error {
-	return g.runInteractive("rebase", "--continue")
+	return g.runInteractive("-c", "core.editor=true", "rebase", "--continue")
 }
 
 // RebaseAbort aborts an in-progress rebase.
