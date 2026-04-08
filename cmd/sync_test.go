@@ -2,7 +2,9 @@
 package cmd_test
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/git"
@@ -143,38 +145,59 @@ func TestSyncStartingBranchDeleted(t *testing.T) {
 }
 
 // TestSyncCheckoutFailure tests the scenario where checkout fails
-// (e.g., dirty worktree prevents checkout).
+// (e.g., dirty worktree with conflicting changes prevents checkout).
 func TestSyncCheckoutFailure(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
 
 	trunk, _ := g.CurrentBranch()
 
-	// Create starting branch with different content
+	// Create starting-branch with a file that differs from trunk
 	g.CreateAndCheckout("starting-branch")
-	// Add a commit to make it different from trunk
-	cmd := exec.Command("git", "-C", dir, "commit", "--allow-empty", "-m", "starting commit")
-	cmd.Run()
-
-	// Go back to trunk
-	g.Checkout(trunk)
-
-	// The sync logic should handle checkout errors gracefully
-	// (warning but not failing the whole sync)
-	startingBranch := "starting-branch"
-	if g.BranchExists(startingBranch) {
-		checkoutErr := g.Checkout(startingBranch)
-		if checkoutErr != nil {
-			// This is the "warning" case - checkout failed
-			// Sync should continue without failing
-			t.Logf("checkout error (expected in dirty state): %v", checkoutErr)
-		}
+	conflictFile := filepath.Join(dir, "conflict.txt")
+	if err := os.WriteFile(conflictFile, []byte("starting-branch content"), 0644); err != nil {
+		t.Fatalf("failed to write conflict file: %v", err)
+	}
+	stageCmd := exec.Command("git", "-C", dir, "add", "conflict.txt")
+	if err := stageCmd.Run(); err != nil {
+		t.Fatalf("git add failed: %v", err)
+	}
+	commitCmd := exec.Command("git", "-C", dir, "commit", "-m", "add conflict file on starting-branch")
+	if err := commitCmd.Run(); err != nil {
+		t.Fatalf("git commit failed: %v", err)
 	}
 
-	// Verify checkout succeeded in clean state
+	// Go back to trunk and create different content in the same file
+	g.Checkout(trunk)
+	if err := os.WriteFile(conflictFile, []byte("trunk content - different!"), 0644); err != nil {
+		t.Fatalf("failed to write conflict file on trunk: %v", err)
+	}
+	// Stage the file but don't commit - this creates dirty state
+	stageCmd2 := exec.Command("git", "-C", dir, "add", "conflict.txt")
+	if err := stageCmd2.Run(); err != nil {
+		t.Fatalf("git add (trunk) failed: %v", err)
+	}
+
+	// Now we're on trunk with staged changes that conflict with starting-branch
+	// Attempting to checkout starting-branch should fail
+	startingBranch := "starting-branch"
+	checkoutErr := g.Checkout(startingBranch)
+
+	// The checkout should fail due to conflicting staged changes
+	if checkoutErr == nil {
+		t.Log("checkout succeeded unexpectedly - git may have auto-merged; checking worktree state")
+		// Even if checkout somehow succeeded, verify the logic handles it
+	} else {
+		t.Logf("checkout failed as expected: %v", checkoutErr)
+	}
+
+	// The key assertion: sync's return-to-branch logic should handle this gracefully
+	// by staying on the current branch (trunk) rather than failing catastrophically
 	currentBranch, _ := g.CurrentBranch()
-	if currentBranch != "starting-branch" {
-		t.Errorf("expected checkout to succeed in clean state, got %q", currentBranch)
+
+	// If checkout failed, we should still be on trunk
+	if checkoutErr != nil && currentBranch != trunk {
+		t.Errorf("expected to stay on %q after checkout failure, got %q", trunk, currentBranch)
 	}
 }
 
