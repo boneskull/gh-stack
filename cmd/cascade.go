@@ -8,6 +8,7 @@ import (
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
+	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/state"
 	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
@@ -30,12 +31,14 @@ var (
 	cascadeOnlyFlag      bool
 	cascadeDryRunFlag    bool
 	cascadeWorktreesFlag bool
+	cascadeNoDetectFlag  bool
 )
 
 func init() {
 	cascadeCmd.Flags().BoolVar(&cascadeOnlyFlag, "only", false, "only restack current branch, not descendants")
 	cascadeCmd.Flags().BoolVar(&cascadeDryRunFlag, "dry-run", false, "show what would be done")
 	cascadeCmd.Flags().BoolVar(&cascadeWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
+	cascadeCmd.Flags().BoolVar(&cascadeNoDetectFlag, "no-detect", false, "skip auto-detection of untracked branches")
 	rootCmd.AddCommand(cascadeCmd)
 }
 
@@ -62,6 +65,14 @@ func runCascade(cmd *cobra.Command, args []string) error {
 	currentBranch, err := g.CurrentBranch()
 	if err != nil {
 		return err
+	}
+
+	// Auto-detect and adopt untracked branches
+	if !cascadeNoDetectFlag {
+		gh, _ := github.NewClient() //nolint:errcheck // nil is fine, skip PR detection
+		if adoptErr := autoDetectAndAdopt(cfg, g, gh, s); adoptErr != nil {
+			fmt.Printf("%s auto-detection: %v\n", s.WarningIcon(), adoptErr)
+		}
 	}
 
 	// Build tree

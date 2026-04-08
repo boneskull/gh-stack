@@ -2,6 +2,7 @@
 package git_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -709,6 +710,45 @@ func TestIsRebaseInProgressWorktree(t *testing.T) {
 	}
 }
 
+func TestListLocalBranches(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create some branches
+	if err := g.CreateBranch("feature-a"); err != nil {
+		t.Fatalf("CreateBranch(feature-a): %v", err)
+	}
+	if err := g.CreateBranch("feature-b"); err != nil {
+		t.Fatalf("CreateBranch(feature-b): %v", err)
+	}
+	if err := g.CreateBranch("feature-c"); err != nil {
+		t.Fatalf("CreateBranch(feature-c): %v", err)
+	}
+
+	branches, err := g.ListLocalBranches()
+	if err != nil {
+		t.Fatalf("ListLocalBranches failed: %v", err)
+	}
+
+	// Should contain trunk + 3 feature branches
+	if len(branches) != 4 {
+		t.Errorf("expected 4 branches, got %d: %v", len(branches), branches)
+	}
+
+	// Check all expected branches are present
+	branchSet := make(map[string]bool)
+	for _, b := range branches {
+		branchSet[b] = true
+	}
+	for _, expected := range []string{trunk, "feature-a", "feature-b", "feature-c"} {
+		if !branchSet[expected] {
+			t.Errorf("expected branch %q in list, got %v", expected, branches)
+		}
+	}
+}
+
 func TestRemoteBranchExists(t *testing.T) {
 	// Create main repo
 	dir := setupTestRepo(t)
@@ -746,5 +786,56 @@ func TestRemoteBranchExists(t *testing.T) {
 	// Non-existent branch should return false
 	if g.RemoteBranchExists("nonexistent-branch-xyz") {
 		t.Error("RemoteBranchExists(nonexistent) = true, want false")
+	}
+}
+
+func TestRevListCount(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+
+	// Create feature branch with 3 commits
+	if err := g.CreateAndCheckout("feature"); err != nil {
+		t.Fatalf("CreateAndCheckout(feature): %v", err)
+	}
+	for i := range 3 {
+		fname := filepath.Join(dir, fmt.Sprintf("file%d.txt", i))
+		if err := os.WriteFile(fname, fmt.Appendf(nil, "content%d", i), 0644); err != nil {
+			t.Fatalf("WriteFile file%d.txt: %v", i, err)
+		}
+		if err := exec.Command("git", "-C", dir, "add", ".").Run(); err != nil {
+			t.Fatalf("git add (commit %d): %v", i, err)
+		}
+		if err := exec.Command("git", "-C", dir, "commit", "-m", fmt.Sprintf("commit %d", i)).Run(); err != nil {
+			t.Fatalf("git commit %d: %v", i, err)
+		}
+	}
+
+	// Count commits from trunk to feature (should be 3)
+	count, err := g.RevListCount(trunk, "feature")
+	if err != nil {
+		t.Fatalf("RevListCount failed: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("expected 3 commits, got %d", count)
+	}
+
+	// Count from feature to trunk (should be 0 since trunk is behind)
+	count, err = g.RevListCount("feature", trunk)
+	if err != nil {
+		t.Fatalf("RevListCount failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 commits, got %d", count)
+	}
+
+	// Count from same ref (should be 0)
+	count, err = g.RevListCount(trunk, trunk)
+	if err != nil {
+		t.Fatalf("RevListCount failed: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("expected 0 commits, got %d", count)
 	}
 }
