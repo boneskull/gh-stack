@@ -32,6 +32,10 @@ jobs:
         # Pinned to v1 for supply-chain safety
         uses: anthropics/claude-code-action@f2accb9a171bd71f4b5c93bcea23876aa5244edb
         with:
+          allowed_bots: 'renovate[bot]'
+          claude_args: |
+            --max-turns 10
+          track_progress: true
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
           plugins: 'code-review@claude-code-plugins'

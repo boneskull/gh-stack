@@ -30,12 +30,17 @@ jobs:
       cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
-      id-token: write
+      contents: read # TODO unclear if needed
+      pull-requests: write # for progress tracking
+      issues: write # for progress tracking
+      id-token: write # needed for OAUTH token
       actions: read # Required for Claude to read CI results on PRs
     steps:
+      - name: Harden-Runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -46,8 +51,12 @@ jobs:
         # Pinned to v1 for supply-chain safety
         uses: anthropics/claude-code-action@f2accb9a171bd71f4b5c93bcea23876aa5244edb
         with:
+          claude_args: |
+            --max-turns 10
+            --allowed-tools 'Bash(gh pr:*),Bash(make:*),Bash(go test:*),Bash(gh stack:*)'
+          track_progress: true
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
+          allowed_bots: 'renovate[bot]'
           # This is an optional setting that allows Claude to read CI results on PRs
           additional_permissions: |
             actions: read
@@ -59,4 +68,3 @@ jobs:
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://code.claude.com/docs/en/cli-reference for available options
           # claude_args: '--allowed-tools Bash(gh pr:*)'
-
