@@ -68,6 +68,16 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Update fork point for the branch that just finished rebasing.
+	// The cascade loop's fork point update only fires after a non-conflicting
+	// rebase, so branches that hit a conflict never get their fork point
+	// refreshed -- leaving it stale for future operations.
+	if parent, parentErr := cfg.GetParent(st.Current); parentErr == nil {
+		if parentTip, tipErr := g.GetTip(parent); tipErr == nil {
+			_ = cfg.SetForkPoint(st.Current, parentTip) //nolint:errcheck // best effort
+		}
+	}
+
 	// Build tree to get node objects
 	root, err := tree.Build(cfg)
 	if err != nil {

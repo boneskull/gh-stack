@@ -145,6 +145,17 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 
 		if !needsRebase {
 			fmt.Printf("Restacking %s... %s\n", s.Branch(b.Name), s.Muted("already up to date"))
+
+			// Refresh fork point even when no rebase is needed. If the branch
+			// was rebased outside gh-stack the stored fork point would be stale;
+			// keeping it current prevents a future --onto rebase from replaying
+			// too many commits.
+			if !dryRun {
+				parentTip, tipErr := g.GetTip(parent)
+				if tipErr == nil {
+					_ = cfg.SetForkPoint(b.Name, parentTip) //nolint:errcheck // best effort
+				}
+			}
 			continue
 		}
 
@@ -159,11 +170,25 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 		useOnto := false
 
 		if fpErr == nil && g.CommitExists(storedForkPoint) {
-			// We have a valid stored fork point
-			// Use --onto if the stored fork point differs from merge-base
 			currentMergeBase, mbErr := g.GetMergeBase(b.Name, parent)
 			if mbErr == nil && currentMergeBase != storedForkPoint {
-				useOnto = true
+				// Fork point differs from merge-base. Determine why:
+				//
+				// If the stored fork point is an ancestor of the merge-base,
+				// it's just stale (e.g. branch was rebased outside gh-stack,
+				// or fork point wasn't updated after a conflict resolution).
+				// A simple rebase using the merge-base is correct; refresh the
+				// fork point so it stays current.
+				//
+				// If the stored fork point is NOT an ancestor of the merge-base,
+				// the parent's history was rewritten (squash merge, force push).
+				// We need --onto with the stored fork point to identify the
+				// correct commit range.
+				if g.IsAncestor(storedForkPoint, currentMergeBase) {
+					_ = cfg.SetForkPoint(b.Name, currentMergeBase) //nolint:errcheck // best effort
+				} else {
+					useOnto = true
+				}
 			}
 		}
 

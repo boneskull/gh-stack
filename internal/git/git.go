@@ -178,6 +178,13 @@ func (g *Git) CommitExists(sha string) bool {
 	return err == nil
 }
 
+// IsAncestor returns true if ancestor is a git ancestor of descendant.
+// Uses `git merge-base --is-ancestor` which returns exit code 0 when true.
+func (g *Git) IsAncestor(ancestor, descendant string) bool {
+	err := g.runSilent("merge-base", "--is-ancestor", ancestor, descendant)
+	return err == nil
+}
+
 // HasUnmergedCommits returns true if the branch has commits not yet in upstream.
 // Uses git cherry to detect by diff content, which works for cherry-picks
 // where the commit SHAs differ but the content is the same.

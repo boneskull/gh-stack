@@ -140,3 +140,153 @@ func TestCascadeReturnsToOriginalBranch(t *testing.T) {
 	env.AssertAncestor("feature-a", "feature-b")
 	env.AssertAncestor("feature-b", "feature-c")
 }
+
+func TestCascadeStaleForkPointFromManualRebase(t *testing.T) {
+	// Reproduces the bug where a manual rebase outside gh-stack leaves the
+	// fork point stale. On the next restack after main advances, the stale
+	// fork point would trigger an --onto rebase that replays too many commits.
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("feature a work")
+
+	// Advance main
+	env.Git("checkout", "main")
+	env.CreateCommit("main update 1")
+
+	// Manually rebase (outside gh-stack) -- fork point stays stale
+	env.Git("checkout", "feature-a")
+	env.Git("rebase", "main")
+
+	// Run restack while already up-to-date so fork point gets refreshed
+	env.MustRun("restack")
+
+	// Advance main again
+	env.Git("checkout", "main")
+	env.CreateCommit("main update 2")
+
+	// This restack should use a simple rebase (not --onto with stale fork point)
+	env.Git("checkout", "feature-a")
+	result := env.MustRun("restack")
+
+	// Should NOT say "using fork point" -- that would mean the stale fork
+	// point incorrectly triggered the --onto path
+	if result.ContainsStdout("using fork point") {
+		t.Error("restack should use simple rebase, not --onto with stale fork point")
+	}
+
+	env.AssertAncestor("main", "feature-a")
+	env.AssertNoRebaseInProgress()
+}
+
+func TestCascadeStaleForkPointDetectedDuringRebase(t *testing.T) {
+	// Even if the "already up to date" refresh was missed, the ancestor check
+	// in the useOnto logic should prevent --onto with a stale fork point.
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("feature a work")
+
+	// Record fork point before any manipulation
+	originalFP := env.GetStackConfig("branch.feature-a.stackforkpoint")
+	if originalFP == "" {
+		t.Fatal("expected fork point to be set after create")
+	}
+
+	// Advance main
+	env.Git("checkout", "main")
+	env.CreateCommit("main advance 1")
+	env.CreateCommit("main advance 2")
+
+	// Manually rebase feature-a onto current main
+	env.Git("checkout", "feature-a")
+	env.Git("rebase", "main")
+
+	// Fork point is still the old value (stale)
+	fpAfterManual := env.GetStackConfig("branch.feature-a.stackforkpoint")
+	if fpAfterManual != originalFP {
+		t.Fatal("expected fork point to still be the original (stale) value")
+	}
+
+	// Advance main further
+	env.Git("checkout", "main")
+	env.CreateCommit("main advance 3")
+
+	// Restack from feature-a -- this triggers NeedsRebase=true with a stale
+	// fork point that differs from merge-base. The fix should detect the stale
+	// fork point is an ancestor of the merge-base and use a simple rebase.
+	env.Git("checkout", "feature-a")
+	result := env.MustRun("restack")
+
+	if result.ContainsStdout("using fork point") {
+		t.Error("restack should NOT use --onto with a stale fork point that is an ancestor of merge-base")
+	}
+
+	env.AssertAncestor("main", "feature-a")
+	env.AssertNoRebaseInProgress()
+}
+
+func TestCascadeForkPointUpdatedAfterContinue(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	// Create a stack that will conflict
+	conflictFile := env.CreateStackWithConflict()
+
+	// Cascade will hit a conflict on feature-b
+	result := env.Run("cascade")
+	if result.Success() {
+		t.Fatal("expected conflict")
+	}
+
+	// Resolve and continue
+	env.ResolveConflict(conflictFile)
+	env.MustRun("continue")
+
+	// After continue, fork point for feature-a should be updated to main's tip.
+	// (feature-a was the one that got rebased before the conflict on feature-b.)
+	mainTip := env.BranchTip("main")
+	featureAFP := env.GetStackConfig("branch.feature-a.stackforkpoint")
+	if featureAFP != mainTip {
+		t.Errorf("feature-a fork point after continue = %s, want main tip %s", featureAFP[:7], mainTip[:7])
+	}
+
+	// feature-b should also have its fork point updated (to feature-a's tip)
+	featureATip := env.BranchTip("feature-a")
+	featureBFP := env.GetStackConfig("branch.feature-b.stackforkpoint")
+	if featureBFP != featureATip {
+		t.Errorf("feature-b fork point after continue = %s, want feature-a tip %s", featureBFP[:7], featureATip[:7])
+	}
+}
+
+func TestCascadeOntoUsedForRewrittenParent(t *testing.T) {
+	// Verify that --onto IS used when the parent's history was actually
+	// rewritten (not just a stale fork point).
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("feature a work")
+
+	env.MustRun("create", "feature-b")
+	env.CreateCommit("feature b work")
+
+	// Amend feature-a's commit (rewrites its history)
+	env.Git("checkout", "feature-a")
+	env.WriteFile("feature-a-amended.txt", "amended content")
+	env.Git("add", ".")
+	env.Git("commit", "--amend", "--no-edit")
+
+	// Restack from feature-a. feature-b's fork point (old feature-a tip)
+	// is now on a different history line → --onto should be used.
+	result := env.MustRun("restack")
+
+	if !result.ContainsStdout("using fork point") {
+		t.Error("restack should use --onto when parent history was rewritten")
+	}
+
+	env.AssertAncestor("feature-a", "feature-b")
+	env.AssertNoRebaseInProgress()
+}
