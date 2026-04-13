@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/boneskull/gh-stack/internal/tree"
 )
 
 func TestUnwrapParagraphs(t *testing.T) {
@@ -314,4 +316,32 @@ func TestIsBaseBranchInvalidError(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApplyMustPushForSkippedAncestors(t *testing.T) {
+	main := &tree.Node{Name: "main"}
+	featA := &tree.Node{Name: "feat-a", Parent: main}
+	featB := &tree.Node{Name: "feat-b", Parent: featA}
+
+	t.Run("skipped_parent_pushed_when_child_gets_PR", func(t *testing.T) {
+		decisions := []*prDecision{
+			{node: featA, action: prActionSkip, skipReason: "user"},
+			{node: featB, action: prActionCreate, title: "t", body: "b", draft: false},
+		}
+		applyMustPushForSkippedAncestors(decisions)
+		if !decisions[0].pushAnyway {
+			t.Error("feat-a should be marked pushAnyway when feat-b gets a PR")
+		}
+	})
+
+	t.Run("skipped_branch_not_marked_when_no_descendant_PR", func(t *testing.T) {
+		decisions := []*prDecision{
+			{node: featA, action: prActionSkip, skipReason: "user"},
+			{node: featB, action: prActionSkip, skipReason: "user"},
+		}
+		applyMustPushForSkippedAncestors(decisions)
+		if decisions[0].pushAnyway || decisions[1].pushAnyway {
+			t.Error("no pushAnyway when entire subtree is skipped")
+		}
+	})
 }
