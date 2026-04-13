@@ -9,5 +9,5 @@ jobs:
     # only run when PR is from this repository (fork PRs don't receive secrets)
     if: github.event.pull_request.head.repo.full_name == github.repository
     # Job body always comes from main so edits to these workflows on a PR cannot break the check.
-    uses: boneskull/gh-stack/.github/workflows/claude-code-review-reusable.yml@1aa24a5ca8eaddc47822b2d799e772255dcf2c6b # main
+    uses: boneskull/gh-stack/.github/workflows/claude-code-review-reusable.yml@e6c362dba3fd07f95b67943fdb414bf42e8507bf # main
     secrets: inherit
