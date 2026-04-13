@@ -34,9 +34,9 @@ gh-install: build
 
 # Install development tools
 tools:
-	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	go install github.com/evilmartians/lefthook/v2@latest
 
 # Install git hooks via lefthook
 hooks:
-	lefthook install
+	lefthook install --force
