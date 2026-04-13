@@ -103,7 +103,12 @@ func runCascade(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	err = doCascadeWithState(g, cfg, branches, cascadeDryRunFlag, state.OperationCascade, false, false, false, nil, stashRef, worktrees, s)
+	err = doCascadeWithState(g, cfg, branches, CascadeOptions{
+		DryRun:    cascadeDryRunFlag,
+		Operation: state.OperationCascade,
+		StashRef:  stashRef,
+		Worktrees: worktrees,
+	}, s)
 
 	// Restore auto-stashed changes after operation (unless conflict, which saves stash in state)
 	if stashRef != "" && !errors.Is(err, ErrConflict) {
@@ -116,12 +121,39 @@ func runCascade(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+// CascadeOptions configures the behaviour of doCascadeWithState.
+//
+// The submit-specific fields (UpdateOnly, OpenWeb, PushOnly, Branches) are
+// only meaningful when Operation is state.OperationSubmit; they are persisted
+// to cascade state so that the push/PR phases can be resumed after a conflict.
+type CascadeOptions struct {
+	// DryRun prints what would be done without actually rebasing.
+	DryRun bool
+	// Operation is the type of operation being performed (state.OperationCascade
+	// or state.OperationSubmit).
+	Operation string
+	// UpdateOnly skips creating new PRs; only existing PRs are updated.
+	// Submit-only.
+	UpdateOnly bool
+	// OpenWeb opens PRs in the browser after creation/update. Submit-only.
+	OpenWeb bool
+	// PushOnly skips the PR creation/update phase entirely. Submit-only.
+	PushOnly bool
+	// Branches is the complete list of branch names being submitted, used
+	// to rebuild the full set for push/PR phases after cascade completes.
+	// Submit-only. Mirrors state.CascadeState.Branches.
+	Branches []string
+	// StashRef is the commit hash of auto-stashed changes (if any), persisted
+	// to state so they can be restored when the operation completes or is aborted.
+	StashRef string
+	// Worktrees maps branch names to linked worktree paths. When non-nil, branches
+	// present in the map are rebased directly in their worktree directory instead
+	// of being checked out in the main working tree.
+	Worktrees map[string]string
+}
+
 // doCascadeWithState performs cascade and saves state with the given operation type.
-// allBranches is the complete list of branches for submit operations (used for push/PR after continue).
-// stashRef is the commit hash of auto-stashed changes (if any), persisted to state on conflict.
-// worktrees maps branch names to linked worktree paths. When non-nil, branches in
-// the map are rebased directly in their worktree directory instead of being checked out.
-func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, dryRun bool, operation string, updateOnly, web, pushOnly bool, allBranches []string, stashRef string, worktrees map[string]string, s *style.Style) error {
+func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, opts CascadeOptions, s *style.Style) error {
 	originalBranch, err := g.CurrentBranch()
 	if err != nil {
 		return err
@@ -150,7 +182,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 			// was rebased outside gh-stack the stored fork point would be stale;
 			// keeping it current prevents a future --onto rebase from replaying
 			// too many commits.
-			if !dryRun {
+			if !opts.DryRun {
 				parentTip, tipErr := g.GetTip(parent)
 				if tipErr == nil {
 					_ = cfg.SetForkPoint(b.Name, parentTip) //nolint:errcheck // best effort
@@ -159,7 +191,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 			continue
 		}
 
-		if dryRun {
+		if opts.DryRun {
 			fmt.Printf("%s Would rebase %s onto %s\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(parent))
 			continue
 		}
@@ -210,8 +242,8 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 
 		// Determine if this branch lives in a linked worktree
 		wtPath := ""
-		if worktrees != nil {
-			wtPath = worktrees[b.Name]
+		if opts.Worktrees != nil {
+			wtPath = opts.Worktrees[b.Name]
 		}
 
 		if useOnto {
@@ -259,13 +291,13 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 				Current:      b.Name,
 				Pending:      remaining,
 				OriginalHead: originalHead,
-				Operation:    operation,
-				UpdateOnly:   updateOnly,
-				Web:          web,
-				PushOnly:     pushOnly,
-				Branches:     allBranches,
-				StashRef:     stashRef,
-				Worktrees:    worktrees,
+				Operation:    opts.Operation,
+				UpdateOnly:   opts.UpdateOnly,
+				Web:          opts.OpenWeb,
+				PushOnly:     opts.PushOnly,
+				Branches:     opts.Branches,
+				StashRef:     opts.StashRef,
+				Worktrees:    opts.Worktrees,
 			}
 			_ = state.Save(g.GetGitDir(), st) //nolint:errcheck // best effort - user can recover manually
 
@@ -274,7 +306,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 				fmt.Printf("Resolve conflicts in worktree: %s\n", wtPath)
 			}
 			fmt.Printf("Remaining branches: %v\n", remaining)
-			if stashRef != "" {
+			if opts.StashRef != "" {
 				fmt.Println(s.Muted("Note: Your uncommitted changes are stashed and will be restored when you continue or abort."))
 			}
 			return ErrConflict
@@ -290,7 +322,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, d
 	}
 
 	// Return to original branch
-	if !dryRun {
+	if !opts.DryRun {
 		_ = g.Checkout(originalBranch) //nolint:errcheck // best effort - cascade succeeded
 	}
 
