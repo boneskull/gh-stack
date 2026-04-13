@@ -303,7 +303,7 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 				prNum, adopted, err := createPRForBranch(g, ghClient, cfg, root, b.Name, parent, trunk, remoteBranches, s)
 				switch {
 				case errors.Is(err, ErrPRSkipped):
-					fmt.Printf("Skipped PR for %s %s\n", s.Branch(b.Name), s.Muted("(user pressed ESC)"))
+					fmt.Printf("Skipped PR for %s %s\n", s.Branch(b.Name), s.Muted("(skipped)"))
 				case err != nil:
 					fmt.Printf("%s failed to create PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), err)
 				case adopted:

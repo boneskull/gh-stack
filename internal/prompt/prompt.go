@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/huh"
 	"github.com/cli/go-gh/v2/pkg/prompter"
 	"github.com/cli/go-gh/v2/pkg/term"
@@ -51,11 +52,9 @@ func Input(prompt, defaultValue string) (string, error) {
 }
 
 // InputWithSkip prompts the user for a single line of input with a default value,
-// allowing the user to skip by pressing ESC. Returns (value, skipped, error).
+// allowing the user to skip by pressing ESC or Ctrl+C. Returns (value, skipped, error).
 //
-// When the user presses ESC (or otherwise aborts via huh.ErrUserAborted),
-// skipped is true and err is nil. Ctrl+C will typically terminate the process
-// via SIGINT rather than returning here.
+// When the user presses ESC or Ctrl+C, skipped is true and err is nil.
 //
 // If not in an interactive terminal, the default is returned without prompting.
 func InputWithSkip(title, description, defaultValue string) (string, bool, error) {
@@ -65,14 +64,26 @@ func InputWithSkip(title, description, defaultValue string) (string, bool, error
 
 	value := defaultValue
 
-	err := huh.NewInput().
+	// Build a keymap that treats both ctrl+c and esc as "quit/skip".
+	// huh's default keymap only binds ctrl+c to Quit, leaving esc unhandled
+	// at the form level, so ESC would otherwise do nothing.
+	km := huh.NewDefaultKeyMap()
+	km.Quit = key.NewBinding(
+		key.WithKeys("ctrl+c", "esc"),
+		key.WithHelp("esc/ctrl+c", "skip"),
+	)
+
+	input := huh.NewInput().
 		Title(title).
 		Description(description).
-		Value(&value).
+		Value(&value)
+
+	err := huh.NewForm(huh.NewGroup(input)).
+		WithShowHelp(false).
+		WithKeyMap(km).
 		Run()
 
 	if errors.Is(err, huh.ErrUserAborted) {
-		// User pressed ESC to skip
 		return "", true, nil
 	}
 	if err != nil {
