@@ -1,0 +1,39 @@
+name: Claude Code Review
+description: Runs Claude AI code review on a pull request
+
+inputs:
+  claude_code_oauth_token:
+    description: OAuth token for Claude Code
+    required: true
+  repository:
+    description: Repository in owner/repo format
+    required: true
+  pr_number:
+    description: Pull request number
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Harden-Runner
+      uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+      with:
+        egress-policy: audit
+
+    - name: Checkout repository
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        fetch-depth: 1
+
+    - name: Run Claude Code Review
+      id: claude-review
+      # Pinned to v1 for supply-chain safety
+      uses: anthropics/claude-code-action@b2fdd80112e5f140e097b11d7a3d9edf0b226fd0
+      with:
+        allowed_bots: 'renovate[bot]'
+        claude_args: |
+          --max-turns 10
+        track_progress: true
+        claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
+        # Uses vendored code-review skill from .claude/commands/code-review.md
+        prompt: '/project:code-review --comment ${{ inputs.repository }}/pull/${{ inputs.pr_number }}'

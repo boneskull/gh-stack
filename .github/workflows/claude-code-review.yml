@@ -8,6 +8,22 @@ jobs:
   claude-review:
     # only run when PR is from this repository (fork PRs don't receive secrets)
     if: github.event.pull_request.head.repo.full_name == github.repository
-    # Job body always comes from main so edits to these workflows on a PR cannot break the check.
-    uses: boneskull/gh-stack/.github/workflows/claude-code-review-reusable.yml@1aa24a5ca8eaddc47822b2d799e772255dcf2c6b # main
-    secrets: inherit
+    concurrency:
+      group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      # Action definition is always fetched from main, so PRs that edit it
+      # don't affect the running version until merged.
+      - name: Run Claude Code Review
+        uses: boneskull/gh-stack/.github/actions/claude-code-review@main
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          repository: ${{ github.repository }}
+          pr_number: ${{ github.event.pull_request.number }}
