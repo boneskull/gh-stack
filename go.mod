@@ -3,7 +3,7 @@ module github.com/boneskull/gh-stack
 go 1.25.0
 
 require (
-	github.com/charmbracelet/bubbles v0.21.1
+	github.com/charmbracelet/bubbles/v2 v2.1.0
 	github.com/charmbracelet/huh v1.0.0
 	github.com/cli/go-gh/v2 v2.13.0
 	github.com/cli/safeexec v1.0.1
