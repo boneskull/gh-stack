@@ -378,6 +378,49 @@ func TestCommitExists(t *testing.T) {
 	}
 }
 
+func TestIsAncestor(t *testing.T) {
+	dir := setupTestRepo(t)
+	g := git.New(dir)
+
+	trunk, _ := g.CurrentBranch()
+	initialTip, _ := g.GetTip(trunk)
+
+	// Add a commit to move trunk forward
+	os.WriteFile(filepath.Join(dir, "new.txt"), []byte("new"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "second commit").Run()
+	secondTip, _ := g.GetTip(trunk)
+
+	// initial is ancestor of second
+	if !g.IsAncestor(initialTip, secondTip) {
+		t.Errorf("expected %s to be ancestor of %s", initialTip[:7], secondTip[:7])
+	}
+
+	// second is NOT ancestor of initial
+	if g.IsAncestor(secondTip, initialTip) {
+		t.Errorf("expected %s to NOT be ancestor of %s", secondTip[:7], initialTip[:7])
+	}
+
+	// commit is its own ancestor
+	if !g.IsAncestor(initialTip, initialTip) {
+		t.Errorf("expected commit to be its own ancestor")
+	}
+
+	// divergent branches are not ancestors of each other
+	exec.Command("git", "-C", dir, "checkout", "-b", "diverge", initialTip).Run()
+	os.WriteFile(filepath.Join(dir, "diverge.txt"), []byte("diverge"), 0644)
+	exec.Command("git", "-C", dir, "add", ".").Run()
+	exec.Command("git", "-C", dir, "commit", "-m", "diverge commit").Run()
+	divergeTip, _ := g.GetTip("diverge")
+
+	if g.IsAncestor(divergeTip, secondTip) {
+		t.Error("divergent branch tip should not be ancestor of trunk tip")
+	}
+	if g.IsAncestor(secondTip, divergeTip) {
+		t.Error("trunk tip should not be ancestor of divergent branch tip")
+	}
+}
+
 func TestRebaseOnto(t *testing.T) {
 	dir := setupTestRepo(t)
 	g := git.New(dir)
