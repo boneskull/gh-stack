@@ -51,8 +51,8 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 
 	// Add warning if not targeting trunk
 	if effectiveParent != nil && effectiveParent.Name != trunk {
-		sb.WriteString("> [!WARNING]\n")
-		sb.WriteString(fmt.Sprintf("> This PR is part of a stack and targets branch `%s`, not `%s`.\n", effectiveParent.Name, trunk))
+		fmt.Fprintf(&sb, "> [!WARNING]\n")
+		fmt.Fprintf(&sb, "> This PR is part of a stack and targets branch `%s`, not `%s`.\n", effectiveParent.Name, trunk)
 
 		// Build parent PR reference if available
 		parentPR := effectiveParent.PR
@@ -62,20 +62,20 @@ func GenerateStackComment(root *tree.Node, currentBranch, trunk, repoURL string,
 			if info, ok := prInfo[parentPR]; ok && info.Title != "" {
 				linkText = fmt.Sprintf("%s #%d", info.Title, parentPR)
 			}
-			sb.WriteString(fmt.Sprintf("> **DO NOT MERGE** until [%s](%s) is merged into `%s`.\n\n", linkText, parentURL, trunk))
+			fmt.Fprintf(&sb, "> **DO NOT MERGE** until [%s](%s) is merged into `%s`.\n\n", linkText, parentURL, trunk)
 		} else {
-			sb.WriteString(fmt.Sprintf("> **DO NOT MERGE** until the parent branch is merged into `%s`.\n\n", trunk))
+			fmt.Fprintf(&sb, "> **DO NOT MERGE** until the parent branch is merged into `%s`.\n\n", trunk)
 		}
 	}
 
 	// Stack header
-	sb.WriteString("### :books: Pull Request Stack\n\n")
+	fmt.Fprintf(&sb, "### :books: Pull Request Stack\n\n")
 
 	// Render tree from root as nested markdown list, filtered to current stack
 	renderTree(&sb, root, currentBranch, repoURL, prInfo, 0, ancestorPath, remoteBranches)
 
-	sb.WriteString("\n---\n")
-	sb.WriteString("*Managed by [gh-stack](https://github.com/boneskull/gh-stack)*\n")
+	fmt.Fprintf(&sb, "\n---\n")
+	fmt.Fprintf(&sb, "*Managed by [gh-stack](https://github.com/boneskull/gh-stack)*\n")
 
 	return sb.String()
 }
