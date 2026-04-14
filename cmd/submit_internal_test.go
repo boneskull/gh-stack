@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/boneskull/gh-stack/internal/github"
 	"github.com/boneskull/gh-stack/internal/tree"
 )
 
@@ -342,6 +343,52 @@ func TestApplyMustPushForSkippedAncestors(t *testing.T) {
 		applyMustPushForSkippedAncestors(decisions)
 		if decisions[0].pushAnyway || decisions[1].pushAnyway {
 			t.Error("no pushAnyway when entire subtree is skipped")
+		}
+	})
+
+	t.Run("skipped_parent_when_child_updates_PR", func(t *testing.T) {
+		decisions := []*prDecision{
+			{node: featA, action: prActionSkip, skipReason: "user"},
+			{node: featB, action: prActionUpdate, prNum: 42},
+		}
+		applyMustPushForSkippedAncestors(decisions)
+		if !decisions[0].pushAnyway {
+			t.Error("feat-a should be pushAnyway when feat-b updates a PR")
+		}
+	})
+
+	t.Run("skipped_parent_when_child_adopts_PR", func(t *testing.T) {
+		decisions := []*prDecision{
+			{node: featA, action: prActionSkip, skipReason: "user"},
+			{node: featB, action: prActionAdopt, adoptPR: &github.PR{Number: 7}},
+		}
+		applyMustPushForSkippedAncestors(decisions)
+		if !decisions[0].pushAnyway {
+			t.Error("feat-a should be pushAnyway when feat-b adopts a PR")
+		}
+	})
+
+	t.Run("three_level_chain_both_skipped_ancestors", func(t *testing.T) {
+		featC := &tree.Node{Name: "feat-c", Parent: featB}
+		decisions := []*prDecision{
+			{node: featA, action: prActionSkip, skipReason: "user"},
+			{node: featB, action: prActionSkip, skipReason: "user"},
+			{node: featC, action: prActionCreate, title: "t", body: "b", draft: false},
+		}
+		applyMustPushForSkippedAncestors(decisions)
+		if !decisions[0].pushAnyway || !decisions[1].pushAnyway {
+			t.Errorf("both ancestors should be pushAnyway, got feat-a=%v feat-b=%v", decisions[0].pushAnyway, decisions[1].pushAnyway)
+		}
+	})
+
+	t.Run("non_skipped_ancestor_not_given_pushAnyway_flag", func(t *testing.T) {
+		decisions := []*prDecision{
+			{node: featA, action: prActionUpdate, prNum: 1},
+			{node: featB, action: prActionCreate, title: "t", body: "b", draft: false},
+		}
+		applyMustPushForSkippedAncestors(decisions)
+		if decisions[0].pushAnyway {
+			t.Error("feat-a is not skipped; pushAnyway should stay false")
 		}
 	})
 }
