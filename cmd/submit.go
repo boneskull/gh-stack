@@ -177,7 +177,15 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Phase 1: Restack
 	fmt.Println(s.Bold("=== Phase 1: Restack ==="))
-	if cascadeErr := doCascadeWithState(g, cfg, branches, submitDryRunFlag, state.OperationSubmit, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag, branchNames, stashRef, nil, s); cascadeErr != nil {
+	if cascadeErr := doCascadeWithState(g, cfg, branches, CascadeOptions{
+		DryRun:     submitDryRunFlag,
+		Operation:  state.OperationSubmit,
+		UpdateOnly: submitUpdateOnlyFlag,
+		OpenWeb:    submitWebFlag,
+		PushOnly:   submitPushOnlyFlag,
+		Branches:   branchNames,
+		StashRef:   stashRef,
+	}, s); cascadeErr != nil {
 		// Stash is saved in state for conflicts; restore on other errors
 		if !errors.Is(cascadeErr, ErrConflict) && stashRef != "" {
 			fmt.Println("Restoring auto-stashed changes...")
@@ -189,7 +197,12 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Phases 2 & 3
-	err = doSubmitPushAndPR(g, cfg, root, branches, submitDryRunFlag, submitUpdateOnlyFlag, submitWebFlag, submitPushOnlyFlag, s)
+	err = doSubmitPushAndPR(g, cfg, root, branches, SubmitOptions{
+		DryRun:     submitDryRunFlag,
+		UpdateOnly: submitUpdateOnlyFlag,
+		OpenWeb:    submitWebFlag,
+		PushOnly:   submitPushOnlyFlag,
+	}, s)
 
 	// Restore auto-stashed changes after operation completes
 	if stashRef != "" {
@@ -202,13 +215,25 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	return err
 }
 
+// SubmitOptions configures the push and PR phases of submit.
+type SubmitOptions struct {
+	// DryRun prints what would be done without actually pushing or creating PRs.
+	DryRun bool
+	// UpdateOnly skips creating new PRs; only existing PRs are updated.
+	UpdateOnly bool
+	// OpenWeb opens created/updated PRs in the browser.
+	OpenWeb bool
+	// PushOnly skips the PR creation/update phase entirely.
+	PushOnly bool
+}
+
 // doSubmitPushAndPR handles push and PR creation/update phases.
 // This is called after cascade succeeds (or from continue after conflict resolution).
-func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly, openWeb, pushOnly bool, s *style.Style) error {
+func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, opts SubmitOptions, s *style.Style) error {
 	// Phase 2: Push all branches
 	fmt.Println(s.Bold("\n=== Phase 2: Push ==="))
 	for _, b := range branches {
-		if dryRun {
+		if opts.DryRun {
 			fmt.Printf("%s Would push %s -> origin/%s (forced)\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(b.Name))
 		} else {
 			fmt.Printf("Pushing %s -> origin/%s (forced)... ", s.Branch(b.Name), s.Branch(b.Name))
@@ -221,16 +246,16 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 	}
 
 	// Phase 3: Create/update PRs
-	if pushOnly {
+	if opts.PushOnly {
 		fmt.Println(s.Bold("\n=== Phase 3: PRs ==="))
 		fmt.Println(s.Muted("Skipped (--push-only)"))
 		return nil
 	}
-	return doSubmitPRs(g, cfg, root, branches, dryRun, updateOnly, openWeb, s)
+	return doSubmitPRs(g, cfg, root, branches, opts, s)
 }
 
 // doSubmitPRs handles PR creation/update for all branches.
-func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, dryRun, updateOnly, openWeb bool, s *style.Style) error {
+func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, opts SubmitOptions, s *style.Style) error {
 	fmt.Println(s.Bold("\n=== Phase 3: PRs ==="))
 
 	trunk, err := cfg.GetTrunk()
@@ -240,7 +265,7 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 
 	// In dry-run mode, we don't need a GitHub client
 	var ghClient *github.Client
-	if !dryRun {
+	if !opts.DryRun {
 		var clientErr error
 		ghClient, clientErr = github.NewClient()
 		if clientErr != nil {
@@ -251,13 +276,23 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 	// Build remote branches set for stack comment filtering.
 	// This uses locally-cached tracking refs which are up-to-date after Phase 2 push.
 	var remoteBranches map[string]bool
-	if !dryRun {
+	if !opts.DryRun {
 		var rbErr error
 		remoteBranches, rbErr = g.ListRemoteBranches()
 		if rbErr != nil {
 			// Non-fatal: we can still render without filtering
 			fmt.Printf("%s could not list remote branches, stack comments may reference local-only branches: %v\n", s.WarningIcon(), rbErr)
 		}
+	}
+
+	// Build the PR context once - shared across all branches in this submit run.
+	pCtx := prContext{
+		ghClient:       ghClient,
+		cfg:            cfg,
+		root:           root,
+		trunk:          trunk,
+		remoteBranches: remoteBranches,
+		s:              s,
 	}
 
 	// Collect PR URLs for --web flag
@@ -274,61 +309,61 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 		switch {
 		case existingPR > 0:
 			// Update existing PR
-			if dryRun {
-				fmt.Printf("%s Would update PR #%d base to %s\n", s.Muted("dry-run:"), existingPR, s.Branch(parent))
+			if opts.DryRun {
+				fmt.Printf("%s Would update PR #%d base to %s\n", pCtx.s.Muted("dry-run:"), existingPR, pCtx.s.Branch(parent))
 			} else {
-				fmt.Printf("Updating PR #%d for %s (base: %s)... ", existingPR, s.Branch(b.Name), s.Branch(parent))
-				if err := ghClient.UpdatePRBase(existingPR, parent); err != nil {
-					fmt.Println(s.Error("failed"))
-					fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), existingPR, err)
+				fmt.Printf("Updating PR #%d for %s (base: %s)... ", existingPR, pCtx.s.Branch(b.Name), pCtx.s.Branch(parent))
+				if err := pCtx.ghClient.UpdatePRBase(existingPR, parent); err != nil {
+					fmt.Println(pCtx.s.Error("failed"))
+					fmt.Printf("%s failed to update PR #%d base: %v\n", pCtx.s.WarningIcon(), existingPR, err)
 				} else {
-					fmt.Println(s.Success("ok"))
-					if openWeb {
-						prURLs = append(prURLs, ghClient.PRURL(existingPR))
+					fmt.Println(pCtx.s.Success("ok"))
+					if opts.OpenWeb {
+						prURLs = append(prURLs, pCtx.ghClient.PRURL(existingPR))
 					}
 				}
 				// Update stack comment
-				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, existingPR, remoteBranches); err != nil {
-					fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), existingPR, err)
+				if err := pCtx.ghClient.GenerateAndPostStackComment(pCtx.root, b.Name, pCtx.trunk, existingPR, pCtx.remoteBranches); err != nil {
+					fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", pCtx.s.WarningIcon(), existingPR, err)
 				}
 
 				// If PR is a draft and now targets trunk, offer to publish
-				maybeMarkPRReady(ghClient, existingPR, b.Name, parent, trunk, s)
+				maybeMarkPRReady(pCtx.ghClient, existingPR, b.Name, parent, pCtx.trunk, pCtx.s)
 			}
-		case !updateOnly:
+		case !opts.UpdateOnly:
 			// Create new PR
-			if dryRun {
-				fmt.Printf("%s Would create PR for %s (base: %s)\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(parent))
+			if opts.DryRun {
+				fmt.Printf("%s Would create PR for %s (base: %s)\n", pCtx.s.Muted("dry-run:"), pCtx.s.Branch(b.Name), pCtx.s.Branch(parent))
 			} else {
-				prNum, adopted, err := createPRForBranch(g, ghClient, cfg, root, b.Name, parent, trunk, remoteBranches, s)
+				prNum, adopted, err := createPRForBranch(g, pCtx, b.Name, parent)
 				switch {
 				case errors.Is(err, ErrPRSkipped):
-					fmt.Printf("Skipped PR for %s %s\n", s.Branch(b.Name), s.Muted("(skipped)"))
+					fmt.Printf("Skipped PR for %s %s\n", pCtx.s.Branch(b.Name), pCtx.s.Muted("(skipped)"))
 				case err != nil:
-					fmt.Printf("%s failed to create PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), err)
+					fmt.Printf("%s failed to create PR for %s: %v\n", pCtx.s.WarningIcon(), pCtx.s.Branch(b.Name), err)
 				case adopted:
-					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
-					if openWeb {
-						prURLs = append(prURLs, ghClient.PRURL(prNum))
+					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", pCtx.s.SuccessIcon(), prNum, pCtx.s.Branch(b.Name), pCtx.ghClient.PRURL(prNum))
+					if opts.OpenWeb {
+						prURLs = append(prURLs, pCtx.ghClient.PRURL(prNum))
 					}
 				default:
-					fmt.Printf("%s Created PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
-					if openWeb {
-						prURLs = append(prURLs, ghClient.PRURL(prNum))
+					fmt.Printf("%s Created PR #%d for %s (%s)\n", pCtx.s.SuccessIcon(), prNum, pCtx.s.Branch(b.Name), pCtx.ghClient.PRURL(prNum))
+					if opts.OpenWeb {
+						prURLs = append(prURLs, pCtx.ghClient.PRURL(prNum))
 					}
 				}
 			}
 		default:
-			fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update-only)"))
+			fmt.Printf("Skipping %s %s\n", pCtx.s.Branch(b.Name), pCtx.s.Muted("(no existing PR, --update-only)"))
 		}
 	}
 
 	// Open PRs in browser if requested
-	if openWeb && len(prURLs) > 0 {
+	if opts.OpenWeb && len(prURLs) > 0 {
 		b := browser.New("", os.Stdout, os.Stderr)
 		for _, url := range prURLs {
 			if err := b.Browse(url); err != nil {
-				fmt.Fprintf(os.Stderr, "%s could not open browser for %s: %v\n", s.WarningIcon(), url, err)
+				fmt.Fprintf(os.Stderr, "%s could not open browser for %s: %v\n", pCtx.s.WarningIcon(), url, err)
 			}
 		}
 	}
@@ -336,24 +371,37 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 	return nil
 }
 
+// prContext bundles the shared read-only context that is threaded through the
+// PR creation and adoption helpers. Grouping these avoids repeating the same
+// six parameters on every private function that participates in the submit
+// workflow.
+type prContext struct {
+	ghClient       *github.Client
+	cfg            *config.Config
+	root           *tree.Node
+	trunk          string
+	remoteBranches map[string]bool
+	s              *style.Style
+}
+
 // createPRForBranch creates a PR for the given branch and stores the PR number.
 // If a PR already exists for the branch, it adopts the existing PR instead.
 // Returns (prNumber, adopted, error) where adopted is true if we adopted an existing PR.
-func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, remoteBranches map[string]bool, s *style.Style) (int, bool, error) {
+func createPRForBranch(g *git.Git, pCtx prContext, branch, base string) (int, bool, error) {
 	// Check for existing PR on GitHub BEFORE prompting user for title/description.
 	// This avoids the confusing UX where we prompt then immediately say "oh, PR already exists".
-	existingPR, err := ghClient.FindPRByHead(branch)
+	existingPR, err := pCtx.ghClient.FindPRByHead(branch)
 	if err != nil {
 		// Non-fatal: proceed with creation attempt which will give clearer error if needed
-		fmt.Printf("%s could not check for existing PR: %v\n", s.WarningIcon(), err)
+		fmt.Printf("%s could not check for existing PR: %v\n", pCtx.s.WarningIcon(), err)
 	} else if existingPR != nil {
 		// PR exists on GitHub but wasn't in local config - adopt it without prompting
-		prNum, adoptErr := adoptExistingPRDirect(ghClient, cfg, root, branch, base, trunk, remoteBranches, existingPR, s)
+		prNum, adoptErr := adoptExistingPRDirect(pCtx, branch, base, existingPR)
 		return prNum, true, adoptErr
 	}
 
 	// Determine if draft (not targeting trunk = middle of stack)
-	draft := base != trunk
+	draft := base != pCtx.trunk
 
 	// Generate default title from first commit message (falls back to branch name)
 	defaultTitle := generateDefaultTitle(g, base, branch)
@@ -362,12 +410,12 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 	defaultBody, bodyErr := generatePRBody(g, base, branch)
 	if bodyErr != nil {
 		// Non-fatal: just skip auto-body
-		fmt.Printf("%s could not generate PR body: %v\n", s.WarningIcon(), bodyErr)
+		fmt.Printf("%s could not generate PR body: %v\n", pCtx.s.WarningIcon(), bodyErr)
 		defaultBody = ""
 	}
 
 	// Get title and body (prompt if interactive and --yes not set)
-	title, body, skipped, err := promptForPRDetails(branch, defaultTitle, defaultBody, s)
+	title, body, skipped, err := promptForPRDetails(branch, defaultTitle, defaultBody, pCtx.s)
 	if err != nil {
 		return 0, false, fmt.Errorf("failed to get PR details: %w", err)
 	}
@@ -375,11 +423,11 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 		return 0, false, ErrPRSkipped
 	}
 
-	pr, err := ghClient.CreateSubmitPR(branch, base, title, body, draft)
+	pr, err := pCtx.ghClient.CreateSubmitPR(branch, base, title, body, draft)
 	if err != nil {
 		// Check if PR already exists - if so, adopt it
 		if strings.Contains(err.Error(), "pull request already exists") {
-			prNum, adoptErr := adoptExistingPR(ghClient, cfg, root, branch, base, trunk, remoteBranches, s)
+			prNum, adoptErr := adoptExistingPR(pCtx, branch, base)
 			return prNum, true, adoptErr
 		}
 		// Detect missing base branch on remote and provide an actionable message
@@ -392,18 +440,18 @@ func createPRForBranch(g *git.Git, ghClient *github.Client, cfg *config.Config, 
 	}
 
 	// Store PR number in config
-	if err := cfg.SetPR(branch, pr.Number); err != nil {
+	if err := pCtx.cfg.SetPR(branch, pr.Number); err != nil {
 		return pr.Number, false, fmt.Errorf("PR created but failed to store number: %w", err)
 	}
 
 	// Update the tree node's PR number so stack comments render correctly
-	if node := tree.FindNode(root, branch); node != nil {
+	if node := tree.FindNode(pCtx.root, branch); node != nil {
 		node.PR = pr.Number
 	}
 
 	// Add stack navigation comment
-	if err := ghClient.GenerateAndPostStackComment(root, branch, trunk, pr.Number, remoteBranches); err != nil {
-		fmt.Printf("%s failed to add stack comment to PR #%d: %v\n", s.WarningIcon(), pr.Number, err)
+	if err := pCtx.ghClient.GenerateAndPostStackComment(pCtx.root, branch, pCtx.trunk, pr.Number, pCtx.remoteBranches); err != nil {
+		fmt.Printf("%s failed to add stack comment to PR #%d: %v\n", pCtx.s.WarningIcon(), pr.Number, err)
 	}
 
 	return pr.Number, false, nil
@@ -516,8 +564,8 @@ func promptForPRDetails(branch, defaultTitle, defaultBody string, s *style.Style
 }
 
 // adoptExistingPR finds an existing PR for the branch and adopts it into the stack.
-func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, remoteBranches map[string]bool, s *style.Style) (int, error) {
-	existingPR, err := ghClient.FindPRByHead(branch)
+func adoptExistingPR(pCtx prContext, branch, base string) (int, error) {
+	existingPR, err := pCtx.ghClient.FindPRByHead(branch)
 	if err != nil {
 		return 0, fmt.Errorf("failed to find existing PR: %w", err)
 	}
@@ -525,37 +573,37 @@ func adoptExistingPR(ghClient *github.Client, cfg *config.Config, root *tree.Nod
 		return 0, fmt.Errorf("PR creation failed but no existing PR found for branch %q", branch)
 	}
 
-	return adoptExistingPRDirect(ghClient, cfg, root, branch, base, trunk, remoteBranches, existingPR, s)
+	return adoptExistingPRDirect(pCtx, branch, base, existingPR)
 }
 
 // adoptExistingPRDirect adopts an already-fetched PR into the stack.
 // This is the implementation shared by adoptExistingPR and the early-detection path in createPRForBranch.
-func adoptExistingPRDirect(ghClient *github.Client, cfg *config.Config, root *tree.Node, branch, base, trunk string, remoteBranches map[string]bool, existingPR *github.PR, s *style.Style) (int, error) {
+func adoptExistingPRDirect(pCtx prContext, branch, base string, existingPR *github.PR) (int, error) {
 	// Store PR number in config
-	if err := cfg.SetPR(branch, existingPR.Number); err != nil {
+	if err := pCtx.cfg.SetPR(branch, existingPR.Number); err != nil {
 		return existingPR.Number, fmt.Errorf("failed to store PR number: %w", err)
 	}
 
 	// Update the tree node's PR number so stack comments render correctly
-	if node := tree.FindNode(root, branch); node != nil {
+	if node := tree.FindNode(pCtx.root, branch); node != nil {
 		node.PR = existingPR.Number
 	}
 
 	// Update PR base to match stack parent
 	if existingPR.Base.Ref != base {
-		if err := ghClient.UpdatePRBase(existingPR.Number, base); err != nil {
-			fmt.Printf("%s failed to update base: %v\n", s.WarningIcon(), err)
+		if err := pCtx.ghClient.UpdatePRBase(existingPR.Number, base); err != nil {
+			fmt.Printf("%s failed to update base: %v\n", pCtx.s.WarningIcon(), err)
 		}
 	}
 
 	// Add/update stack navigation comment
-	if err := ghClient.GenerateAndPostStackComment(root, branch, trunk, existingPR.Number, remoteBranches); err != nil {
-		fmt.Printf("%s failed to update stack comment: %v\n", s.WarningIcon(), err)
+	if err := pCtx.ghClient.GenerateAndPostStackComment(pCtx.root, branch, pCtx.trunk, existingPR.Number, pCtx.remoteBranches); err != nil {
+		fmt.Printf("%s failed to update stack comment: %v\n", pCtx.s.WarningIcon(), err)
 	}
 
 	// If adopted PR is a draft and targets trunk, offer to publish
-	if existingPR.Draft && base == trunk {
-		promptMarkPRReady(ghClient, existingPR.Number, branch, trunk, s)
+	if existingPR.Draft && base == pCtx.trunk {
+		promptMarkPRReady(pCtx.ghClient, existingPR.Number, branch, pCtx.trunk, pCtx.s)
 	}
 
 	return existingPR.Number, nil
