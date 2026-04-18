@@ -5,11 +5,11 @@ import "testing"
 
 // Note: Full E2E testing of sync's return-to-original-branch behavior is limited
 // because sync requires a real GitHub remote. The underlying return-to-branch logic
-// is tested via TestCascadeReturnsToOriginalBranch in cascade_test.go, since sync
-// delegates restacking to the same doCascadeWithState function.
+// is tested via TestRestackReturnsToOriginalBranch in restack_test.go, since sync
+// delegates restacking to the same doRestackWithState function.
 //
 // The fix for issue #58 (sync leaving user on wrong branch) is validated by:
-// 1. TestCascadeReturnsToOriginalBranch - tests the shared restack infrastructure
+// 1. TestRestackReturnsToOriginalBranch - tests the shared restack infrastructure
 // 2. cmd/sync_test.go unit tests - test sync-specific starting branch capture:
 //    - TestSyncStartingBranchCapture - normal branch detection
 //    - TestSyncStartingBranchDetachedHEAD - "HEAD" normalization for detached state

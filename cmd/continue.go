@@ -69,7 +69,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 	}
 
 	// Update fork point for the branch that just finished rebasing.
-	// The cascade loop's fork point update only fires after a non-conflicting
+	// The restack loop's fork point update only fires after a non-conflicting
 	// rebase, so branches that hit a conflict never get their fork point
 	// refreshed -- leaving it stale for future operations.
 	if parent, parentErr := cfg.GetParent(st.Current); parentErr == nil {
@@ -84,7 +84,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// If there are more branches to cascade, continue cascading
+	// If there are more branches to restack, continue cascading
 	if len(st.Pending) > 0 {
 		var branches []*tree.Node
 		for _, name := range st.Pending {
@@ -96,7 +96,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		// Remove state file before continuing (will be recreated if conflict)
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
-		if cascadeErr := doCascadeWithState(g, cfg, branches, CascadeOptions{
+		if restackErr := doRestackWithState(g, cfg, branches, RestackOptions{
 			Operation:  st.Operation,
 			UpdateOnly: st.UpdateOnly,
 			OpenWeb:    st.Web,
@@ -104,18 +104,18 @@ func runContinue(cmd *cobra.Command, args []string) error {
 			Branches:   st.Branches,
 			StashRef:   st.StashRef,
 			Worktrees:  st.Worktrees,
-		}, s); cascadeErr != nil {
-			// Stash handling is done by doCascadeWithState (conflict saves in state, errors restore)
-			if !errors.Is(cascadeErr, ErrConflict) && st.StashRef != "" {
+		}, s); restackErr != nil {
+			// Stash handling is done by doRestackWithState (conflict saves in state, errors restore)
+			if !errors.Is(restackErr, ErrConflict) && st.StashRef != "" {
 				fmt.Println("Restoring auto-stashed changes...")
 				if popErr := g.StashPop(st.StashRef); popErr != nil {
 					fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(st.StashRef), popErr)
 				}
 			}
-			return cascadeErr // Another conflict - state saved
+			return restackErr // Another conflict - state saved
 		}
 	} else {
-		// No more branches to cascade - cleanup state
+		// No more branches to restack - cleanup state
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 	}
 
@@ -160,7 +160,7 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Restore stash after cascade completes
+	// Restore stash after restack completes
 	if st.StashRef != "" {
 		fmt.Println("Restoring auto-stashed changes...")
 		if popErr := g.StashPop(st.StashRef); popErr != nil {

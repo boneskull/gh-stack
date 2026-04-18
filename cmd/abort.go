@@ -33,7 +33,7 @@ func runAbort(cmd *cobra.Command, args []string) error {
 
 	g := git.New(cwd)
 
-	// Check if cascade in progress
+	// Check if restack in progress
 	st, err := state.Load(g.GetGitDir())
 	if err != nil {
 		return errors.New("no operation in progress")

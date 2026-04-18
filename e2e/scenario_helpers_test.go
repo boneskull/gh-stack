@@ -31,7 +31,7 @@ func (e *TestEnv) CreateConflict(baseBranch, featureBranch string) string {
 }
 
 // CreateStackWithConflict creates a 3-branch stack where cascading will conflict.
-// After setup, you should be on feature-a and cascade from there.
+// After setup, you should be on feature-a and restack from there.
 // The conflict occurs when feature-b rebases onto feature-a (after feature-a picks up main's changes).
 func (e *TestEnv) CreateStackWithConflict() string {
 	e.t.Helper()
@@ -61,7 +61,7 @@ func (e *TestEnv) CreateStackWithConflict() string {
 	e.Git("add", conflictFile)
 	e.Git("commit", "-m", "main: modify shared.txt")
 
-	// Return to feature-a for cascade (cascade operates on current + descendants)
+	// Return to feature-a for restack (restack operates on current + descendants)
 	e.Git("checkout", "feature-a")
 
 	return conflictFile

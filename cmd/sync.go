@@ -25,13 +25,13 @@ var syncCmd = &cobra.Command{
 }
 
 var (
-	syncNoCascadeFlag bool
+	syncNoRestackFlag bool
 	syncDryRunFlag    bool
 	syncWorktreesFlag bool
 )
 
 func init() {
-	syncCmd.Flags().BoolVar(&syncNoCascadeFlag, "no-restack", false, "skip restacking branches")
+	syncCmd.Flags().BoolVar(&syncNoRestackFlag, "no-restack", false, "skip restacking branches")
 	syncCmd.Flags().BoolVar(&syncDryRunFlag, "dry-run", false, "show what would be done")
 	syncCmd.Flags().BoolVar(&syncWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
 	rootCmd.AddCommand(syncCmd)
@@ -202,7 +202,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		// Check if branch content is identical to trunk (squash merge detection)
 		isContentMerged, diffErr := g.IsContentMerged(branch, trunk)
 		if diffErr != nil {
-			// Can't determine, let cascade try
+			// Can't determine, let restack try
 			continue
 		}
 
@@ -330,7 +330,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 			fmt.Printf("Rebasing %s onto %s (from fork point %s)...\n", s.Branch(rt.childName), s.Branch(trunk), displayForkPoint)
 			if rebaseErr := g.RebaseOnto(trunk, rt.forkPoint, rt.childName); rebaseErr != nil {
 				fmt.Printf("%s --onto rebase failed, will try normal restack: %v\n", s.WarningIcon(), rebaseErr)
-				// Don't return error - let cascade try
+				// Don't return error - let restack try
 			} else {
 				fmt.Printf("%s Rebased %s successfully\n", s.SuccessIcon(), s.Branch(rt.childName))
 
@@ -348,8 +348,8 @@ func runSync(cmd *cobra.Command, args []string) error {
 		_ = g.Checkout(currentBranch) //nolint:errcheck // best effort
 	}
 
-	// Cascade all (if not disabled)
-	if !syncNoCascadeFlag {
+	// Restack all (if not disabled)
+	if !syncNoRestackFlag {
 		fmt.Println(s.Bold("\nRestacking all branches..."))
 		// Rebuild tree after modifications
 		root, err = tree.Build(cfg)
@@ -367,13 +367,13 @@ func runSync(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Cascade from trunk's children
+		// Restack from trunk's children
 		for _, child := range root.Children {
 			allBranches := []*tree.Node{child}
 			allBranches = append(allBranches, tree.GetDescendants(child)...)
-			if err := doCascadeWithState(g, cfg, allBranches, CascadeOptions{
+			if err := doRestackWithState(g, cfg, allBranches, RestackOptions{
 				DryRun:    syncDryRunFlag,
-				Operation: state.OperationCascade,
+				Operation: state.OperationRestack,
 				StashRef:  stashRef,
 				Worktrees: worktrees,
 			}, s); err != nil {

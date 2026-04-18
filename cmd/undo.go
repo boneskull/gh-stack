@@ -52,7 +52,7 @@ func runUndo(cmd *cobra.Command, args []string) error {
 	g := git.New(cwd)
 	gitDir := g.GetGitDir()
 
-	// Check if a cascade/submit is in progress
+	// Check if a restack/submit is in progress
 	if state.Exists(gitDir) {
 		return errors.New("cannot undo while an operation is in progress; run 'gh stack continue' or 'gh stack abort' first")
 	}
