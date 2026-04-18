@@ -76,7 +76,7 @@ func TestSubmitCurrentOnlyDryRun(t *testing.T) {
 
 	env.Git("checkout", "feat-a")
 
-	// Submit --current-only should NOT cascade feat-b
+	// Submit --current-only should NOT restack feat-b
 	result := env.MustRun("submit", "--dry-run", "--current-only")
 
 	// Should mention feat-a but not feat-b in push phase
@@ -89,7 +89,7 @@ func TestSubmitCurrentOnlyDryRun(t *testing.T) {
 	}
 }
 
-func TestSubmitWithCascadeNeeded(t *testing.T) {
+func TestSubmitWithRestackNeeded(t *testing.T) {
 	env := NewTestEnvWithRemote(t)
 	env.MustRun("init")
 
@@ -109,7 +109,7 @@ func TestSubmitWithCascadeNeeded(t *testing.T) {
 
 	// Should show rebase would happen
 	if !strings.Contains(result.Stdout, "Would rebase feat-b onto feat-a") {
-		t.Error("expected cascade of feat-b onto feat-a")
+		t.Error("expected restack of feat-b onto feat-a")
 	}
 }
 
@@ -125,7 +125,7 @@ func TestSubmitAlreadyUpToDate(t *testing.T) {
 
 	// Should indicate already up to date
 	if !strings.Contains(result.Stdout, "already up to date") {
-		t.Error("expected 'already up to date' for branch that doesn't need cascade")
+		t.Error("expected 'already up to date' for branch that doesn't need restack")
 	}
 }
 

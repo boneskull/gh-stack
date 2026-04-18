@@ -204,7 +204,7 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Phase 1: Restack
 	fmt.Println(s.Bold("=== Phase 1: Restack ==="))
-	if cascadeErr := doCascadeWithState(g, cfg, branches, CascadeOptions{
+	if restackErr := doRestackWithState(g, cfg, branches, RestackOptions{
 		DryRun:     submitDryRunFlag,
 		Operation:  state.OperationSubmit,
 		UpdateOnly: submitUpdateOnlyFlag,
@@ -212,15 +212,15 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 		PushOnly:   submitPushOnlyFlag,
 		Branches:   branchNames,
 		StashRef:   stashRef,
-	}, s); cascadeErr != nil {
+	}, s); restackErr != nil {
 		// Stash is saved in state for conflicts; restore on other errors
-		if !errors.Is(cascadeErr, ErrConflict) && stashRef != "" {
+		if !errors.Is(restackErr, ErrConflict) && stashRef != "" {
 			fmt.Println("Restoring auto-stashed changes...")
 			if popErr := g.StashPop(stashRef); popErr != nil {
 				fmt.Printf("%s could not restore stashed changes (commit %s): %v\n", s.WarningIcon(), git.AbbrevSHA(stashRef), popErr)
 			}
 		}
-		return cascadeErr
+		return restackErr
 	}
 
 	// Phases 2 & 3
@@ -255,7 +255,7 @@ type SubmitOptions struct {
 }
 
 // doSubmitPushAndPR handles push and PR creation/update phases.
-// This is called after cascade succeeds (or from continue after conflict resolution).
+// This is called after restack succeeds (or from continue after conflict resolution).
 func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, opts SubmitOptions, s *style.Style) error {
 	var decisions []*prDecision
 	var ghClient *github.Client

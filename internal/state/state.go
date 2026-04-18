@@ -10,21 +10,21 @@ import (
 
 const stateFile = "STACK_CASCADE_STATE"
 
-// Operation types for cascade state.
+// Operation types for restack state.
 const (
-	OperationCascade = "cascade"
+	OperationRestack = "restack"
 	OperationSubmit  = "submit"
 )
 
-// ErrNoState is returned when no cascade state exists.
-var ErrNoState = errors.New("no cascade in progress")
+// ErrNoState is returned when no restack state exists.
+var ErrNoState = errors.New("no restack in progress")
 
-// CascadeState represents the state of an in-progress cascade or submit operation.
-type CascadeState struct {
+// RestackState represents the state of an in-progress restack or submit operation.
+type RestackState struct {
 	Current      string   `json:"current"`
 	Pending      []string `json:"pending"`
 	OriginalHead string   `json:"original_head"`
-	// Operation is "cascade" or "submit" - determines what happens after cascade completes
+	// Operation is "restack" or "submit" - determines what happens after restack completes
 	Operation string `json:"operation,omitempty"`
 	// UpdateOnly (submit only) - if true, don't create new PRs, only update existing
 	UpdateOnly bool `json:"update_only,omitempty"`
@@ -33,7 +33,7 @@ type CascadeState struct {
 	// PushOnly (submit only) - if true, skip PR creation/update phase entirely
 	PushOnly bool `json:"push_only,omitempty"`
 	// Branches (submit only) - the complete list of branches being submitted.
-	// Used to rebuild the full set for push/PR phases after cascade completes.
+	// Used to rebuild the full set for push/PR phases after restack completes.
 	Branches []string `json:"branches,omitempty"`
 	// StashRef is the commit hash of auto-stashed changes (if any).
 	// Used to restore working tree changes when operation completes or is aborted.
@@ -44,8 +44,8 @@ type CascadeState struct {
 	Worktrees map[string]string `json:"worktrees,omitempty"`
 }
 
-// Save persists cascade state to .git/STACK_CASCADE_STATE.
-func Save(gitDir string, s *CascadeState) error {
+// Save persists restack state to .git/STACK_CASCADE_STATE.
+func Save(gitDir string, s *RestackState) error {
 	path := filepath.Join(gitDir, stateFile)
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
@@ -54,8 +54,8 @@ func Save(gitDir string, s *CascadeState) error {
 	return os.WriteFile(path, data, 0644)
 }
 
-// Load reads cascade state from .git/STACK_CASCADE_STATE.
-func Load(gitDir string) (*CascadeState, error) {
+// Load reads restack state from .git/STACK_CASCADE_STATE.
+func Load(gitDir string) (*RestackState, error) {
 	path := filepath.Join(gitDir, stateFile)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -65,14 +65,14 @@ func Load(gitDir string) (*CascadeState, error) {
 		return nil, err
 	}
 
-	var s CascadeState
+	var s RestackState
 	if err := json.Unmarshal(data, &s); err != nil {
 		return nil, err
 	}
 	return &s, nil
 }
 
-// Remove deletes the cascade state file.
+// Remove deletes the restack state file.
 func Remove(gitDir string) error {
 	path := filepath.Join(gitDir, stateFile)
 	err := os.Remove(path)
@@ -82,7 +82,7 @@ func Remove(gitDir string) error {
 	return err
 }
 
-// Exists checks if a cascade is in progress.
+// Exists checks if a restack is in progress.
 func Exists(gitDir string) bool {
 	path := filepath.Join(gitDir, stateFile)
 	_, err := os.Stat(path)

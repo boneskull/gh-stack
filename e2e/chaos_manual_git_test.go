@@ -60,7 +60,7 @@ func TestManualRebase(t *testing.T) {
 	env.Git("checkout", "main")
 	env.CreateCommit("main moved")
 
-	// User rebases manually with git instead of cascade
+	// User rebases manually with git instead of restack
 	env.Git("checkout", "feature-1")
 	env.Git("rebase", "main")
 
@@ -105,20 +105,20 @@ func TestManualBranchDelete(t *testing.T) {
 	}
 }
 
-func TestManualRebaseAbortDuringCascade(t *testing.T) {
+func TestManualRebaseAbortDuringRestack(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
 	// Set up conflict scenario
 	env.CreateStackWithConflict()
-	env.Run("cascade") // Will conflict and leave rebase in progress
+	env.Run("restack") // Will conflict and leave rebase in progress
 
 	env.AssertRebaseInProgress()
 
 	// User manually aborts with git instead of gh-stack abort
 	env.Git("rebase", "--abort")
 
-	// gh-stack abort should still work (cleans up cascade state)
+	// gh-stack abort should still work (cleans up restack state)
 	result := env.Run("abort")
 	if result.Failed() {
 		t.Errorf("abort should succeed after manual rebase --abort, got: %s", result.Stderr)

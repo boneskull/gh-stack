@@ -9,12 +9,12 @@ import (
 	"github.com/boneskull/gh-stack/internal/state"
 )
 
-func TestCascadeState(t *testing.T) {
+func TestRestackState(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
 	os.Mkdir(gitDir, 0755)
 
-	s := &state.CascadeState{
+	s := &state.RestackState{
 		Current:      "feature-b",
 		Pending:      []string{"feature-c", "feature-d"},
 		OriginalHead: "abc123",
@@ -38,7 +38,7 @@ func TestCascadeState(t *testing.T) {
 	}
 }
 
-func TestCascadeStateNotExists(t *testing.T) {
+func TestRestackStateNotExists(t *testing.T) {
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
 	os.Mkdir(gitDir, 0755)
@@ -56,7 +56,7 @@ func TestSubmitState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := &state.CascadeState{
+	s := &state.RestackState{
 		Current:      "feature-b",
 		Pending:      []string{"feature-c"},
 		OriginalHead: "abc123",
@@ -95,7 +95,7 @@ func TestSubmitStatePushOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := &state.CascadeState{
+	s := &state.RestackState{
 		Current:      "feature-b",
 		Pending:      []string{"feature-c"},
 		OriginalHead: "abc123",

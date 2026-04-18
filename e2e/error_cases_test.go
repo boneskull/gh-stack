@@ -38,7 +38,7 @@ func TestCreateWithModifiedTrackedFile(t *testing.T) {
 	env.AssertBranch("feature-1")
 }
 
-func TestCascadeWithDirtyTree(t *testing.T) {
+func TestRestackWithDirtyTree(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -52,11 +52,11 @@ func TestCascadeWithDirtyTree(t *testing.T) {
 	// Make dirty with modified tracked file
 	env.WriteFile("README.md", "modified content")
 
-	result := env.Run("cascade")
+	result := env.Run("restack")
 
 	// Should auto-stash and succeed
 	if result.Failed() {
-		t.Errorf("cascade should auto-stash and succeed, got: %s", result.Stderr)
+		t.Errorf("restack should auto-stash and succeed, got: %s", result.Stderr)
 	}
 	if !result.ContainsStdout("Auto-stashed") {
 		t.Errorf("expected auto-stash message, got: %s", result.Stdout)

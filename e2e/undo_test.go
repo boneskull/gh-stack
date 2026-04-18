@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestUndoCascade(t *testing.T) {
+func TestUndoRestack(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -24,9 +24,9 @@ func TestUndoCascade(t *testing.T) {
 	env.Git("checkout", "main")
 	env.CreateCommit("main moved forward")
 
-	// Cascade from feature-a
+	// Restack from feature-a
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Verify branches moved
 	newFeatureASha := env.BranchTip("feature-a")
@@ -38,7 +38,7 @@ func TestUndoCascade(t *testing.T) {
 		t.Error("feature-b should have been rebased")
 	}
 
-	// Undo the cascade
+	// Undo the restack
 	env.MustRun("undo", "--force")
 
 	// Verify branches restored
@@ -56,7 +56,7 @@ func TestUndoDryRun(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
-	// Create stack and cascade
+	// Create stack and restack
 	env.MustRun("create", "feature-a")
 	env.CreateCommit("feature a work")
 	featureASha := env.BranchTip("feature-a")
@@ -65,12 +65,12 @@ func TestUndoDryRun(t *testing.T) {
 	env.CreateCommit("main moved forward")
 
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Verify branch moved
-	cascadedSha := env.BranchTip("feature-a")
-	if cascadedSha == featureASha {
-		t.Fatal("cascade didn't change SHA")
+	restackdSha := env.BranchTip("feature-a")
+	if restackdSha == featureASha {
+		t.Fatal("restack didn't change SHA")
 	}
 
 	// Dry run should not change anything
@@ -79,9 +79,9 @@ func TestUndoDryRun(t *testing.T) {
 		t.Error("expected dry-run message in output")
 	}
 
-	// Branch should still be at cascaded SHA
+	// Branch should still be at restackd SHA
 	afterDryRunSha := env.BranchTip("feature-a")
-	if afterDryRunSha != cascadedSha {
+	if afterDryRunSha != restackdSha {
 		t.Error("dry-run should not have changed branch")
 	}
 }
@@ -109,9 +109,9 @@ func TestUndoRestoresConfig(t *testing.T) {
 	env.CreateCommit("main moved forward")
 
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
-	// Cascade updates fork point
+	// Restack updates fork point
 	newForkPoint := env.GetStackConfig("branch.feature-a.stackforkpoint")
 	if newForkPoint == originalForkPoint {
 		// Fork point should have changed (or been set)
@@ -139,7 +139,7 @@ func TestUndoArchivesSnapshot(t *testing.T) {
 	env.CreateCommit("main moved forward")
 
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Verify snapshot exists
 	undoDir := filepath.Join(env.WorkDir, ".git", "stack-undo")
@@ -183,7 +183,7 @@ func TestUndoArchivesSnapshot(t *testing.T) {
 	}
 }
 
-func TestCascadeWithAutoStashRestoresAfterSuccess(t *testing.T) {
+func TestRestackWithAutoStashRestoresAfterSuccess(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -198,19 +198,19 @@ func TestCascadeWithAutoStashRestoresAfterSuccess(t *testing.T) {
 	// Create uncommitted changes
 	env.WriteFile("uncommitted.txt", "uncommitted content\n")
 
-	// Cascade should auto-stash and then restore after success
-	result := env.MustRun("cascade")
+	// Restack should auto-stash and then restore after success
+	result := env.MustRun("restack")
 	if !result.ContainsStdout("Auto-stashed") {
 		t.Error("expected auto-stash message")
 	}
 	if !result.ContainsStdout("Restoring auto-stashed") {
-		t.Error("expected restore message after successful cascade")
+		t.Error("expected restore message after successful restack")
 	}
 
-	// Uncommitted file should be restored after successful cascade
+	// Uncommitted file should be restored after successful restack
 	content, err := os.ReadFile(filepath.Join(env.WorkDir, "uncommitted.txt"))
 	if err != nil {
-		t.Errorf("uncommitted file should be present after cascade: %v", err)
+		t.Errorf("uncommitted file should be present after restack: %v", err)
 	} else if string(content) != "uncommitted content\n" {
 		t.Errorf("uncommitted file has wrong content: %q", content)
 	}
@@ -229,9 +229,9 @@ func TestUndoRestoresOriginalBranch(t *testing.T) {
 	env.Git("checkout", "main")
 	env.CreateCommit("main moved forward")
 
-	// Cascade from feature-a
+	// Restack from feature-a
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Should still be on feature-a
 	env.AssertBranch("feature-a")
@@ -239,39 +239,39 @@ func TestUndoRestoresOriginalBranch(t *testing.T) {
 	// Now checkout something else
 	env.Git("checkout", "feature-b")
 
-	// Undo should restore to feature-a (original head at time of cascade)
+	// Undo should restore to feature-a (original head at time of restack)
 	env.MustRun("undo", "--force")
 	env.AssertBranch("feature-a")
 }
 
-func TestUndoBlockedDuringCascade(t *testing.T) {
+func TestUndoBlockedDuringRestack(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
 	conflictFile := env.CreateStackWithConflict()
 	_ = conflictFile
 
-	// Start cascade (will conflict)
-	result := env.Run("cascade")
+	// Start restack (will conflict)
+	result := env.Run("restack")
 	if result.Success() {
-		t.Fatal("expected cascade to fail on conflict")
+		t.Fatal("expected restack to fail on conflict")
 	}
 	env.AssertRebaseInProgress()
 
 	// Undo should be blocked
 	result = env.Run("undo", "--force")
 	if result.Success() {
-		t.Error("undo should fail during cascade in progress")
+		t.Error("undo should fail during restack in progress")
 	}
 	if !result.ContainsStdout("operation is in progress") && !result.ContainsStderr("operation is in progress") {
 		t.Errorf("expected message about operation in progress, got stdout: %s, stderr: %s", result.Stdout, result.Stderr)
 	}
 
-	// Abort the cascade
+	// Abort the restack
 	env.MustRun("abort")
 }
 
-func TestMultipleCascadesUndoLatest(t *testing.T) {
+func TestMultipleRestacksUndoLatest(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -280,33 +280,33 @@ func TestMultipleCascadesUndoLatest(t *testing.T) {
 	env.CreateCommit("feature a v1")
 	featureAv1 := env.BranchTip("feature-a")
 
-	// First cascade trigger
+	// First restack trigger
 	env.Git("checkout", "main")
 	env.CreateCommit("main update 1")
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	featureAAfterFirst := env.BranchTip("feature-a")
 	if featureAAfterFirst == featureAv1 {
-		t.Fatal("first cascade didn't change SHA")
+		t.Fatal("first restack didn't change SHA")
 	}
 
-	// Second cascade trigger
+	// Second restack trigger
 	env.Git("checkout", "main")
 	env.CreateCommit("main update 2")
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	featureAAfterSecond := env.BranchTip("feature-a")
 	if featureAAfterSecond == featureAAfterFirst {
-		t.Fatal("second cascade didn't change SHA")
+		t.Fatal("second restack didn't change SHA")
 	}
 
-	// Undo should restore to state before SECOND cascade (not first)
+	// Undo should restore to state before SECOND restack (not first)
 	env.MustRun("undo", "--force")
 	featureAAfterUndo := env.BranchTip("feature-a")
 	if featureAAfterUndo != featureAAfterFirst {
-		t.Errorf("undo should restore to state before second cascade: expected %s, got %s",
+		t.Errorf("undo should restore to state before second restack: expected %s, got %s",
 			featureAAfterFirst, featureAAfterUndo)
 	}
 }

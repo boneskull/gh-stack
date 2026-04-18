@@ -1,9 +1,9 @@
-// e2e/cascade_test.go
+// e2e/restack_test.go
 package e2e_test
 
 import "testing"
 
-func TestCascadeSimple(t *testing.T) {
+func TestRestackSimple(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -18,9 +18,9 @@ func TestCascadeSimple(t *testing.T) {
 	env.Git("checkout", "main")
 	env.CreateCommit("main moved forward")
 
-	// Cascade from feature-a
+	// Restack from feature-a
 	env.Git("checkout", "feature-a")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Verify ancestry
 	env.AssertAncestor("main", "feature-a")
@@ -28,7 +28,7 @@ func TestCascadeSimple(t *testing.T) {
 	env.AssertNoRebaseInProgress()
 }
 
-func TestCascadeDeepStack(t *testing.T) {
+func TestRestackDeepStack(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -43,9 +43,9 @@ func TestCascadeDeepStack(t *testing.T) {
 	env.Git("checkout", "main")
 	env.CreateCommit("main update")
 
-	// Cascade from first branch
+	// Restack from first branch
 	env.Git("checkout", "feat-1")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Verify chain
 	env.AssertAncestor("main", "feat-1")
@@ -54,17 +54,17 @@ func TestCascadeDeepStack(t *testing.T) {
 	}
 }
 
-func TestCascadeWithConflict(t *testing.T) {
+func TestRestackWithConflict(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
 	_ = env.CreateStackWithConflict()
 
-	result := env.Run("cascade")
+	result := env.Run("restack")
 
-	// Cascade returns non-zero on conflict (consistent with git rebase)
+	// Restack returns non-zero on conflict (consistent with git rebase)
 	if result.Success() {
-		t.Error("cascade should return non-zero exit on conflict")
+		t.Error("restack should return non-zero exit on conflict")
 	}
 	if !result.ContainsStdout("CONFLICT") {
 		t.Errorf("expected CONFLICT in output, got: %s", result.Stdout)
@@ -72,15 +72,15 @@ func TestCascadeWithConflict(t *testing.T) {
 	env.AssertRebaseInProgress()
 }
 
-func TestCascadeAbort(t *testing.T) {
+func TestRestackAbort(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
 	env.CreateStackWithConflict()
-	result := env.Run("cascade")
+	result := env.Run("restack")
 
 	if result.Success() {
-		t.Fatal("expected cascade to fail on conflict")
+		t.Fatal("expected restack to fail on conflict")
 	}
 	env.AssertRebaseInProgress()
 
@@ -89,15 +89,15 @@ func TestCascadeAbort(t *testing.T) {
 	env.AssertNoRebaseInProgress()
 }
 
-func TestCascadeContinue(t *testing.T) {
+func TestRestackContinue(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
 	conflictFile := env.CreateStackWithConflict()
-	result := env.Run("cascade")
+	result := env.Run("restack")
 
 	if result.Success() {
-		t.Fatal("expected cascade to fail on conflict")
+		t.Fatal("expected restack to fail on conflict")
 	}
 	env.AssertRebaseInProgress()
 
@@ -108,7 +108,7 @@ func TestCascadeContinue(t *testing.T) {
 	env.AssertNoRebaseInProgress()
 }
 
-func TestCascadeReturnsToOriginalBranch(t *testing.T) {
+func TestRestackReturnsToOriginalBranch(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
@@ -126,11 +126,11 @@ func TestCascadeReturnsToOriginalBranch(t *testing.T) {
 	env.Git("checkout", "main")
 	env.CreateCommit("main moved forward")
 
-	// Start cascade from feature-a (not the deepest branch)
+	// Start restack from feature-a (not the deepest branch)
 	env.Git("checkout", "feature-a")
 	env.AssertBranch("feature-a")
 
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Verify we returned to feature-a, not feature-c (the last restacked branch)
 	env.AssertBranch("feature-a")
@@ -141,7 +141,7 @@ func TestCascadeReturnsToOriginalBranch(t *testing.T) {
 	env.AssertAncestor("feature-b", "feature-c")
 }
 
-func TestCascadeStaleForkPointFromManualRebase(t *testing.T) {
+func TestRestackStaleForkPointFromManualRebase(t *testing.T) {
 	// Reproduces the bug where a manual rebase outside gh-stack leaves the
 	// fork point stale. On the next restack after main advances, the stale
 	// fork point would trigger an --onto rebase that replays too many commits.
@@ -180,7 +180,7 @@ func TestCascadeStaleForkPointFromManualRebase(t *testing.T) {
 	env.AssertNoRebaseInProgress()
 }
 
-func TestCascadeStaleForkPointDetectedDuringRebase(t *testing.T) {
+func TestRestackStaleForkPointDetectedDuringRebase(t *testing.T) {
 	// Even if the "already up to date" refresh was missed, the ancestor check
 	// in the useOnto logic should prevent --onto with a stale fork point.
 	env := NewTestEnv(t)
@@ -228,15 +228,15 @@ func TestCascadeStaleForkPointDetectedDuringRebase(t *testing.T) {
 	env.AssertNoRebaseInProgress()
 }
 
-func TestCascadeForkPointUpdatedAfterContinue(t *testing.T) {
+func TestRestackForkPointUpdatedAfterContinue(t *testing.T) {
 	env := NewTestEnv(t)
 	env.MustRun("init")
 
 	// Create a stack that will conflict
 	conflictFile := env.CreateStackWithConflict()
 
-	// Cascade will hit a conflict on feature-b
-	result := env.Run("cascade")
+	// Restack will hit a conflict on feature-b
+	result := env.Run("restack")
 	if result.Success() {
 		t.Fatal("expected conflict")
 	}
@@ -261,7 +261,7 @@ func TestCascadeForkPointUpdatedAfterContinue(t *testing.T) {
 	}
 }
 
-func TestCascadeOntoUsedForRewrittenParent(t *testing.T) {
+func TestRestackOntoUsedForRewrittenParent(t *testing.T) {
 	// Verify that --onto IS used when the parent's history was actually
 	// rewritten (not just a stale fork point).
 	env := NewTestEnv(t)

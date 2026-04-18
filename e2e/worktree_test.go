@@ -151,7 +151,7 @@ func TestRestackWithoutWorktreeFlagErrors(t *testing.T) {
 func TestSyncWithWorktree(t *testing.T) {
 	// sync requires a real GitHub remote which we can't simulate in E2E tests.
 	// Instead, verify the --worktrees flag is accepted by the sync command
-	// and test the cascade-with-worktrees behavior (which sync delegates to)
+	// and test the restack-with-worktrees behavior (which sync delegates to)
 	// via the restack tests above.
 	env := NewTestEnv(t)
 	env.MustRun("init")

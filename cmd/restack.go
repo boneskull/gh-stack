@@ -1,4 +1,4 @@
-// cmd/cascade.go
+// cmd/restack.go
 package cmd
 
 import (
@@ -15,31 +15,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ErrConflict indicates a rebase conflict occurred during cascade.
+// ErrConflict indicates a rebase conflict occurred during restack.
 var ErrConflict = errors.New("rebase conflict: resolve and run 'gh stack continue', or 'gh stack abort'")
 
-var cascadeCmd = &cobra.Command{
+var restackCmd = &cobra.Command{
 	Use:     "restack",
 	Aliases: []string{"cascade"},
 	Short:   "Rebase current branch and descendants onto their parents",
 	Long:    `Rebase the current branch onto its parent, then recursively restack descendants.`,
-	RunE:    runCascade,
+	RunE:    runRestack,
 }
 
 var (
-	cascadeOnlyFlag      bool
-	cascadeDryRunFlag    bool
-	cascadeWorktreesFlag bool
+	restackOnlyFlag      bool
+	restackDryRunFlag    bool
+	restackWorktreesFlag bool
 )
 
 func init() {
-	cascadeCmd.Flags().BoolVar(&cascadeOnlyFlag, "only", false, "only restack current branch, not descendants")
-	cascadeCmd.Flags().BoolVar(&cascadeDryRunFlag, "dry-run", false, "show what would be done")
-	cascadeCmd.Flags().BoolVar(&cascadeWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
-	rootCmd.AddCommand(cascadeCmd)
+	restackCmd.Flags().BoolVar(&restackOnlyFlag, "only", false, "only restack current branch, not descendants")
+	restackCmd.Flags().BoolVar(&restackDryRunFlag, "dry-run", false, "show what would be done")
+	restackCmd.Flags().BoolVar(&restackWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
+	rootCmd.AddCommand(restackCmd)
 }
 
-func runCascade(cmd *cobra.Command, args []string) error {
+func runRestack(cmd *cobra.Command, args []string) error {
 	s := style.New()
 
 	cwd, err := os.Getwd()
@@ -54,7 +54,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 
 	g := git.New(cwd)
 
-	// Check if cascade already in progress
+	// Check if restack already in progress
 	if state.Exists(g.GetGitDir()) {
 		return errors.New("operation already in progress; use 'gh stack continue' or 'gh stack abort'")
 	}
@@ -76,18 +76,18 @@ func runCascade(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("branch %q is not tracked in the stack\n\nTo add it, run:\n  gh stack adopt %s    # to stack on %s\n  gh stack adopt -p <parent>    # to stack on a different branch", currentBranch, trunk, trunk)
 	}
 
-	// Collect branches to cascade
+	// Collect branches to restack
 	var branches []*tree.Node
 	branches = append(branches, node)
-	if !cascadeOnlyFlag {
+	if !restackOnlyFlag {
 		branches = append(branches, tree.GetDescendants(node)...)
 	}
 
 	// Save undo snapshot (unless dry-run)
 	var stashRef string
-	if !cascadeDryRunFlag {
+	if !restackDryRunFlag {
 		var saveErr error
-		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "cascade", "gh stack restack", s)
+		stashRef, saveErr = saveUndoSnapshot(g, cfg, branches, nil, "restack", "gh stack restack", s)
 		if saveErr != nil {
 			fmt.Printf("%s could not save undo state: %v\n", s.WarningIcon(), saveErr)
 		}
@@ -95,7 +95,7 @@ func runCascade(cmd *cobra.Command, args []string) error {
 
 	// Build worktree map if --worktrees flag is set
 	var worktrees map[string]string
-	if cascadeWorktreesFlag {
+	if restackWorktreesFlag {
 		var wtErr error
 		worktrees, wtErr = g.ListWorktrees()
 		if wtErr != nil {
@@ -103,9 +103,9 @@ func runCascade(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	err = doCascadeWithState(g, cfg, branches, CascadeOptions{
-		DryRun:    cascadeDryRunFlag,
-		Operation: state.OperationCascade,
+	err = doRestackWithState(g, cfg, branches, RestackOptions{
+		DryRun:    restackDryRunFlag,
+		Operation: state.OperationRestack,
 		StashRef:  stashRef,
 		Worktrees: worktrees,
 	}, s)
@@ -121,15 +121,15 @@ func runCascade(cmd *cobra.Command, args []string) error {
 	return err
 }
 
-// CascadeOptions configures the behaviour of doCascadeWithState.
+// RestackOptions configures the behaviour of doRestackWithState.
 //
 // The submit-specific fields (UpdateOnly, OpenWeb, PushOnly, Branches) are
 // only meaningful when Operation is state.OperationSubmit; they are persisted
-// to cascade state so that the push/PR phases can be resumed after a conflict.
-type CascadeOptions struct {
+// to restack state so that the push/PR phases can be resumed after a conflict.
+type RestackOptions struct {
 	// DryRun prints what would be done without actually rebasing.
 	DryRun bool
-	// Operation is the type of operation being performed (state.OperationCascade
+	// Operation is the type of operation being performed (state.OperationRestack
 	// or state.OperationSubmit).
 	Operation string
 	// UpdateOnly skips creating new PRs; only existing PRs are updated.
@@ -140,8 +140,8 @@ type CascadeOptions struct {
 	// PushOnly skips the PR creation/update phase entirely. Submit-only.
 	PushOnly bool
 	// Branches is the complete list of branch names being submitted, used
-	// to rebuild the full set for push/PR phases after cascade completes.
-	// Submit-only. Mirrors state.CascadeState.Branches.
+	// to rebuild the full set for push/PR phases after restack completes.
+	// Submit-only. Mirrors state.RestackState.Branches.
 	Branches []string
 	// StashRef is the commit hash of auto-stashed changes (if any), persisted
 	// to state so they can be restored when the operation completes or is aborted.
@@ -152,8 +152,8 @@ type CascadeOptions struct {
 	Worktrees map[string]string
 }
 
-// doCascadeWithState performs cascade and saves state with the given operation type.
-func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, opts CascadeOptions, s *style.Style) error {
+// doRestackWithState performs restack and saves state with the given operation type.
+func doRestackWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, opts RestackOptions, s *style.Style) error {
 	originalBranch, err := g.CurrentBranch()
 	if err != nil {
 		return err
@@ -287,7 +287,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 				remaining = append(remaining, r.Name)
 			}
 
-			st := &state.CascadeState{
+			st := &state.RestackState{
 				Current:      b.Name,
 				Pending:      remaining,
 				OriginalHead: originalHead,
@@ -323,7 +323,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 
 	// Return to original branch
 	if !opts.DryRun {
-		_ = g.Checkout(originalBranch) //nolint:errcheck // best effort - cascade succeeded
+		_ = g.Checkout(originalBranch) //nolint:errcheck // best effort - restack succeeded
 	}
 
 	return nil
@@ -332,7 +332,7 @@ func doCascadeWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 // displayOperationName maps internal operation constants to user-facing names.
 func displayOperationName(op string) string {
 	switch op {
-	case state.OperationCascade:
+	case state.OperationRestack:
 		return "Restack"
 	case state.OperationSubmit:
 		return "Submit"

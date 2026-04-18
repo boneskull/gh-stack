@@ -18,7 +18,7 @@ func TestSaveAndLoadLatest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "feature-a")
+	snapshot := undo.NewSnapshot("restack", "gh stack restack", "feature-a")
 	snapshot.Branches["feature-a"] = undo.BranchState{
 		SHA:         "abc123def456",
 		StackParent: "main",
@@ -39,11 +39,11 @@ func TestSaveAndLoadLatest(t *testing.T) {
 		t.Fatalf("LoadLatest failed: %v", err)
 	}
 
-	if loaded.Operation != "cascade" {
-		t.Errorf("Operation mismatch: %q != %q", loaded.Operation, "cascade")
+	if loaded.Operation != "restack" {
+		t.Errorf("Operation mismatch: %q != %q", loaded.Operation, "restack")
 	}
-	if loaded.Command != "gh stack cascade" {
-		t.Errorf("Command mismatch: %q != %q", loaded.Command, "gh stack cascade")
+	if loaded.Command != "gh stack restack" {
+		t.Errorf("Command mismatch: %q != %q", loaded.Command, "gh stack restack")
 	}
 	if loaded.OriginalHead != "feature-a" {
 		t.Errorf("OriginalHead mismatch: %q != %q", loaded.OriginalHead, "feature-a")
@@ -79,7 +79,7 @@ func TestLoadLatestReturnsNewest(t *testing.T) {
 	}
 
 	// Create first snapshot
-	snapshot1 := undo.NewSnapshot("cascade", "gh stack cascade", "feature-a")
+	snapshot1 := undo.NewSnapshot("restack", "gh stack restack", "feature-a")
 	snapshot1.Timestamp = time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 	snapshot1.Branches["feature-a"] = undo.BranchState{SHA: "first"}
 	if err := undo.Save(gitDir, snapshot1); err != nil {
@@ -125,7 +125,7 @@ func TestArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+	snapshot := undo.NewSnapshot("restack", "gh stack restack", "main")
 	snapshot.Branches["feature"] = undo.BranchState{SHA: "abc123"}
 	if err := undo.Save(gitDir, snapshot); err != nil {
 		t.Fatal(err)
@@ -172,7 +172,7 @@ func TestList(t *testing.T) {
 	}
 
 	// Create multiple snapshots
-	for i, op := range []string{"cascade", "submit", "sync"} {
+	for i, op := range []string{"restack", "submit", "sync"} {
 		snapshot := undo.NewSnapshot(op, "gh stack "+op, "main")
 		snapshot.Timestamp = time.Date(2024, 1, i+1, 12, 0, 0, 0, time.UTC)
 		snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
@@ -194,8 +194,8 @@ func TestList(t *testing.T) {
 	if snapshots[0].Operation != "sync" {
 		t.Errorf("Expected sync (newest) first, got %q", snapshots[0].Operation)
 	}
-	if snapshots[2].Operation != "cascade" {
-		t.Errorf("Expected cascade (oldest) last, got %q", snapshots[2].Operation)
+	if snapshots[2].Operation != "restack" {
+		t.Errorf("Expected restack (oldest) last, got %q", snapshots[2].Operation)
 	}
 }
 
@@ -210,7 +210,7 @@ func TestExists(t *testing.T) {
 		t.Error("Exists should return false when no snapshots")
 	}
 
-	snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+	snapshot := undo.NewSnapshot("restack", "gh stack restack", "main")
 	snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
 	if err := undo.Save(gitDir, snapshot); err != nil {
 		t.Fatal(err)
@@ -272,7 +272,7 @@ func TestStashRef(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+	snapshot := undo.NewSnapshot("restack", "gh stack restack", "main")
 	snapshot.StashRef = "stash@{0}"
 	snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
 
@@ -297,7 +297,7 @@ func TestRemove(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+	snapshot := undo.NewSnapshot("restack", "gh stack restack", "main")
 	snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
 	if err := undo.Save(gitDir, snapshot); err != nil {
 		t.Fatal(err)
@@ -331,7 +331,7 @@ func TestSavePrunesOldSnapshots(t *testing.T) {
 
 	// Create 55 snapshots (exceeds the 50 limit)
 	for i := range 55 {
-		snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+		snapshot := undo.NewSnapshot("restack", "gh stack restack", "main")
 		// Use distinct timestamps to ensure unique filenames
 		snapshot.Timestamp = time.Date(2024, 1, 1, 0, 0, i, 0, time.UTC)
 		snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
@@ -373,7 +373,7 @@ func TestArchivePrunesOldSnapshots(t *testing.T) {
 
 	// Create and archive 55 snapshots (exceeds the 50 limit)
 	for i := range 55 {
-		snapshot := undo.NewSnapshot("cascade", "gh stack cascade", "main")
+		snapshot := undo.NewSnapshot("restack", "gh stack restack", "main")
 		snapshot.Timestamp = time.Date(2024, 1, 1, 0, 0, i, 0, time.UTC)
 		snapshot.Branches["feature"] = undo.BranchState{SHA: "abc"}
 		if err := undo.Save(gitDir, snapshot); err != nil {

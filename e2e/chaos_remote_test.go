@@ -15,22 +15,22 @@ func TestRemoteTrunkAhead(t *testing.T) {
 	// Simulate remote main moving ahead (another dev merged something)
 	env.SimulateSomeoneElsePushed("main")
 
-	// Local doesn't know yet - cascade uses local main
+	// Local doesn't know yet - restack uses local main
 	env.Git("checkout", "feature-1")
-	result := env.Run("cascade")
+	result := env.Run("restack")
 
 	// Should succeed with local state (feature-1 already up-to-date with local main)
 	if result.Failed() {
-		t.Errorf("cascade should work with local state: %s", result.Stderr)
+		t.Errorf("restack should work with local state: %s", result.Stderr)
 	}
 
 	// After fetch, local sees remote is ahead
 	env.FetchOrigin()
 
-	// Now cascade would pick up the new main commits
-	result = env.Run("cascade")
+	// Now restack would pick up the new main commits
+	result = env.Run("restack")
 	if result.Failed() {
-		t.Errorf("cascade after fetch should work: %s", result.Stderr)
+		t.Errorf("restack after fetch should work: %s", result.Stderr)
 	}
 }
 
@@ -47,7 +47,7 @@ func TestLocalTrunkAhead(t *testing.T) {
 	// Don't push!
 
 	env.Git("checkout", "feature-1")
-	env.MustRun("cascade")
+	env.MustRun("restack")
 
 	// Should work with local main (includes unpushed commit)
 	env.AssertAncestor("main", "feature-1")
@@ -96,14 +96,14 @@ func TestSomeoneElsePushedToMyBranch(t *testing.T) {
 
 	// Submit should fail - remote has diverged (--force-with-lease protects us)
 	result := env.Run("submit", "--dry-run")
-	// In dry-run, cascade/push phases shown but no actual push
+	// In dry-run, restack/push phases shown but no actual push
 	// The actual failure would happen on real push with --force-with-lease
 	if result.Failed() {
 		t.Logf("submit dry-run result: %s", result.Stderr)
 	}
 }
 
-func TestSubmitAfterCascade(t *testing.T) {
+func TestSubmitAfterRestack(t *testing.T) {
 	env := NewTestEnvWithRemote(t)
 	env.MustRun("init")
 
@@ -121,13 +121,13 @@ func TestSubmitAfterCascade(t *testing.T) {
 	env.Git("checkout", "feature-1")
 	result := env.MustRun("submit", "--dry-run")
 
-	// Should show cascade needed
+	// Should show restack needed
 	if !result.ContainsStdout("Would rebase") {
 		t.Error("submit should show rebase would happen")
 	}
 }
 
-func TestFetchBeforeCascade(t *testing.T) {
+func TestFetchBeforeRestack(t *testing.T) {
 	env := NewTestEnvWithRemote(t)
 	env.MustRun("init")
 
@@ -137,10 +137,10 @@ func TestFetchBeforeCascade(t *testing.T) {
 	// Remote main moves
 	env.SimulateSomeoneElsePushed("main")
 
-	// Without fetch, cascade uses stale local main
-	result := env.Run("cascade")
-	// Document: does cascade auto-fetch? Or use local state?
+	// Without fetch, restack uses stale local main
+	result := env.Run("restack")
+	// Document: does restack auto-fetch? Or use local state?
 	if result.Failed() {
-		t.Errorf("cascade should not fail: %s", result.Stderr)
+		t.Errorf("restack should not fail: %s", result.Stderr)
 	}
 }
