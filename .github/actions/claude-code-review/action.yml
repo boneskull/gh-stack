@@ -30,7 +30,7 @@ runs:
       # Pinned to v1 for supply-chain safety
       uses: anthropics/claude-code-action@b2fdd80112e5f140e097b11d7a3d9edf0b226fd0
       with:
-        allowed_bots: 'renovate[bot]'
+        allowed_bots: 'renovate[bot],cursor'
         claude_args: |
           --max-turns 20
         track_progress: true
