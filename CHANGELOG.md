@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.6.3](https://github.com/boneskull/gh-stack/compare/v0.6.2...v0.6.3) (2026-04-18)
+
+
+### Bug Fixes
+
+* **cmd:** defer submit push until PR intent is known ([96fb5b9](https://github.com/boneskull/gh-stack/commit/96fb5b9e981137fa2ab8bc8f21afca670ca86bf6))
+* **cmd:** only push stack branches when submit will touch PRs ([#89](https://github.com/boneskull/gh-stack/issues/89)) ([96fb5b9](https://github.com/boneskull/gh-stack/commit/96fb5b9e981137fa2ab8bc8f21afca670ca86bf6))
+* **deps:** update module github.com/charmbracelet/bubbles to v0.21.1 ([#87](https://github.com/boneskull/gh-stack/issues/87)) ([37e572a](https://github.com/boneskull/gh-stack/commit/37e572a5f513c5379fa565eb3e424190b6d01332))
+* **prompt:** support ESC to skip PR creation ([#85](https://github.com/boneskull/gh-stack/issues/85)) ([bfce25d](https://github.com/boneskull/gh-stack/commit/bfce25d3d04ed6201a40344a7d25a5425bb38765))
+* **prompt:** support ESC to skip PR creation in huh form ([bfce25d](https://github.com/boneskull/gh-stack/commit/bfce25d3d04ed6201a40344a7d25a5425bb38765)), closes [#78](https://github.com/boneskull/gh-stack/issues/78)
+* rename cascade to restack more generally ([#94](https://github.com/boneskull/gh-stack/issues/94)) ([115ce65](https://github.com/boneskull/gh-stack/commit/115ce650a8621eca5c070b1a034b0fa8788085e4))
+* **restack:** prevent stale fork points from triggering incorrect --onto rebases ([#83](https://github.com/boneskull/gh-stack/issues/83)) ([a9af01a](https://github.com/boneskull/gh-stack/commit/a9af01a1e7f39896023bd5d7cecfbcb2a9744668))
+
 ## [0.6.2](https://github.com/boneskull/gh-stack/compare/v0.6.1...v0.6.2) (2026-04-08)
 
 
