@@ -22,7 +22,7 @@ jobs:
       # Action definition is always fetched from main, so PRs that edit it
       # don't affect the running version until merged.
       - name: Run Claude Code Review
-        uses: boneskull/gh-stack/.github/actions/claude-code-review@main
+        uses: boneskull/gh-stack/.github/actions/claude-code-review@115ce650a8621eca5c070b1a034b0fa8788085e4 # main
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           repository: ${{ github.repository }}
