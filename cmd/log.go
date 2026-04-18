@@ -29,8 +29,8 @@ var (
 )
 
 func init() {
-	logCmd.Flags().BoolVar(&logAllFlag, "all", false, "show all branches")
-	logCmd.Flags().BoolVar(&logPorcelainFlag, "porcelain", false, "machine-readable output")
+	logCmd.Flags().BoolVarP(&logAllFlag, "all", "a", false, "show all branches")
+	logCmd.Flags().BoolVarP(&logPorcelainFlag, "porcelain", "p", false, "machine-readable output")
 	rootCmd.AddCommand(logCmd)
 }
 

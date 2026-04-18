@@ -26,7 +26,7 @@ By default, adopts the current branch. Use --branch to specify a different branc
 var adoptBranchFlag string
 
 func init() {
-	adoptCmd.Flags().StringVar(&adoptBranchFlag, "branch", "", "branch to adopt (default: current branch)")
+	adoptCmd.Flags().StringVarP(&adoptBranchFlag, "branch", "b", "", "branch to adopt (default: current branch)")
 	rootCmd.AddCommand(adoptCmd)
 }
 

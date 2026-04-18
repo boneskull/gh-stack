@@ -36,9 +36,9 @@ var (
 )
 
 func init() {
-	rootCmd.AddCommand(undoCmd)
 	undoCmd.Flags().BoolVarP(&undoForce, "force", "f", false, "Skip confirmation prompt")
-	undoCmd.Flags().BoolVar(&undoDryRun, "dry-run", false, "Show what would be restored without making changes")
+	undoCmd.Flags().BoolVarP(&undoDryRun, "dry-run", "D", false, "Show what would be restored without making changes")
+	rootCmd.AddCommand(undoCmd)
 }
 
 func runUndo(cmd *cobra.Command, args []string) error {

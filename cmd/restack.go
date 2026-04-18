@@ -33,9 +33,9 @@ var (
 )
 
 func init() {
-	restackCmd.Flags().BoolVar(&restackOnlyFlag, "only", false, "only restack current branch, not descendants")
-	restackCmd.Flags().BoolVar(&restackDryRunFlag, "dry-run", false, "show what would be done")
-	restackCmd.Flags().BoolVar(&restackWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
+	restackCmd.Flags().BoolVarP(&restackOnlyFlag, "current", "c", false, "only restack current branch, not descendants")
+	restackCmd.Flags().BoolVarP(&restackDryRunFlag, "dry-run", "D", false, "show what would be done")
+	restackCmd.Flags().BoolVarP(&restackWorktreesFlag, "worktrees", "w", false, "rebase branches checked out in linked worktrees in-place")
 	rootCmd.AddCommand(restackCmd)
 }
 
