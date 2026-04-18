@@ -30,7 +30,7 @@ parent-before-child order. Use --from to limit the scope to a subtree.
 
 Phases:
 1. Restack: rebase affected branches onto their parents
-2. Push: force-push all affected branches (with --force-with-lease)
+2. Push: force-push branches that will get a PR (or that are bases for one), with --force-with-lease
 3. PR: create PRs for branches without them, update PR bases for those that have them
 
 If a rebase conflict occurs, resolve it and run 'gh stack continue'.`,
@@ -47,8 +47,35 @@ var (
 	submitFromFlag        string
 )
 
-// ErrPRSkipped is returned when a user skips PR creation by pressing ESC.
-var ErrPRSkipped = errors.New("PR creation skipped by user")
+// prAction describes what we will do for a branch in the PR phase after push.
+type prAction int
+
+const (
+	prActionSkip prAction = iota
+	prActionUpdate
+	prActionAdopt
+	prActionCreate
+)
+
+// prDecision is the outcome of planning one stack branch before any push.
+type prDecision struct {
+	node   *tree.Node
+	parent string
+	action prAction
+	// prActionUpdate
+	prNum int
+	// prActionAdopt
+	adoptPR *github.PR
+	// prActionCreate
+	title string
+	body  string
+	draft bool
+	// pushAnyway is true when action is prActionSkip but a descendant branch
+	// will get a PR, so the branch must still exist on the remote as a base.
+	pushAnyway bool
+	// skipReason is set when action is prActionSkip ("update-only" or "user").
+	skipReason string
+}
 
 func init() {
 	submitCmd.Flags().BoolVar(&submitDryRunFlag, "dry-run", false, "show what would be done without doing it")
@@ -230,9 +257,41 @@ type SubmitOptions struct {
 // doSubmitPushAndPR handles push and PR creation/update phases.
 // This is called after cascade succeeds (or from continue after conflict resolution).
 func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, opts SubmitOptions, s *style.Style) error {
-	// Phase 2: Push all branches
+	var decisions []*prDecision
+	var ghClient *github.Client
+	if !opts.PushOnly && !opts.DryRun {
+		var clientErr error
+		ghClient, clientErr = github.NewClient()
+		if clientErr != nil {
+			return clientErr
+		}
+	}
+	if !opts.PushOnly {
+		trunk, err := cfg.GetTrunk()
+		if err != nil {
+			return err
+		}
+		decisions = planPRDecisions(g, cfg, ghClient, trunk, branches, opts.DryRun, opts.UpdateOnly, s)
+		applyMustPushForSkippedAncestors(decisions)
+	}
+
+	decisionByName := make(map[string]*prDecision, len(decisions))
+	for _, d := range decisions {
+		decisionByName[d.node.Name] = d
+	}
+
+	// Phase 2: Push branches that will participate in PRs (or all if --push-only).
 	fmt.Println(s.Bold("\n=== Phase 2: Push ==="))
 	for _, b := range branches {
+		var d *prDecision
+		if !opts.PushOnly {
+			d = decisionByName[b.Name]
+		}
+		shouldPush := opts.PushOnly || d == nil || d.action != prActionSkip || d.pushAnyway
+		if !shouldPush {
+			fmt.Printf("Skipping push for %s %s\n", s.Branch(b.Name), s.Muted("(no PR for this branch)"))
+			continue
+		}
 		if opts.DryRun {
 			fmt.Printf("%s Would push %s -> origin/%s (forced)\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(b.Name))
 		} else {
@@ -245,17 +304,106 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 		}
 	}
 
-	// Phase 3: Create/update PRs
 	if opts.PushOnly {
 		fmt.Println(s.Bold("\n=== Phase 3: PRs ==="))
 		fmt.Println(s.Muted("Skipped (--push-only)"))
 		return nil
 	}
-	return doSubmitPRs(g, cfg, root, branches, opts, s)
+	return executePRDecisions(g, cfg, root, decisions, ghClient, opts, s)
 }
 
-// doSubmitPRs handles PR creation/update for all branches.
-func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tree.Node, opts SubmitOptions, s *style.Style) error {
+// planPRDecisions resolves what to do for each branch before any push.
+// When dryRun is true, ghClient may be nil (no GitHub lookups for adopt).
+func planPRDecisions(g *git.Git, cfg *config.Config, ghClient *github.Client, trunk string, branches []*tree.Node, dryRun, updateOnly bool, s *style.Style) []*prDecision {
+	out := make([]*prDecision, 0, len(branches))
+	for _, b := range branches {
+		parent, _ := cfg.GetParent(b.Name) //nolint:errcheck // empty is fine
+		if parent == "" {
+			parent = trunk
+		}
+		existingPR, _ := cfg.GetPR(b.Name) //nolint:errcheck // 0 is fine
+		switch {
+		case existingPR > 0:
+			out = append(out, &prDecision{node: b, parent: parent, action: prActionUpdate, prNum: existingPR})
+		case updateOnly:
+			out = append(out, &prDecision{node: b, parent: parent, action: prActionSkip, skipReason: "update-only"})
+		case dryRun:
+			out = append(out, planPRDecisionDryRun(g, b, parent, trunk, s))
+		default:
+			out = append(out, planPRDecisionInteractive(g, ghClient, b, parent, trunk, s))
+		}
+	}
+	return out
+}
+
+func planPRDecisionDryRun(g *git.Git, b *tree.Node, parent, trunk string, s *style.Style) *prDecision {
+	draft := parent != trunk
+	defaultTitle := generateDefaultTitle(g, parent, b.Name)
+	defaultBody, bodyErr := generatePRBody(g, parent, b.Name)
+	if bodyErr != nil {
+		fmt.Printf("%s could not generate PR body: %v\n", s.WarningIcon(), bodyErr)
+		defaultBody = ""
+	}
+	return &prDecision{
+		node:   b,
+		parent: parent,
+		action: prActionCreate,
+		title:  defaultTitle,
+		body:   defaultBody,
+		draft:  draft,
+	}
+}
+
+func planPRDecisionInteractive(g *git.Git, ghClient *github.Client, b *tree.Node, parent, trunk string, s *style.Style) *prDecision {
+	branch := b.Name
+	existingPR, err := ghClient.FindPRByHead(branch)
+	if err != nil {
+		fmt.Printf("%s could not check for existing PR: %v\n", s.WarningIcon(), err)
+	} else if existingPR != nil {
+		return &prDecision{node: b, parent: parent, action: prActionAdopt, adoptPR: existingPR}
+	}
+
+	draft := parent != trunk
+	defaultTitle := generateDefaultTitle(g, parent, branch)
+	defaultBody, bodyErr := generatePRBody(g, parent, branch)
+	if bodyErr != nil {
+		fmt.Printf("%s could not generate PR body: %v\n", s.WarningIcon(), bodyErr)
+		defaultBody = ""
+	}
+	title, body, skipped, err := promptForPRDetails(branch, defaultTitle, defaultBody, s)
+	if err != nil {
+		fmt.Printf("%s failed to get PR details for %s: %v\n", s.WarningIcon(), s.Branch(branch), err)
+		return &prDecision{node: b, parent: parent, action: prActionSkip, skipReason: "user"}
+	}
+	if skipped {
+		return &prDecision{node: b, parent: parent, action: prActionSkip, skipReason: "user"}
+	}
+	return &prDecision{node: b, parent: parent, action: prActionCreate, title: title, body: body, draft: draft}
+}
+
+// applyMustPushForSkippedAncestors marks skipped branches that must still be
+// pushed because a descendant will open or update a PR that uses them as base.
+func applyMustPushForSkippedAncestors(decisions []*prDecision) {
+	byName := make(map[string]*prDecision, len(decisions))
+	for _, d := range decisions {
+		byName[d.node.Name] = d
+	}
+	for _, d := range decisions {
+		if d.action == prActionSkip {
+			continue
+		}
+		for cur := d.node.Parent; cur != nil; cur = cur.Parent {
+			if x := byName[cur.Name]; x != nil && x.action == prActionSkip {
+				x.pushAnyway = true
+			}
+		}
+	}
+}
+
+// executePRDecisions runs the PR phase from pre-planned decisions (after push).
+// planningClient is the client used during planPRDecisions; it is nil in dry-run.
+// When not dry-run, the same client is reused here (no second NewClient).
+func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisions []*prDecision, planningClient *github.Client, opts SubmitOptions, s *style.Style) error {
 	fmt.Println(s.Bold("\n=== Phase 3: PRs ==="))
 
 	trunk, err := cfg.GetTrunk()
@@ -263,9 +411,8 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 		return err
 	}
 
-	// In dry-run mode, we don't need a GitHub client
-	var ghClient *github.Client
-	if !opts.DryRun {
+	ghClient := planningClient
+	if !opts.DryRun && ghClient == nil {
 		var clientErr error
 		ghClient, clientErr = github.NewClient()
 		if clientErr != nil {
@@ -273,19 +420,15 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 		}
 	}
 
-	// Build remote branches set for stack comment filtering.
-	// This uses locally-cached tracking refs which are up-to-date after Phase 2 push.
 	var remoteBranches map[string]bool
 	if !opts.DryRun {
 		var rbErr error
 		remoteBranches, rbErr = g.ListRemoteBranches()
 		if rbErr != nil {
-			// Non-fatal: we can still render without filtering
 			fmt.Printf("%s could not list remote branches, stack comments may reference local-only branches: %v\n", s.WarningIcon(), rbErr)
 		}
 	}
 
-	// Build the PR context once - shared across all branches in this submit run.
 	pCtx := prContext{
 		ghClient:       ghClient,
 		cfg:            cfg,
@@ -295,75 +438,88 @@ func doSubmitPRs(g *git.Git, cfg *config.Config, root *tree.Node, branches []*tr
 		s:              s,
 	}
 
-	// Collect PR URLs for --web flag
 	var prURLs []string
 
-	for _, b := range branches {
-		parent, _ := cfg.GetParent(b.Name) //nolint:errcheck // empty is fine
-		if parent == "" {
-			parent = trunk
-		}
+	for _, d := range decisions {
+		b := d.node
+		parent := d.parent
 
-		existingPR, _ := cfg.GetPR(b.Name) //nolint:errcheck // 0 is fine
-
-		switch {
-		case existingPR > 0:
-			// Update existing PR
+		switch d.action {
+		case prActionSkip:
 			if opts.DryRun {
-				fmt.Printf("%s Would update PR #%d base to %s\n", pCtx.s.Muted("dry-run:"), existingPR, pCtx.s.Branch(parent))
+				if d.skipReason == "update-only" {
+					fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update-only)"))
+				}
+				continue
+			}
+			switch d.skipReason {
+			case "update-only":
+				fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update-only)"))
+			case "user":
+				fmt.Printf("Skipped PR for %s %s\n", s.Branch(b.Name), s.Muted("(skipped)"))
+			}
+		case prActionUpdate:
+			if opts.DryRun {
+				fmt.Printf("%s Would update PR #%d base to %s\n", s.Muted("dry-run:"), d.prNum, s.Branch(parent))
 			} else {
-				fmt.Printf("Updating PR #%d for %s (base: %s)... ", existingPR, pCtx.s.Branch(b.Name), pCtx.s.Branch(parent))
-				if err := pCtx.ghClient.UpdatePRBase(existingPR, parent); err != nil {
-					fmt.Println(pCtx.s.Error("failed"))
-					fmt.Printf("%s failed to update PR #%d base: %v\n", pCtx.s.WarningIcon(), existingPR, err)
+				fmt.Printf("Updating PR #%d for %s (base: %s)... ", d.prNum, s.Branch(b.Name), s.Branch(parent))
+				if err := ghClient.UpdatePRBase(d.prNum, parent); err != nil {
+					fmt.Println(s.Error("failed"))
+					fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), d.prNum, err)
 				} else {
-					fmt.Println(pCtx.s.Success("ok"))
+					fmt.Println(s.Success("ok"))
 					if opts.OpenWeb {
-						prURLs = append(prURLs, pCtx.ghClient.PRURL(existingPR))
+						prURLs = append(prURLs, ghClient.PRURL(d.prNum))
 					}
 				}
-				// Update stack comment
-				if err := pCtx.ghClient.GenerateAndPostStackComment(pCtx.root, b.Name, pCtx.trunk, existingPR, pCtx.remoteBranches); err != nil {
-					fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", pCtx.s.WarningIcon(), existingPR, err)
+				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, d.prNum, remoteBranches); err != nil {
+					fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), d.prNum, err)
 				}
-
-				// If PR is a draft and now targets trunk, offer to publish
-				maybeMarkPRReady(pCtx.ghClient, existingPR, b.Name, parent, pCtx.trunk, pCtx.s)
+				maybeMarkPRReady(ghClient, d.prNum, b.Name, parent, trunk, s)
 			}
-		case !opts.UpdateOnly:
-			// Create new PR
+		case prActionAdopt:
 			if opts.DryRun {
-				fmt.Printf("%s Would create PR for %s (base: %s)\n", pCtx.s.Muted("dry-run:"), pCtx.s.Branch(b.Name), pCtx.s.Branch(parent))
+				fmt.Printf("%s Would adopt PR #%d for %s (base: %s)\n", s.Muted("dry-run:"), d.adoptPR.Number, s.Branch(b.Name), s.Branch(parent))
 			} else {
-				prNum, adopted, err := createPRForBranch(g, pCtx, b.Name, parent)
+				prNum, adoptErr := adoptExistingPRDirect(pCtx, b.Name, parent, d.adoptPR)
 				switch {
-				case errors.Is(err, ErrPRSkipped):
-					fmt.Printf("Skipped PR for %s %s\n", pCtx.s.Branch(b.Name), pCtx.s.Muted("(skipped)"))
-				case err != nil:
-					fmt.Printf("%s failed to create PR for %s: %v\n", pCtx.s.WarningIcon(), pCtx.s.Branch(b.Name), err)
-				case adopted:
-					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", pCtx.s.SuccessIcon(), prNum, pCtx.s.Branch(b.Name), pCtx.ghClient.PRURL(prNum))
+				case adoptErr != nil:
+					fmt.Printf("%s failed to adopt PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), adoptErr)
+				default:
+					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
 					if opts.OpenWeb {
-						prURLs = append(prURLs, pCtx.ghClient.PRURL(prNum))
+						prURLs = append(prURLs, ghClient.PRURL(prNum))
+					}
+				}
+			}
+		case prActionCreate:
+			if opts.DryRun {
+				fmt.Printf("%s Would create PR for %s (base: %s)\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(parent))
+			} else {
+				prNum, adopted, execErr := executePRCreate(pCtx, b.Name, parent, d.title, d.body, d.draft)
+				switch {
+				case execErr != nil:
+					fmt.Printf("%s failed to create PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), execErr)
+				case adopted:
+					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
+					if opts.OpenWeb {
+						prURLs = append(prURLs, ghClient.PRURL(prNum))
 					}
 				default:
-					fmt.Printf("%s Created PR #%d for %s (%s)\n", pCtx.s.SuccessIcon(), prNum, pCtx.s.Branch(b.Name), pCtx.ghClient.PRURL(prNum))
+					fmt.Printf("%s Created PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
 					if opts.OpenWeb {
-						prURLs = append(prURLs, pCtx.ghClient.PRURL(prNum))
+						prURLs = append(prURLs, ghClient.PRURL(prNum))
 					}
 				}
 			}
-		default:
-			fmt.Printf("Skipping %s %s\n", pCtx.s.Branch(b.Name), pCtx.s.Muted("(no existing PR, --update-only)"))
 		}
 	}
 
-	// Open PRs in browser if requested
 	if opts.OpenWeb && len(prURLs) > 0 {
-		b := browser.New("", os.Stdout, os.Stderr)
+		brw := browser.New("", os.Stdout, os.Stderr)
 		for _, url := range prURLs {
-			if err := b.Browse(url); err != nil {
-				fmt.Fprintf(os.Stderr, "%s could not open browser for %s: %v\n", pCtx.s.WarningIcon(), url, err)
+			if err := brw.Browse(url); err != nil {
+				fmt.Fprintf(os.Stderr, "%s could not open browser for %s: %v\n", s.WarningIcon(), url, err)
 			}
 		}
 	}
@@ -384,53 +540,15 @@ type prContext struct {
 	s              *style.Style
 }
 
-// createPRForBranch creates a PR for the given branch and stores the PR number.
-// If a PR already exists for the branch, it adopts the existing PR instead.
-// Returns (prNumber, adopted, error) where adopted is true if we adopted an existing PR.
-func createPRForBranch(g *git.Git, pCtx prContext, branch, base string) (int, bool, error) {
-	// Check for existing PR on GitHub BEFORE prompting user for title/description.
-	// This avoids the confusing UX where we prompt then immediately say "oh, PR already exists".
-	existingPR, err := pCtx.ghClient.FindPRByHead(branch)
-	if err != nil {
-		// Non-fatal: proceed with creation attempt which will give clearer error if needed
-		fmt.Printf("%s could not check for existing PR: %v\n", pCtx.s.WarningIcon(), err)
-	} else if existingPR != nil {
-		// PR exists on GitHub but wasn't in local config - adopt it without prompting
-		prNum, adoptErr := adoptExistingPRDirect(pCtx, branch, base, existingPR)
-		return prNum, true, adoptErr
-	}
-
-	// Determine if draft (not targeting trunk = middle of stack)
-	draft := base != pCtx.trunk
-
-	// Generate default title from first commit message (falls back to branch name)
-	defaultTitle := generateDefaultTitle(g, base, branch)
-
-	// Generate PR body from commits
-	defaultBody, bodyErr := generatePRBody(g, base, branch)
-	if bodyErr != nil {
-		// Non-fatal: just skip auto-body
-		fmt.Printf("%s could not generate PR body: %v\n", pCtx.s.WarningIcon(), bodyErr)
-		defaultBody = ""
-	}
-
-	// Get title and body (prompt if interactive and --yes not set)
-	title, body, skipped, err := promptForPRDetails(branch, defaultTitle, defaultBody, pCtx.s)
-	if err != nil {
-		return 0, false, fmt.Errorf("failed to get PR details: %w", err)
-	}
-	if skipped {
-		return 0, false, ErrPRSkipped
-	}
-
+// executePRCreate opens a PR with the given title/body (branch must be on the remote).
+// Returns adopted true if an existing PR was adopted instead of creating.
+func executePRCreate(pCtx prContext, branch, base, title, body string, draft bool) (prNum int, adopted bool, err error) {
 	pr, err := pCtx.ghClient.CreateSubmitPR(branch, base, title, body, draft)
 	if err != nil {
-		// Check if PR already exists - if so, adopt it
 		if strings.Contains(err.Error(), "pull request already exists") {
 			prNum, adoptErr := adoptExistingPR(pCtx, branch, base)
 			return prNum, true, adoptErr
 		}
-		// Detect missing base branch on remote and provide an actionable message
 		if isBaseBranchInvalidError(err) {
 			return 0, false, fmt.Errorf(
 				"base branch %q does not exist on the remote; push it first or run 'gh stack submit' to push the entire stack: %w",
@@ -439,17 +557,14 @@ func createPRForBranch(g *git.Git, pCtx prContext, branch, base string) (int, bo
 		return 0, false, err
 	}
 
-	// Store PR number in config
 	if err := pCtx.cfg.SetPR(branch, pr.Number); err != nil {
 		return pr.Number, false, fmt.Errorf("PR created but failed to store number: %w", err)
 	}
 
-	// Update the tree node's PR number so stack comments render correctly
 	if node := tree.FindNode(pCtx.root, branch); node != nil {
 		node.PR = pr.Number
 	}
 
-	// Add stack navigation comment
 	if err := pCtx.ghClient.GenerateAndPostStackComment(pCtx.root, branch, pCtx.trunk, pr.Number, pCtx.remoteBranches); err != nil {
 		fmt.Printf("%s failed to add stack comment to PR #%d: %v\n", pCtx.s.WarningIcon(), pr.Number, err)
 	}
@@ -577,7 +692,7 @@ func adoptExistingPR(pCtx prContext, branch, base string) (int, error) {
 }
 
 // adoptExistingPRDirect adopts an already-fetched PR into the stack.
-// This is the implementation shared by adoptExistingPR and the early-detection path in createPRForBranch.
+// This is the implementation shared by adoptExistingPR and the adopt path in executePRDecisions.
 func adoptExistingPRDirect(pCtx prContext, branch, base string, existingPR *github.PR) (int, error) {
 	// Store PR number in config
 	if err := pCtx.cfg.SetPR(branch, existingPR.Number); err != nil {
@@ -633,9 +748,9 @@ func promptMarkPRReady(ghClient *github.Client, prNumber int, branch, trunk stri
 	fmt.Printf("PR #%d (%s) is a draft and now targets %s.\n", prNumber, s.Branch(branch), s.Branch(trunk))
 
 	// Skip prompt if --yes flag is set or non-interactive
-	shouldMarkReady := true
+	shouldMarkReady := false
 	if !submitYesFlag && prompt.IsInteractive() {
-		shouldMarkReady, _ = prompt.Confirm("Mark as ready for review?", true) //nolint:errcheck // default is fine
+		shouldMarkReady, _ = prompt.Confirm("Mark as ready for review?", false) //nolint:errcheck // default is fine
 	}
 
 	if shouldMarkReady {
