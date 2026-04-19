@@ -23,7 +23,7 @@ var orphanCmd = &cobra.Command{
 var orphanForceFlag bool
 
 func init() {
-	orphanCmd.Flags().BoolVar(&orphanForceFlag, "force", false, "also orphan all descendants")
+	orphanCmd.Flags().BoolVarP(&orphanForceFlag, "force", "f", false, "also orphan all descendants")
 	rootCmd.AddCommand(orphanCmd)
 }
 

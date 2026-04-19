@@ -76,8 +76,8 @@ func TestSubmitCurrentOnlyDryRun(t *testing.T) {
 
 	env.Git("checkout", "feat-a")
 
-	// Submit --current-only should NOT restack feat-b
-	result := env.MustRun("submit", "--dry-run", "--current-only")
+	// Submit --current should NOT restack feat-b
+	result := env.MustRun("submit", "--dry-run", "--current")
 
 	// Should mention feat-a but not feat-b in push phase
 	output := result.Stdout
@@ -85,7 +85,7 @@ func TestSubmitCurrentOnlyDryRun(t *testing.T) {
 		t.Error("expected feat-a push in output")
 	}
 	if strings.Contains(output, "Would push feat-b") {
-		t.Error("feat-b should not be pushed with --current-only")
+		t.Error("feat-b should not be pushed with --current")
 	}
 }
 
@@ -136,13 +136,13 @@ func TestSubmitUpdateOnlyDryRun(t *testing.T) {
 	env.MustRun("create", "feature-1")
 	env.CreateCommit("feature 1 work")
 
-	// With --update-only, should skip PR creation for branches without PRs
-	result := env.MustRun("submit", "--dry-run", "--update-only")
+	// With --update, should skip PR creation for branches without PRs
+	result := env.MustRun("submit", "--dry-run", "--update")
 
-	// Should not show "Would create PR" since update-only skips creation
+	// Should not show "Would create PR" since update skips creation
 	// (In dry-run, it should show the skip message)
 	if strings.Contains(result.Stdout, "Would create PR") {
-		t.Error("should not create PR with --update-only")
+		t.Error("should not create PR with --update")
 	}
 }
 
@@ -247,11 +247,11 @@ func TestSubmitFromTrunkCurrentOnlyFails(t *testing.T) {
 	// Go back to trunk
 	env.Git("checkout", "main")
 
-	// Submit --current-only from trunk should fail
-	result := env.Run("submit", "--dry-run", "--current-only")
+	// Submit --current from trunk should fail
+	result := env.Run("submit", "--dry-run", "--current")
 
 	if result.Success() {
-		t.Error("expected submit --current-only from trunk to fail")
+		t.Error("expected submit --current from trunk to fail")
 	}
 	if !strings.Contains(result.Stderr, "cannot submit trunk") {
 		t.Errorf("expected error about trunk, got: %s", result.Stderr)
@@ -281,7 +281,7 @@ func TestSubmitPushOnlyDryRun(t *testing.T) {
 	env.MustRun("create", "feature-1")
 	env.CreateCommit("feature 1 work")
 
-	result := env.MustRun("submit", "--dry-run", "--push-only")
+	result := env.MustRun("submit", "--dry-run", "--skip-prs")
 
 	// Should show all three phases
 	if !strings.Contains(result.Stdout, "Phase 1: Restack") {
@@ -295,13 +295,13 @@ func TestSubmitPushOnlyDryRun(t *testing.T) {
 	}
 
 	// Should show skipped message for PR phase
-	if !strings.Contains(result.Stdout, "Skipped (--push-only)") {
-		t.Error("expected 'Skipped (--push-only)' message")
+	if !strings.Contains(result.Stdout, "Skipped (--skip-prs)") {
+		t.Error("expected 'Skipped (--skip-prs)' message")
 	}
 
 	// Should NOT mention PR creation
 	if strings.Contains(result.Stdout, "Would create PR") {
-		t.Error("should not mention PR creation with --push-only")
+		t.Error("should not mention PR creation with --skip-prs")
 	}
 }
 
@@ -312,12 +312,12 @@ func TestSubmitPushOnlyWithUpdateOnlyFails(t *testing.T) {
 	env.MustRun("create", "feature-1")
 	env.CreateCommit("feature 1 work")
 
-	result := env.Run("submit", "--dry-run", "--push-only", "--update-only")
+	result := env.Run("submit", "--dry-run", "--skip-prs", "--update")
 
 	if result.Success() {
-		t.Error("expected --push-only and --update-only to fail")
+		t.Error("expected --skip-prs and --update to fail")
 	}
-	if !strings.Contains(result.Stderr, "--push-only and --update-only cannot be used together") {
+	if !strings.Contains(result.Stderr, "--skip-prs and --update cannot be used together") {
 		t.Errorf("expected error about conflicting flags, got: %s", result.Stderr)
 	}
 }
@@ -329,12 +329,12 @@ func TestSubmitPushOnlyWithWebFails(t *testing.T) {
 	env.MustRun("create", "feature-1")
 	env.CreateCommit("feature 1 work")
 
-	result := env.Run("submit", "--dry-run", "--push-only", "--web")
+	result := env.Run("submit", "--dry-run", "--skip-prs", "--web")
 
 	if result.Success() {
-		t.Error("expected --push-only and --web to fail")
+		t.Error("expected --skip-prs and --web to fail")
 	}
-	if !strings.Contains(result.Stderr, "--push-only and --web cannot be used together") {
+	if !strings.Contains(result.Stderr, "--skip-prs and --web cannot be used together") {
 		t.Errorf("expected error about conflicting flags, got: %s", result.Stderr)
 	}
 }
@@ -456,12 +456,12 @@ func TestSubmitFromAndCurrentOnlyMutualExclusion(t *testing.T) {
 	env.MustRun("create", "feat-a")
 	env.CreateCommit("a work")
 
-	result := env.Run("submit", "--dry-run", "--from=feat-a", "--current-only")
+	result := env.Run("submit", "--dry-run", "--from=feat-a", "--current")
 
 	if result.Success() {
-		t.Error("expected --from and --current-only to fail")
+		t.Error("expected --from and --current to fail")
 	}
-	if !strings.Contains(result.Stderr, "--from and --current-only cannot be used together") {
+	if !strings.Contains(result.Stderr, "--from and --current cannot be used together") {
 		t.Errorf("expected error about conflicting flags, got: %s", result.Stderr)
 	}
 }

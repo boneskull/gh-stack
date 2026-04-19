@@ -162,15 +162,15 @@ func TestCreateEmptyWithStagedChanges(t *testing.T) {
 	os.WriteFile(f, []byte("content"), 0644)
 	exec.Command("git", "-C", dir, "add", f).Run()
 
-	// Create branch WITHOUT committing (--empty behavior)
+	// Create branch WITHOUT committing (--no-commit behavior)
 	g.CreateAndCheckout("feature-empty")
 	cfg.SetParent("feature-empty", trunk)
-	// Don't commit - this simulates --empty flag
+	// Don't commit - this simulates --no-commit flag
 
 	// Staged changes should still exist
 	hasStaged, _ := g.HasStagedChanges()
 	if !hasStaged {
-		t.Error("expected staged changes to remain with --empty")
+		t.Error("expected staged changes to remain with --no-commit")
 	}
 }
 

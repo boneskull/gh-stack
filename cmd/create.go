@@ -27,7 +27,7 @@ var (
 
 func init() {
 	createCmd.Flags().StringVarP(&createMessageFlag, "message", "m", "", "commit message for staged changes")
-	createCmd.Flags().BoolVar(&createEmptyFlag, "empty", false, "create branch without committing staged changes")
+	createCmd.Flags().BoolVarP(&createEmptyFlag, "no-commit", "C", false, "create branch without committing staged changes")
 	rootCmd.AddCommand(createCmd)
 }
 
@@ -77,7 +77,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 
 	if hasStaged && !createEmptyFlag {
 		if createMessageFlag == "" {
-			return errors.New("staged changes found but no commit message provided; use -m or --empty")
+			return errors.New("staged changes found but no commit message provided; use -m or --no-commit")
 		}
 	}
 

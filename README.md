@@ -170,10 +170,10 @@ Display the branch tree showing the stack hierarchy, current branch, and associa
 
 #### log Flags
 
-| Flag          | Description                           |
-| ------------- | ------------------------------------- |
-| `--all`       | Show all branches                     |
-| `--porcelain` | Machine-readable tab-separated output |
+| Flag              | Description                           |
+| ----------------- | ------------------------------------- |
+| `-a, --all`       | Show all branches                     |
+| `-p, --porcelain` | Machine-readable tab-separated output |
 
 #### Porcelain Format
 
@@ -197,10 +197,10 @@ gh stack create <name>
 
 #### create Flags
 
-| Flag            | Description                                     |
-| --------------- | ----------------------------------------------- |
-| `-m, --message` | Commit message for staged changes               |
-| `--empty`       | Create branch without committing staged changes |
+| Flag              | Description                                     |
+| ----------------- | ----------------------------------------------- |
+| `-m, --message`   | Commit message for staged changes               |
+| `-C, --no-commit` | Create branch without committing staged changes |
 
 ### adopt
 
@@ -216,9 +216,9 @@ gh stack adopt <parent>
 
 #### adopt Flags
 
-| Flag       | Description                               |
-| ---------- | ----------------------------------------- |
-| `--branch` | Branch to adopt (default: current branch) |
+| Flag           | Description                               |
+| -------------- | ----------------------------------------- |
+| `-b, --branch` | Branch to adopt (default: current branch) |
 
 ### orphan
 
@@ -236,9 +236,9 @@ If no branch is specified, orphans the current branch.
 
 #### orphan Flags
 
-| Flag      | Description                 |
-| --------- | --------------------------- |
-| `--force` | Also orphan all descendants |
+| Flag          | Description                 |
+| ------------- | --------------------------- |
+| `-f, --force` | Also orphan all descendants |
 
 ### link
 
@@ -276,15 +276,15 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### submit Flags
 
-| Flag             | Description                                                              |
-| ---------------- | ------------------------------------------------------------------------ |
-| `--dry-run`      | Show what would happen without doing it                                  |
-| `--from [branch]` | Submit from this branch toward leaves (bare `--from` = current branch) |
-| `--current-only` | Only submit the current branch, not descendants                          |
-| `--update-only`  | Only update existing PRs, don't create new ones                          |
-| `--push-only`    | Skip PR creation/update, only restack and push                           |
-| `-y, --yes`      | Skip interactive prompts; use auto-generated PR title/description        |
-| `-w, --web`      | Open created/updated PRs in web browser                                  |
+| Flag                  | Description                                                            |
+| --------------------- | ---------------------------------------------------------------------- |
+| `-D, --dry-run`       | Show what would happen without doing it                                |
+| `-f, --from [branch]` | Submit from this branch toward leaves (bare `--from` = current branch) |
+| `-c, --current`       | Only submit the current branch, not descendants                        |
+| `-u, --update`        | Only update existing PRs, don't create new ones                        |
+| `-s, --skip-prs`      | Skip PR creation/update, only restack and push                         |
+| `-y, --yes`           | Skip interactive prompts; use auto-generated PR title/description      |
+| `--web`               | Open created/updated PRs in web browser                                |
 
 ### restack
 
@@ -296,11 +296,11 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### restack Flags
 
-| Flag          | Description                                              |
-| ------------- | -------------------------------------------------------- |
-| `--only`      | Only restack current branch, not descendants             |
-| `--dry-run`   | Show what would be done                                  |
-| `--worktrees` | Rebase branches checked out in linked worktrees in-place |
+| Flag              | Description                                              |
+| ----------------- | -------------------------------------------------------- |
+| `-c, --current`   | Only restack current branch, not descendants             |
+| `-D, --dry-run`   | Show what would be done                                  |
+| `-w, --worktrees` | Rebase branches checked out in linked worktrees in-place |
 
 ### continue
 
@@ -322,11 +322,11 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 
 #### sync Flags
 
-| Flag           | Description                                              |
-| -------------- | -------------------------------------------------------- |
-| `--no-restack` | Skip restacking branches                                 |
-| `--dry-run`    | Show what would be done                                  |
-| `--worktrees`  | Rebase branches checked out in linked worktrees in-place |
+| Flag              | Description                                              |
+| ----------------- | -------------------------------------------------------- |
+| `--no-restack`    | Skip restacking branches (might not work well!)          |
+| `-D, --dry-run`   | Show what would be done                                  |
+| `-w, --worktrees` | Rebase branches checked out in linked worktrees in-place |
 
 ### undo
 
@@ -346,10 +346,10 @@ Snapshots are stored in `.git/stack-undo/` and archived to `.git/stack-undo/done
 
 #### undo Flags
 
-| Flag        | Description                                  |
-| ----------- | -------------------------------------------- |
-| `--force`   | Skip confirmation prompt                     |
-| `--dry-run` | Show what would be restored without doing it |
+| Flag            | Description                                  |
+| --------------- | -------------------------------------------- |
+| `-f, --force`   | Skip confirmation prompt                     |
+| `-D, --dry-run` | Show what would be restored without doing it |
 
 ## Working with Git Worktrees
 

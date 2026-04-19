@@ -73,18 +73,18 @@ type prDecision struct {
 	// pushAnyway is true when action is prActionSkip but a descendant branch
 	// will get a PR, so the branch must still exist on the remote as a base.
 	pushAnyway bool
-	// skipReason is set when action is prActionSkip ("update-only" or "user").
+	// skipReason is set when action is prActionSkip ("update" or "user").
 	skipReason string
 }
 
 func init() {
-	submitCmd.Flags().BoolVar(&submitDryRunFlag, "dry-run", false, "show what would be done without doing it")
-	submitCmd.Flags().BoolVar(&submitCurrentOnlyFlag, "current-only", false, "only submit current branch, not descendants")
-	submitCmd.Flags().BoolVar(&submitUpdateOnlyFlag, "update-only", false, "only update existing PRs, don't create new ones")
-	submitCmd.Flags().BoolVar(&submitPushOnlyFlag, "push-only", false, "skip PR creation/update, only restack and push")
+	submitCmd.Flags().BoolVarP(&submitDryRunFlag, "dry-run", "D", false, "show what would be done without doing it")
+	submitCmd.Flags().BoolVarP(&submitCurrentOnlyFlag, "current", "c", false, "only submit current branch, not descendants")
+	submitCmd.Flags().BoolVarP(&submitUpdateOnlyFlag, "update", "u", false, "only update existing PRs, don't create new ones")
+	submitCmd.Flags().BoolVarP(&submitPushOnlyFlag, "skip-prs", "s", false, "skip PR creation/update, only restack and push")
 	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts and use auto-generated title/description for PRs")
-	submitCmd.Flags().BoolVarP(&submitWebFlag, "web", "w", false, "open created/updated PRs in web browser")
-	submitCmd.Flags().StringVar(&submitFromFlag, "from", "", "submit from this branch toward leaves (default: entire stack; bare --from = current branch)")
+	submitCmd.Flags().BoolVar(&submitWebFlag, "web", false, "open created/updated PRs in web browser")
+	submitCmd.Flags().StringVarP(&submitFromFlag, "from", "f", "", "submit from this branch toward leaves (default: entire stack; bare --from = current branch)")
 	submitCmd.Flags().Lookup("from").NoOptDefVal = "HEAD"
 	rootCmd.AddCommand(submitCmd)
 }
@@ -94,13 +94,13 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Validate flag combinations
 	if submitPushOnlyFlag && submitUpdateOnlyFlag {
-		return errors.New("--push-only and --update-only cannot be used together: --push-only skips all PR operations")
+		return errors.New("--skip-prs and --update cannot be used together: --skip-prs skips all PR operations")
 	}
 	if submitPushOnlyFlag && submitWebFlag {
-		return errors.New("--push-only and --web cannot be used together: --push-only skips all PR operations")
+		return errors.New("--skip-prs and --web cannot be used together: --skip-prs skips all PR operations")
 	}
 	if submitFromFlag != "" && submitCurrentOnlyFlag {
-		return errors.New("--from and --current-only cannot be used together")
+		return errors.New("--from and --current cannot be used together: --current limits the scope to the current branch")
 	}
 
 	cwd, err := os.Getwd()
@@ -138,15 +138,15 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 
 	// Collect branches to submit.
 	//
-	// --current-only: only the current branch (no descendants, no ancestors).
+	// --current: only the current branch (no descendants, no ancestors).
 	// --from (bare):  current branch + descendants (old default behavior).
 	// --from=<branch>: that branch + descendants.
 	// Default:         entire stack (all trunk descendants).
 	var branches []*tree.Node
 	if submitCurrentOnlyFlag {
-		// --current-only: submit only the current checked-out branch
+		// --current: submit only the current checked-out branch
 		if currentBranch == trunk {
-			return fmt.Errorf("cannot submit trunk branch %q; switch to a stack branch or remove --current-only", trunk)
+			return fmt.Errorf("cannot submit trunk branch %q; switch to a stack branch or remove --current", trunk)
 		}
 		node := tree.FindNode(root, currentBranch)
 		if node == nil {
@@ -280,7 +280,7 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 		decisionByName[d.node.Name] = d
 	}
 
-	// Phase 2: Push branches that will participate in PRs (or all if --push-only).
+	// Phase 2: Push branches that will participate in PRs (or all if --skip-prs).
 	fmt.Println(s.Bold("\n=== Phase 2: Push ==="))
 	for _, b := range branches {
 		var d *prDecision
@@ -306,7 +306,7 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 
 	if opts.PushOnly {
 		fmt.Println(s.Bold("\n=== Phase 3: PRs ==="))
-		fmt.Println(s.Muted("Skipped (--push-only)"))
+		fmt.Println(s.Muted("Skipped (--skip-prs)"))
 		return nil
 	}
 	return executePRDecisions(g, cfg, root, decisions, ghClient, opts, s)
@@ -326,7 +326,7 @@ func planPRDecisions(g *git.Git, cfg *config.Config, ghClient *github.Client, tr
 		case existingPR > 0:
 			out = append(out, &prDecision{node: b, parent: parent, action: prActionUpdate, prNum: existingPR})
 		case updateOnly:
-			out = append(out, &prDecision{node: b, parent: parent, action: prActionSkip, skipReason: "update-only"})
+			out = append(out, &prDecision{node: b, parent: parent, action: prActionSkip, skipReason: "update"})
 		case dryRun:
 			out = append(out, planPRDecisionDryRun(g, b, parent, trunk, s))
 		default:
@@ -447,14 +447,14 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 		switch d.action {
 		case prActionSkip:
 			if opts.DryRun {
-				if d.skipReason == "update-only" {
-					fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update-only)"))
+				if d.skipReason == "update" {
+					fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update)"))
 				}
 				continue
 			}
 			switch d.skipReason {
-			case "update-only":
-				fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update-only)"))
+			case "update":
+				fmt.Printf("Skipping %s %s\n", s.Branch(b.Name), s.Muted("(no existing PR, --update)"))
 			case "user":
 				fmt.Printf("Skipped PR for %s %s\n", s.Branch(b.Name), s.Muted("(skipped)"))
 			}

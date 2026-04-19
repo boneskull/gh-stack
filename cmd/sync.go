@@ -32,8 +32,8 @@ var (
 
 func init() {
 	syncCmd.Flags().BoolVar(&syncNoRestackFlag, "no-restack", false, "skip restacking branches")
-	syncCmd.Flags().BoolVar(&syncDryRunFlag, "dry-run", false, "show what would be done")
-	syncCmd.Flags().BoolVar(&syncWorktreesFlag, "worktrees", false, "rebase branches checked out in linked worktrees in-place")
+	syncCmd.Flags().BoolVarP(&syncDryRunFlag, "dry-run", "D", false, "show what would be done")
+	syncCmd.Flags().BoolVarP(&syncWorktreesFlag, "worktrees", "w", false, "rebase branches checked out in linked worktrees in-place")
 	rootCmd.AddCommand(syncCmd)
 }
 
