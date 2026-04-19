@@ -468,15 +468,17 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 					fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), d.prNum, err)
 				} else {
 					fmt.Println(s.Success("ok"))
+					// Check for trunk transition BEFORE persisting the new base, so
+					// isTransitionToTrunk compares against the previous stored value.
+					maybeMarkPRReady(ghClient, cfg, d.prNum, b.Name, parent, trunk, s)
 					_ = cfg.SetPRBase(b.Name, parent) //nolint:errcheck // best effort — used for transition detection only
+					if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, d.prNum, remoteBranches); err != nil {
+						fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), d.prNum, err)
+					}
 					if opts.OpenWeb {
 						prURLs = append(prURLs, ghClient.PRURL(d.prNum))
 					}
 				}
-				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, d.prNum, remoteBranches); err != nil {
-					fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), d.prNum, err)
-				}
-				maybeMarkPRReady(ghClient, cfg, d.prNum, b.Name, parent, trunk, s)
 			}
 		case prActionAdopt:
 			if opts.DryRun {

@@ -424,6 +424,41 @@ func TestIsTransitionToTrunk(t *testing.T) {
 	})
 }
 
+// TestIsTransitionToTrunkOrderingInvariant verifies the property that
+// isTransitionToTrunk must be evaluated BEFORE SetPRBase is called with trunk,
+// because SetPRBase overwrites the stored value that the function reads.
+// This guards against the regression where SetPRBase was called before
+// maybeMarkPRReady in the prActionUpdate path, silently suppressing the prompt.
+func TestIsTransitionToTrunkOrderingInvariant(t *testing.T) {
+	trunk := "main"
+
+	t.Run("returns_true_before_SetPRBase_when_parent_stored", func(t *testing.T) {
+		cfg := setupTestRepo(t)
+		if err := cfg.SetPRBase("feat-a", "feat-parent"); err != nil {
+			t.Fatalf("SetPRBase failed: %v", err)
+		}
+		// Simulates the correct ordering: check transition BEFORE persisting trunk.
+		transitionDetected := isTransitionToTrunk(cfg, "feat-a", trunk)
+		_ = cfg.SetPRBase("feat-a", trunk)
+		if !transitionDetected {
+			t.Error("expected transition to be detected when checked before SetPRBase(trunk)")
+		}
+	})
+
+	t.Run("returns_false_after_SetPRBase_wrong_order", func(t *testing.T) {
+		cfg := setupTestRepo(t)
+		if err := cfg.SetPRBase("feat-a", "feat-parent"); err != nil {
+			t.Fatalf("SetPRBase failed: %v", err)
+		}
+		// Simulates the buggy ordering: persist trunk BEFORE checking transition.
+		_ = cfg.SetPRBase("feat-a", trunk)
+		transitionDetected := isTransitionToTrunk(cfg, "feat-a", trunk)
+		if transitionDetected {
+			t.Error("demonstrates the bug: SetPRBase before check suppresses the prompt")
+		}
+	})
+}
+
 func TestApplyMustPushForSkippedAncestors(t *testing.T) {
 	main := &tree.Node{Name: "main"}
 	featA := &tree.Node{Name: "feat-a", Parent: main}
