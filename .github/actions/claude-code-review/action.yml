@@ -33,6 +33,7 @@ runs:
         allowed_bots: 'renovate[bot],cursor'
         claude_args: |
           --max-turns 20
+        track_progress: true
         claude_code_oauth_token: ${{ inputs.claude_code_oauth_token }}
         # Uses vendored code-review skill from .claude/commands/code-review.md
         prompt: '/project:code-review --comment ${{ inputs.repository }}/pull/${{ inputs.pr_number }}'
