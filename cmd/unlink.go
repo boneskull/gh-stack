@@ -42,6 +42,7 @@ func runUnlink(cmd *cobra.Command, args []string) error {
 	if err := cfg.RemovePR(branch); err != nil {
 		return err
 	}
+	_ = cfg.RemovePRBase(branch) //nolint:errcheck // best effort cleanup
 
 	s := style.New()
 	fmt.Printf("%s Unlinked PR from branch %s\n", s.SuccessIcon(), s.Branch(branch))

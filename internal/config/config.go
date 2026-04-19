@@ -23,6 +23,9 @@ var ErrNoPR = errors.New("no PR associated with branch")
 // ErrNoForkPoint is returned when a branch has no stored fork point.
 var ErrNoForkPoint = errors.New("no fork point stored for branch")
 
+// ErrNoPRBase is returned when a branch has no stored last-known PR base.
+var ErrNoPRBase = errors.New("no PR base stored for branch")
+
 // Config provides access to stack metadata stored in .git/config.
 type Config struct {
 	repoPath string
@@ -119,6 +122,31 @@ func (c *Config) SetForkPoint(branch, sha string) error {
 // RemoveForkPoint removes the stored fork point for a branch.
 func (c *Config) RemoveForkPoint(branch string) error {
 	key := "branch." + branch + ".stackForkPoint"
+	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run() //nolint:errcheck // unset returns error if key missing
+	return nil
+}
+
+// GetPRBase returns the last-known remote PR base branch for the given branch.
+// This is used to detect when a PR's base transitions to trunk so the publish
+// prompt fires only on that transition rather than on every submit run.
+func (c *Config) GetPRBase(branch string) (string, error) {
+	key := "branch." + branch + ".stackPRBase"
+	out, err := exec.Command("git", "-C", c.repoPath, "config", "--get", key).Output()
+	if err != nil {
+		return "", ErrNoPRBase
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SetPRBase stores the last-known remote PR base branch for the given branch.
+func (c *Config) SetPRBase(branch, base string) error {
+	key := "branch." + branch + ".stackPRBase"
+	return exec.Command("git", "-C", c.repoPath, "config", key, base).Run()
+}
+
+// RemovePRBase removes the stored PR base for a branch.
+func (c *Config) RemovePRBase(branch string) error {
+	key := "branch." + branch + ".stackPRBase"
 	_ = exec.Command("git", "-C", c.repoPath, "config", "--unset", key).Run() //nolint:errcheck // unset returns error if key missing
 	return nil
 }

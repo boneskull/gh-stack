@@ -9,9 +9,13 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"os/exec"
 	"testing"
 
+	"github.com/boneskull/gh-stack/internal/config"
+	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/github"
+	"github.com/boneskull/gh-stack/internal/style"
 	"github.com/boneskull/gh-stack/internal/tree"
 )
 
@@ -319,6 +323,107 @@ func TestIsBaseBranchInvalidError(t *testing.T) {
 	}
 }
 
+func setupTestRepo(t *testing.T) *config.Config {
+	t.Helper()
+	dir := t.TempDir()
+	if err := exec.Command("git", "init", dir).Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+	exec.Command("git", "-C", dir, "config", "user.email", "test@test.com").Run() //nolint:errcheck
+	exec.Command("git", "-C", dir, "config", "user.name", "Test").Run()           //nolint:errcheck
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("config.Load failed: %v", err)
+	}
+	return cfg
+}
+
+// setupTestRepoWithDir is like setupTestRepo but also returns the directory path
+// for callers that need to run git commands directly or construct a git.Git instance.
+func setupTestRepoWithDir(t *testing.T) (*config.Config, string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := exec.Command("git", "init", dir).Run(); err != nil {
+		t.Fatalf("git init failed: %v", err)
+	}
+	exec.Command("git", "-C", dir, "config", "user.email", "test@test.com").Run() //nolint:errcheck
+	exec.Command("git", "-C", dir, "config", "user.name", "Test").Run()           //nolint:errcheck
+	// Create an initial commit so the repo has a HEAD and we can create branches.
+	exec.Command("git", "-C", dir, "commit", "--allow-empty", "-m", "init").Run() //nolint:errcheck
+	cfg, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("config.Load failed: %v", err)
+	}
+	return cfg, dir
+}
+
+func TestIsTransitionToTrunk(t *testing.T) {
+	trunk := "main"
+
+	t.Run("no_stored_base_returns_true", func(t *testing.T) {
+		cfg := setupTestRepo(t)
+		// No stored base — first run after PR creation; should prompt.
+		if !isTransitionToTrunk(cfg, "feat-a", trunk) {
+			t.Error("expected true when no stored base exists")
+		}
+	})
+
+	t.Run("stored_base_is_not_trunk_returns_true", func(t *testing.T) {
+		cfg := setupTestRepo(t)
+		// Branch previously targeted a non-trunk parent; now it targets trunk.
+		if err := cfg.SetPRBase("feat-a", "feat-parent"); err != nil {
+			t.Fatalf("SetPRBase failed: %v", err)
+		}
+		if !isTransitionToTrunk(cfg, "feat-a", trunk) {
+			t.Error("expected true when stored base is not trunk")
+		}
+	})
+
+	t.Run("stored_base_is_trunk_returns_false", func(t *testing.T) {
+		cfg := setupTestRepo(t)
+		// Branch was already targeting trunk on the previous run; don't re-prompt.
+		if err := cfg.SetPRBase("feat-a", trunk); err != nil {
+			t.Fatalf("SetPRBase failed: %v", err)
+		}
+		if isTransitionToTrunk(cfg, "feat-a", trunk) {
+			t.Error("expected false when stored base is already trunk")
+		}
+	})
+
+	t.Run("different_branches_are_independent", func(t *testing.T) {
+		cfg := setupTestRepo(t)
+		// feat-a already targeting trunk; feat-b has no stored base.
+		if err := cfg.SetPRBase("feat-a", trunk); err != nil {
+			t.Fatalf("SetPRBase failed: %v", err)
+		}
+		if isTransitionToTrunk(cfg, "feat-a", trunk) {
+			t.Error("feat-a: expected false when stored base is trunk")
+		}
+		if !isTransitionToTrunk(cfg, "feat-b", trunk) {
+			t.Error("feat-b: expected true when no stored base exists")
+		}
+	})
+
+	t.Run("custom_trunk_name_works", func(t *testing.T) {
+		cfg := setupTestRepo(t)
+		customTrunk := "master"
+		// Stored as "master"; should not prompt.
+		if err := cfg.SetPRBase("feat-a", customTrunk); err != nil {
+			t.Fatalf("SetPRBase failed: %v", err)
+		}
+		if isTransitionToTrunk(cfg, "feat-a", customTrunk) {
+			t.Error("expected false with custom trunk name already stored")
+		}
+		// Stored as something else; should prompt.
+		if err := cfg.SetPRBase("feat-b", "other-branch"); err != nil {
+			t.Fatalf("SetPRBase failed: %v", err)
+		}
+		if !isTransitionToTrunk(cfg, "feat-b", customTrunk) {
+			t.Error("expected true when stored base is not the custom trunk")
+		}
+	})
+}
+
 func TestApplyMustPushForSkippedAncestors(t *testing.T) {
 	main := &tree.Node{Name: "main"}
 	featA := &tree.Node{Name: "feat-a", Parent: main}
@@ -391,4 +496,85 @@ func TestApplyMustPushForSkippedAncestors(t *testing.T) {
 			t.Error("feat-a is not skipped; pushAnyway should stay false")
 		}
 	})
+}
+
+func TestDeleteMergedBranchClearsPRBase(t *testing.T) {
+	cfg, dir := setupTestRepoWithDir(t)
+	g := git.New(dir)
+	s := style.New()
+
+	trunk, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch failed: %v", err)
+	}
+	if err := cfg.SetTrunk(trunk); err != nil {
+		t.Fatalf("SetTrunk failed: %v", err)
+	}
+
+	// Create feature-a with a commit so git can delete it later.
+	if err := exec.Command("git", "-C", dir, "checkout", "-b", "feature-a").Run(); err != nil {
+		t.Fatalf("create branch failed: %v", err)
+	}
+	if err := exec.Command("git", "-C", dir, "commit", "--allow-empty", "-m", "feat").Run(); err != nil {
+		t.Fatalf("commit failed: %v", err)
+	}
+	if err := exec.Command("git", "-C", dir, "checkout", trunk).Run(); err != nil {
+		t.Fatalf("checkout trunk failed: %v", err)
+	}
+
+	if err := cfg.SetParent("feature-a", trunk); err != nil {
+		t.Fatalf("SetParent failed: %v", err)
+	}
+	if err := cfg.SetPR("feature-a", 10); err != nil {
+		t.Fatalf("SetPR failed: %v", err)
+	}
+	if err := cfg.SetPRBase("feature-a", trunk); err != nil {
+		t.Fatalf("SetPRBase failed: %v", err)
+	}
+
+	currentBranch := trunk
+	deleteMergedBranch(g, cfg, "feature-a", trunk, &currentBranch, s)
+
+	if v, err := cfg.GetPRBase("feature-a"); err == nil {
+		t.Errorf("expected stackPRBase to be removed after deleteMergedBranch, got %q", v)
+	}
+	if v, err := cfg.GetPR("feature-a"); err == nil {
+		t.Errorf("expected stackPR to be removed after deleteMergedBranch, got %d", v)
+	}
+}
+
+func TestOrphanMergedBranchClearsPRBase(t *testing.T) {
+	cfg, dir := setupTestRepoWithDir(t)
+	g := git.New(dir)
+	s := style.New()
+
+	trunk, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch failed: %v", err)
+	}
+	if err := cfg.SetTrunk(trunk); err != nil {
+		t.Fatalf("SetTrunk failed: %v", err)
+	}
+
+	if err := cfg.SetParent("feature-a", trunk); err != nil {
+		t.Fatalf("SetParent failed: %v", err)
+	}
+	if err := cfg.SetPR("feature-a", 11); err != nil {
+		t.Fatalf("SetPR failed: %v", err)
+	}
+	if err := cfg.SetPRBase("feature-a", trunk); err != nil {
+		t.Fatalf("SetPRBase failed: %v", err)
+	}
+
+	orphanMergedBranch(cfg, "feature-a", s)
+
+	if v, err := cfg.GetPRBase("feature-a"); err == nil {
+		t.Errorf("expected stackPRBase to be removed after orphanMergedBranch, got %q", v)
+	}
+	if v, err := cfg.GetPR("feature-a"); err == nil {
+		t.Errorf("expected stackPR to be removed after orphanMergedBranch, got %d", v)
+	}
+	if v, err := cfg.GetParent("feature-a"); err == nil {
+		t.Errorf("expected stackParent to be removed after orphanMergedBranch, got %q", v)
+	}
 }

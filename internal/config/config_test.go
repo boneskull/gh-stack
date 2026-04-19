@@ -155,6 +155,53 @@ func TestListTrackedBranches(t *testing.T) {
 	}
 }
 
+func TestPRBase(t *testing.T) {
+	dir := setupTestRepo(t)
+	cfg, _ := config.Load(dir)
+
+	// Initially no PR base
+	_, err := cfg.GetPRBase("feature-a")
+	if !errors.Is(err, config.ErrNoPRBase) {
+		t.Errorf("GetPRBase = %v, want ErrNoPRBase", err)
+	}
+
+	// Set PR base
+	if setErr := cfg.SetPRBase("feature-a", "main"); setErr != nil {
+		t.Fatalf("SetPRBase failed: %v", setErr)
+	}
+
+	// Get PR base
+	got, err := cfg.GetPRBase("feature-a")
+	if err != nil {
+		t.Fatalf("GetPRBase failed: %v", err)
+	}
+	if got != "main" {
+		t.Errorf("GetPRBase = %q, want %q", got, "main")
+	}
+
+	// Update PR base
+	if setErr := cfg.SetPRBase("feature-a", "feat-parent"); setErr != nil {
+		t.Fatalf("SetPRBase update failed: %v", setErr)
+	}
+	got, err = cfg.GetPRBase("feature-a")
+	if err != nil {
+		t.Fatalf("GetPRBase after update failed: %v", err)
+	}
+	if got != "feat-parent" {
+		t.Errorf("GetPRBase after update = %q, want %q", got, "feat-parent")
+	}
+
+	// Remove PR base
+	if removeErr := cfg.RemovePRBase("feature-a"); removeErr != nil {
+		t.Fatalf("RemovePRBase failed: %v", removeErr)
+	}
+
+	_, err = cfg.GetPRBase("feature-a")
+	if !errors.Is(err, config.ErrNoPRBase) {
+		t.Errorf("after remove, GetPRBase = %v, want ErrNoPRBase", err)
+	}
+}
+
 func TestForkPoint(t *testing.T) {
 	dir := setupTestRepo(t)
 	cfg, _ := config.Load(dir)
