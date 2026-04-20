@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.0](https://github.com/boneskull/gh-stack/compare/v0.6.3...v1.0.0) (2026-04-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* Some flags have changed. `restack`: `--only` is now `-c, --current`; `submit`: `--current-only` is now `-c, --current`, `--update-only` is now `-u, --update`, `--push-only` is now `-s, --skip-prs`, removed `-w` shorthand from `--web`.
+
+### Bug Fixes
+
+* normalize flags ([#97](https://github.com/boneskull/gh-stack/issues/97)) ([91a896d](https://github.com/boneskull/gh-stack/commit/91a896d092afb5a90147bc10339d05b1ec4aa597))
+* **submit:** only prompt to publish draft when base transitions to trunk ([#100](https://github.com/boneskull/gh-stack/issues/100)) ([c47ca16](https://github.com/boneskull/gh-stack/commit/c47ca167d25b1ed0235e2a376a7a0efed7dd871e))
+
 ## [0.6.3](https://github.com/boneskull/gh-stack/compare/v0.6.2...v0.6.3) (2026-04-18)
 
 
