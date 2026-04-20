@@ -468,14 +468,17 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 					fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), d.prNum, err)
 				} else {
 					fmt.Println(s.Success("ok"))
+					// Check for trunk transition BEFORE persisting the new base, so
+					// isTransitionToTrunk compares against the previous stored value.
+					maybeMarkPRReady(ghClient, cfg, d.prNum, b.Name, parent, trunk, s)
+					_ = cfg.SetPRBase(b.Name, parent) //nolint:errcheck // best effort — used for transition detection only
+					if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, d.prNum, remoteBranches); err != nil {
+						fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), d.prNum, err)
+					}
 					if opts.OpenWeb {
 						prURLs = append(prURLs, ghClient.PRURL(d.prNum))
 					}
 				}
-				if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, d.prNum, remoteBranches); err != nil {
-					fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), d.prNum, err)
-				}
-				maybeMarkPRReady(ghClient, d.prNum, b.Name, parent, trunk, s)
 			}
 		case prActionAdopt:
 			if opts.DryRun {
@@ -560,6 +563,9 @@ func executePRCreate(pCtx prContext, branch, base, title, body string, draft boo
 	if err := pCtx.cfg.SetPR(branch, pr.Number); err != nil {
 		return pr.Number, false, fmt.Errorf("PR created but failed to store number: %w", err)
 	}
+
+	// Persist the base so future submit runs can detect trunk transitions.
+	_ = pCtx.cfg.SetPRBase(branch, base) //nolint:errcheck // best effort
 
 	if node := tree.FindNode(pCtx.root, branch); node != nil {
 		node.PR = pr.Number
@@ -711,23 +717,51 @@ func adoptExistingPRDirect(pCtx prContext, branch, base string, existingPR *gith
 		}
 	}
 
+	// Persist the new base for transition detection on future submit runs.
+	_ = pCtx.cfg.SetPRBase(branch, base) //nolint:errcheck // best effort
+
 	// Add/update stack navigation comment
 	if err := pCtx.ghClient.GenerateAndPostStackComment(pCtx.root, branch, pCtx.trunk, existingPR.Number, pCtx.remoteBranches); err != nil {
 		fmt.Printf("%s failed to update stack comment: %v\n", pCtx.s.WarningIcon(), err)
 	}
 
-	// If adopted PR is a draft and targets trunk, offer to publish
-	if existingPR.Draft && base == pCtx.trunk {
+	// Prompt to publish if the PR is a draft and its base is transitioning to trunk.
+	// We use the live pre-adoption base (existingPR.Base.Ref) here since stored base
+	// metadata may not exist yet for a freshly adopted PR.
+	if existingPR.Draft && base == pCtx.trunk && existingPR.Base.Ref != pCtx.trunk {
 		promptMarkPRReady(pCtx.ghClient, existingPR.Number, branch, pCtx.trunk, pCtx.s)
 	}
 
 	return existingPR.Number, nil
 }
 
+// isTransitionToTrunk reports whether a PR's base branch is moving to trunk for
+// the first time as tracked by gh-stack. It uses the stored last-known PR base
+// (persisted after each successful submit) to detect the transition, avoiding
+// any additional GitHub API calls.
+//
+// Returns true when:
+//   - no stored base exists yet (first run after PR creation/adoption), or
+//   - stored base is not trunk (base is changing from something else to trunk).
+//
+// Returns false when the stored base is already trunk, meaning the PR was
+// already targeting trunk on the previous submit run.
+func isTransitionToTrunk(cfg *config.Config, branch, trunk string) bool {
+	storedBase, err := cfg.GetPRBase(branch)
+	if err == nil && storedBase == trunk {
+		return false
+	}
+	return true
+}
+
 // maybeMarkPRReady checks if a PR is a draft targeting trunk and offers to publish it.
 // This handles the case where a PR was created as a draft (middle of stack) but now
 // targets trunk because its parent was merged.
-func maybeMarkPRReady(ghClient *github.Client, prNumber int, branch, base, trunk string, s *style.Style) {
+//
+// The prompt fires only when the base branch is transitioning to trunk for the first
+// time — i.e., the stored last-known base is not already trunk. This prevents the
+// prompt from appearing on every submit run once the PR already targets trunk.
+func maybeMarkPRReady(ghClient *github.Client, cfg *config.Config, prNumber int, branch, base, trunk string, s *style.Style) {
 	// Only relevant if PR now targets trunk
 	if base != trunk {
 		return
@@ -736,6 +770,11 @@ func maybeMarkPRReady(ghClient *github.Client, prNumber int, branch, base, trunk
 	// Check if PR is a draft
 	pr, err := ghClient.GetPR(prNumber)
 	if err != nil || !pr.Draft {
+		return
+	}
+
+	// Only prompt when the base is transitioning to trunk this run.
+	if !isTransitionToTrunk(cfg, branch, trunk) {
 		return
 	}
 

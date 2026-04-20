@@ -318,6 +318,10 @@ func runSync(cmd *cobra.Command, args []string) error {
 		if rt.childPR > 0 {
 			if updateErr := gh.UpdatePRBase(rt.childPR, trunk); updateErr != nil {
 				fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), rt.childPR, updateErr)
+			} else {
+				// Persist the new base so the submit publish-prompt knows this
+				// PR is already targeting trunk on its next run.
+				_ = cfg.SetPRBase(rt.childName, trunk) //nolint:errcheck // best effort
 			}
 		}
 
@@ -473,6 +477,7 @@ func deleteMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, cu
 	_ = cfg.RemoveParent(branch)    //nolint:errcheck // best effort cleanup
 	_ = cfg.RemovePR(branch)        //nolint:errcheck // best effort cleanup
 	_ = cfg.RemoveForkPoint(branch) //nolint:errcheck // best effort cleanup
+	_ = cfg.RemovePRBase(branch)    //nolint:errcheck // best effort cleanup
 	if err := g.DeleteBranch(branch); err != nil {
 		fmt.Printf("%s could not delete branch %s: %v\n", s.WarningIcon(), s.Branch(branch), err)
 	}
@@ -485,5 +490,6 @@ func orphanMergedBranch(cfg *config.Config, branch string, s *style.Style) merge
 	_ = cfg.RemoveParent(branch)    //nolint:errcheck // best effort cleanup
 	_ = cfg.RemovePR(branch)        //nolint:errcheck // best effort cleanup
 	_ = cfg.RemoveForkPoint(branch) //nolint:errcheck // best effort cleanup
+	_ = cfg.RemovePRBase(branch)    //nolint:errcheck // best effort cleanup
 	return mergedActionOrphan
 }
