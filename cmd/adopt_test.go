@@ -37,7 +37,7 @@ func TestAdoptBranch(t *testing.T) {
 	}
 }
 
-func TestAdoptRejectsAlreadyTracked(t *testing.T) {
+func TestAdoptReparentsAlreadyTracked(t *testing.T) {
 	dir := setupTestRepo(t)
 
 	cfg, _ := config.Load(dir)
@@ -46,14 +46,23 @@ func TestAdoptRejectsAlreadyTracked(t *testing.T) {
 	trunk, _ := g.CurrentBranch()
 	cfg.SetTrunk(trunk)
 
-	// Create and track a branch
-	g.CreateBranch("tracked-feature")
-	cfg.SetParent("tracked-feature", trunk)
+	// Create two branches; track feature-a under trunk
+	g.CreateBranch("feature-a")
+	cfg.SetParent("feature-a", trunk)
+	g.CreateBranch("feature-b")
+	cfg.SetParent("feature-b", trunk)
 
-	// Trying to get parent should succeed (it's tracked)
-	_, err := cfg.GetParent("tracked-feature")
+	// Simulate what runAdopt does when reparenting feature-b under feature-a
+	if err := cfg.SetParent("feature-b", "feature-a"); err != nil {
+		t.Fatalf("SetParent failed: %v", err)
+	}
+
+	parent, err := cfg.GetParent("feature-b")
 	if err != nil {
-		t.Error("expected branch to be tracked")
+		t.Fatalf("GetParent failed: %v", err)
+	}
+	if parent != "feature-a" {
+		t.Errorf("expected parent %q after reparent, got %q", "feature-a", parent)
 	}
 }
 

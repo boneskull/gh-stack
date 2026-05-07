@@ -62,9 +62,15 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("branch %q does not exist", branchName)
 	}
 
-	// Check if already tracked
-	if _, getParentErr := cfg.GetParent(branchName); getParentErr == nil {
-		return fmt.Errorf("branch %q is already tracked", branchName)
+	// A branch cannot be its own parent
+	if parent == branchName {
+		return fmt.Errorf("cannot adopt: branch %q cannot be its own parent", branchName)
+	}
+
+	// Check if already tracked, capture old parent if so
+	oldParent, alreadyTracked := "", false
+	if p, getParentErr := cfg.GetParent(branchName); getParentErr == nil {
+		oldParent, alreadyTracked = p, true
 	}
 
 	// Validate parent is trunk or tracked
@@ -94,6 +100,14 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	s := style.New()
+
+	// No-op: already tracked with the same parent
+	if alreadyTracked && oldParent == parent {
+		fmt.Printf("%s Branch %s is already tracked with parent %s\n", s.WarningIcon(), s.Branch(branchName), s.Branch(parent))
+		return nil
+	}
+
 	// Set parent
 	if err := cfg.SetParent(branchName, parent); err != nil {
 		return err
@@ -105,7 +119,10 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		_ = cfg.SetForkPoint(branchName, forkPoint) //nolint:errcheck // best effort
 	}
 
-	s := style.New()
-	fmt.Printf("%s Adopted branch %s with parent %s\n", s.SuccessIcon(), s.Branch(branchName), s.Branch(parent))
+	if alreadyTracked {
+		fmt.Printf("%s Updated branch %s parent from %s to %s\n", s.SuccessIcon(), s.Branch(branchName), s.Branch(oldParent), s.Branch(parent))
+	} else {
+		fmt.Printf("%s Adopted branch %s with parent %s\n", s.SuccessIcon(), s.Branch(branchName), s.Branch(parent))
+	}
 	return nil
 }

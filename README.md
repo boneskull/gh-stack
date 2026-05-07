@@ -206,7 +206,7 @@ gh stack create <name>
 
 Start tracking an existing branch by setting its parent.
 
-By default, adopts the current branch. The parent must be either the trunk or another tracked branch.
+By default, adopts the current branch. The parent must be either the trunk or another tracked branch. If the branch is already tracked, `adopt` updates its parent to the specified branch (or does nothing if the parent is unchanged).
 
 #### adopt Usage
 
