@@ -23,7 +23,10 @@ The catch? Managing these stacks by hand is tedious. When `main` updates, you ne
 
 ## Installation
 
-Requires [GitHub CLI][] (`gh`) installed and authenticated.
+Requires:
+
+- [GitHub CLI][] (`gh`) installed and authenticated
+- Git 2.38 or newer (for `git rebase --update-refs` support; macOS Command Line Tools and current Linux distributions all ship a compatible version)
 
 ```bash
 gh extension install boneskull/gh-stack
@@ -278,13 +281,14 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 | Flag                  | Description                                                            |
 | --------------------- | ---------------------------------------------------------------------- |
-| `-D, --dry-run`       | Show what would happen without doing it                                |
-| `-f, --from [branch]` | Submit from this branch toward leaves (bare `--from` = current branch) |
-| `-c, --current`       | Only submit the current branch, not descendants                        |
-| `-u, --update`        | Only update existing PRs, don't create new ones                        |
-| `-s, --skip-prs`      | Skip PR creation/update, only restack and push                         |
-| `-y, --yes`           | Skip interactive prompts; use auto-generated PR title/description      |
-| `--web`               | Open created/updated PRs in web browser                                |
+| `-D, --dry-run`       | Show what would happen without doing it                                    |
+| `-f, --from [branch]` | Submit from this branch toward leaves (bare `--from` = current branch)     |
+| `-c, --current`       | Only submit the current branch, not descendants                            |
+| `-u, --update`        | Only update existing PRs, don't create new ones                            |
+| `-s, --skip-prs`      | Skip PR creation/update, only restack and push                             |
+| `-y, --yes`           | Skip interactive prompts; use auto-generated PR title/description          |
+| `--web`               | Open created/updated PRs in web browser                                    |
+| `--no-update-refs`    | Do not pass `--update-refs` to git (preserves untracked bookmark branches) |
 
 ### restack
 
@@ -296,11 +300,12 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 
 #### restack Flags
 
-| Flag              | Description                                              |
-| ----------------- | -------------------------------------------------------- |
-| `-c, --current`   | Only restack current branch, not descendants             |
-| `-D, --dry-run`   | Show what would be done                                  |
-| `-w, --worktrees` | Rebase branches checked out in linked worktrees in-place |
+| Flag                 | Description                                                                |
+| -------------------- | -------------------------------------------------------------------------- |
+| `-c, --current`      | Only restack current branch, not descendants                               |
+| `-D, --dry-run`      | Show what would be done                                                    |
+| `-w, --worktrees`    | Rebase branches checked out in linked worktrees in-place                   |
+| `--no-update-refs`   | Do not pass `--update-refs` to git (preserves untracked bookmark branches) |
 
 ### continue
 
@@ -324,9 +329,10 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 
 | Flag              | Description                                              |
 | ----------------- | -------------------------------------------------------- |
-| `--no-restack`    | Skip restacking branches (might not work well!)          |
-| `-D, --dry-run`   | Show what would be done                                  |
-| `-w, --worktrees` | Rebase branches checked out in linked worktrees in-place |
+| `--no-restack`      | Skip restacking branches (might not work well!)                            |
+| `-D, --dry-run`     | Show what would be done                                                    |
+| `-w, --worktrees`   | Rebase branches checked out in linked worktrees in-place                   |
+| `--no-update-refs`  | Do not pass `--update-refs` to git (preserves untracked bookmark branches) |
 
 ### undo
 
@@ -370,6 +376,10 @@ If a rebase conflict occurs in a worktree branch, **gh-stack** will tell you whi
 > [!NOTE]
 >
 > The `--worktrees` flag is opt-in. Without it, **gh-stack** behaves exactly as before. If none of your stack branches are checked out in linked worktrees, the flag is a harmless no-op.
+
+> [!NOTE]
+>
+> When linked worktrees are detected, **gh-stack** automatically passes `--no-update-refs` to git. This prevents silent stack corruption: git's `--update-refs` silently skips any ref that is checked out in a linked worktree, which would leave the chain in a broken state. If no branches are checked out in linked worktrees (even with `--worktrees` set), **gh-stack** passes `--update-refs` normally so that any untracked bookmark branches pointing into the stack are kept in sync.
 
 ## How It Works
 

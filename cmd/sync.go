@@ -25,15 +25,17 @@ var syncCmd = &cobra.Command{
 }
 
 var (
-	syncNoRestackFlag bool
-	syncDryRunFlag    bool
-	syncWorktreesFlag bool
+	syncNoRestackFlag    bool
+	syncDryRunFlag       bool
+	syncWorktreesFlag    bool
+	syncNoUpdateRefsFlag bool
 )
 
 func init() {
 	syncCmd.Flags().BoolVar(&syncNoRestackFlag, "no-restack", false, "skip restacking branches")
 	syncCmd.Flags().BoolVarP(&syncDryRunFlag, "dry-run", "D", false, "show what would be done")
 	syncCmd.Flags().BoolVarP(&syncWorktreesFlag, "worktrees", "w", false, "rebase branches checked out in linked worktrees in-place")
+	syncCmd.Flags().BoolVar(&syncNoUpdateRefsFlag, "no-update-refs", false, "do not pass --update-refs to git (preserves untracked bookmark branches pointing into the stack)")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -255,6 +257,18 @@ func runSync(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Build worktree map once, used by both the retarget rebase and the main
+	// restack loop so both apply the same suppression rule: suppress
+	// --update-refs when any worktrees are active (len > 0).
+	var worktrees map[string]string
+	if syncWorktreesFlag {
+		var wtErr error
+		worktrees, wtErr = g.ListWorktrees()
+		if wtErr != nil {
+			return fmt.Errorf("failed to list worktrees: %w", wtErr)
+		}
+	}
+
 	// Handle merged branches
 	root, _ := tree.Build(cfg) //nolint:errcheck // nil root is fine, FindNode handles it
 
@@ -325,14 +339,17 @@ func runSync(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Rebase using --onto if we have a fork point
+		// Rebase using --onto if we have a fork point.
+		// Suppress --update-refs when --worktrees is active (same rule as the
+		// main restack loop) or when the user passed --no-update-refs.
 		if rt.forkPoint != "" && g.CommitExists(rt.forkPoint) {
 			displayForkPoint := rt.forkPoint
 			if len(displayForkPoint) > 8 {
 				displayForkPoint = displayForkPoint[:8]
 			}
+			retargetUpdateRefs := !syncNoUpdateRefsFlag && len(worktrees) == 0
 			fmt.Printf("Rebasing %s onto %s (from fork point %s)...\n", s.Branch(rt.childName), s.Branch(trunk), displayForkPoint)
-			if rebaseErr := g.RebaseOnto(trunk, rt.forkPoint, rt.childName); rebaseErr != nil {
+			if rebaseErr := g.RebaseOnto(trunk, rt.forkPoint, rt.childName, retargetUpdateRefs); rebaseErr != nil {
 				fmt.Printf("%s --onto rebase failed, will try normal restack: %v\n", s.WarningIcon(), rebaseErr)
 				// Don't return error - let restack try
 			} else {
@@ -361,25 +378,16 @@ func runSync(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		// Build worktree map if --worktrees flag is set
-		var worktrees map[string]string
-		if syncWorktreesFlag {
-			var wtErr error
-			worktrees, wtErr = g.ListWorktrees()
-			if wtErr != nil {
-				return fmt.Errorf("failed to list worktrees: %w", wtErr)
-			}
-		}
-
 		// Restack from trunk's children
 		for _, child := range root.Children {
 			allBranches := []*tree.Node{child}
 			allBranches = append(allBranches, tree.GetDescendants(child)...)
 			if err := doRestackWithState(g, cfg, allBranches, RestackOptions{
-				DryRun:    syncDryRunFlag,
-				Operation: state.OperationRestack,
-				StashRef:  stashRef,
-				Worktrees: worktrees,
+				DryRun:       syncDryRunFlag,
+				Operation:    state.OperationRestack,
+				StashRef:     stashRef,
+				Worktrees:    worktrees,
+				NoUpdateRefs: syncNoUpdateRefsFlag,
 			}, s); err != nil {
 				if errors.Is(err, ErrConflict) {
 					hitConflict = true

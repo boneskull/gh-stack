@@ -97,13 +97,14 @@ func runContinue(cmd *cobra.Command, args []string) error {
 		_ = state.Remove(g.GetGitDir()) //nolint:errcheck // cleanup
 
 		if restackErr := doRestackWithState(g, cfg, branches, RestackOptions{
-			Operation:  st.Operation,
-			UpdateOnly: st.UpdateOnly,
-			OpenWeb:    st.Web,
-			PushOnly:   st.PushOnly,
-			Branches:   st.Branches,
-			StashRef:   st.StashRef,
-			Worktrees:  st.Worktrees,
+			Operation:    st.Operation,
+			UpdateOnly:   st.UpdateOnly,
+			OpenWeb:      st.Web,
+			PushOnly:     st.PushOnly,
+			Branches:     st.Branches,
+			StashRef:     st.StashRef,
+			Worktrees:    st.Worktrees,
+			NoUpdateRefs: !st.UpdateRefs,
 		}, s); restackErr != nil {
 			// Stash handling is done by doRestackWithState (conflict saves in state, errors restore)
 			if !errors.Is(restackErr, ErrConflict) && st.StashRef != "" {

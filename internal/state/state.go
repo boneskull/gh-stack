@@ -42,6 +42,11 @@ type RestackState struct {
 	// Persisted so that continue/abort can find the correct worktree
 	// directory for branches that were being rebased in a linked worktree.
 	Worktrees map[string]string `json:"worktrees,omitempty"`
+	// UpdateRefs is the resolved --update-refs setting from the original
+	// invocation, persisted so that `continue` rebases remaining branches
+	// with the same setting after a conflict. False (zero value) means
+	// --no-update-refs was in effect, which is safe for old state files.
+	UpdateRefs bool `json:"update_refs,omitempty"`
 }
 
 // Save persists restack state to .git/STACK_CASCADE_STATE.

@@ -27,15 +27,17 @@ var restackCmd = &cobra.Command{
 }
 
 var (
-	restackOnlyFlag      bool
-	restackDryRunFlag    bool
-	restackWorktreesFlag bool
+	restackOnlyFlag         bool
+	restackDryRunFlag       bool
+	restackWorktreesFlag    bool
+	restackNoUpdateRefsFlag bool
 )
 
 func init() {
 	restackCmd.Flags().BoolVarP(&restackOnlyFlag, "current", "c", false, "only restack current branch, not descendants")
 	restackCmd.Flags().BoolVarP(&restackDryRunFlag, "dry-run", "D", false, "show what would be done")
 	restackCmd.Flags().BoolVarP(&restackWorktreesFlag, "worktrees", "w", false, "rebase branches checked out in linked worktrees in-place")
+	restackCmd.Flags().BoolVar(&restackNoUpdateRefsFlag, "no-update-refs", false, "do not pass --update-refs to git (preserves untracked bookmark branches pointing into the stack)")
 	rootCmd.AddCommand(restackCmd)
 }
 
@@ -104,10 +106,11 @@ func runRestack(cmd *cobra.Command, args []string) error {
 	}
 
 	err = doRestackWithState(g, cfg, branches, RestackOptions{
-		DryRun:    restackDryRunFlag,
-		Operation: state.OperationRestack,
-		StashRef:  stashRef,
-		Worktrees: worktrees,
+		DryRun:       restackDryRunFlag,
+		Operation:    state.OperationRestack,
+		StashRef:     stashRef,
+		Worktrees:    worktrees,
+		NoUpdateRefs: restackNoUpdateRefsFlag,
 	}, s)
 
 	// Restore auto-stashed changes after operation (unless conflict, which saves stash in state)
@@ -150,6 +153,11 @@ type RestackOptions struct {
 	// present in the map are rebased directly in their worktree directory instead
 	// of being checked out in the main working tree.
 	Worktrees map[string]string
+	// NoUpdateRefs suppresses --update-refs on rebase invocations when true.
+	// --update-refs is also suppressed automatically when Worktrees is non-empty
+	// because git silently skips refs checked out in other worktrees, which
+	// would corrupt the stack without any error or warning.
+	NoUpdateRefs bool
 }
 
 // doRestackWithState performs restack and saves state with the given operation type.
@@ -162,6 +170,14 @@ func doRestackWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 	if err != nil {
 		return err
 	}
+
+	// Resolve the effective --update-refs setting once for this operation.
+	// We always pass the flag explicitly (either --update-refs or --no-update-refs)
+	// to override any ambient rebase.updateRefs git config setting.
+	// Suppress when linked worktrees are detected (Worktrees map non-empty):
+	// git silently skips refs that are checked out in another worktree rather
+	// than refusing, which would leave the stack in a broken state with no error.
+	updateRefs := !opts.NoUpdateRefs && len(opts.Worktrees) == 0
 
 	for i, b := range branches {
 		parent, err := cfg.GetParent(b.Name)
@@ -254,13 +270,15 @@ func doRestackWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 
 		var rebaseErr error
 		if wtPath != "" {
-			// Branch is checked out in a linked worktree -- rebase there directly
+			// Branch is checked out in a linked worktree -- rebase there directly.
+			// updateRefs is already false when worktrees are active (see resolution
+			// rule above), so RebaseHere/RebaseOntoHere pass --no-update-refs.
 			fmt.Printf("  %s\n", s.Muted(fmt.Sprintf("Using worktree at %s for %s", wtPath, b.Name)))
 			gitWt := git.New(wtPath)
 			if useOnto {
-				rebaseErr = gitWt.RebaseOntoHere(parent, storedForkPoint)
+				rebaseErr = gitWt.RebaseOntoHere(parent, storedForkPoint, updateRefs)
 			} else {
-				rebaseErr = gitWt.RebaseHere(parent)
+				rebaseErr = gitWt.RebaseHere(parent, updateRefs)
 			}
 			// If git failed for a non-conflict reason (e.g. worktree dir was removed),
 			// wrap the error with context so the user knows which worktree we tried.
@@ -274,9 +292,9 @@ func doRestackWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 			}
 
 			if useOnto {
-				rebaseErr = g.RebaseOnto(parent, storedForkPoint, b.Name)
+				rebaseErr = g.RebaseOnto(parent, storedForkPoint, b.Name, updateRefs)
 			} else {
-				rebaseErr = g.Rebase(parent)
+				rebaseErr = g.Rebase(parent, updateRefs)
 			}
 		}
 
@@ -298,6 +316,7 @@ func doRestackWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 				Branches:     opts.Branches,
 				StashRef:     opts.StashRef,
 				Worktrees:    opts.Worktrees,
+				UpdateRefs:   updateRefs,
 			}
 			_ = state.Save(g.GetGitDir(), st) //nolint:errcheck // best effort - user can recover manually
 

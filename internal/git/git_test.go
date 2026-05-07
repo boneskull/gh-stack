@@ -457,7 +457,7 @@ func TestRebaseOnto(t *testing.T) {
 
 	// Now rebase child onto trunk, using parent tip as the fork point
 	// This should only replay "child commit", not "parent commit"
-	err = g.RebaseOnto(trunk, parentTip, "child")
+	err = g.RebaseOnto(trunk, parentTip, "child", false)
 	if err != nil {
 		t.Fatalf("RebaseOnto failed: %v", err)
 	}
@@ -789,5 +789,118 @@ func TestRemoteBranchExists(t *testing.T) {
 	// Non-existent branch should return false
 	if g.RemoteBranchExists("nonexistent-branch-xyz") {
 		t.Error("RemoteBranchExists(nonexistent) = true, want false")
+	}
+}
+
+// setupLinearStack creates a linear chain main → A → B → C and advances main,
+// returning the repo dir.
+func setupLinearStack(t *testing.T) (dir string) {
+	t.Helper()
+	dir = t.TempDir()
+
+	run := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("git %v failed: %v", args, err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	run("init", "-b", "main")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "Test")
+
+	os.WriteFile(filepath.Join(dir, "f"), []byte("m1"), 0644)
+	run("add", ".")
+	run("commit", "-m", "m1")
+
+	run("checkout", "-b", "A")
+	os.WriteFile(filepath.Join(dir, "a"), []byte("a"), 0644)
+	run("add", ".")
+	run("commit", "-m", "a")
+
+	run("checkout", "-b", "B")
+	os.WriteFile(filepath.Join(dir, "b"), []byte("b"), 0644)
+	run("add", ".")
+	run("commit", "-m", "b")
+
+	run("checkout", "-b", "C")
+	os.WriteFile(filepath.Join(dir, "c"), []byte("c"), 0644)
+	run("add", ".")
+	run("commit", "-m", "c")
+
+	// Advance main so there is something to rebase onto
+	run("checkout", "main")
+	os.WriteFile(filepath.Join(dir, "f"), []byte("m2"), 0644)
+	run("add", ".")
+	run("commit", "-m", "m2")
+
+	return dir
+}
+
+// TestRebaseUpdateRefsMovesBookmark verifies that Rebase with updateRefs=true
+// moves untracked bookmark branches that point into the rebased range.
+// Uses a plain rebase (not --onto) so the full chain A→B→C is replayed and
+// both B's ref and the bookmark (which points to B) are updated.
+func TestRebaseUpdateRefsMovesBookmark(t *testing.T) {
+	dir := setupLinearStack(t)
+	g := git.New(dir)
+
+	bBefore, err := g.GetTip("B")
+	if err != nil {
+		t.Fatalf("GetTip(B) failed: %v", err)
+	}
+
+	// Create an untracked bookmark pointing at B's current tip
+	if out, err := exec.Command("git", "-C", dir, "branch", "bookmark", "B").CombinedOutput(); err != nil {
+		t.Fatalf("git branch bookmark B failed: %v\n%s", err, out)
+	}
+
+	// Checkout C and rebase the whole chain (A→B→C) onto new main with --update-refs.
+	// B's ref and bookmark should both move to the rebased equivalent of B's commit.
+	if out, err := exec.Command("git", "-C", dir, "checkout", "C").CombinedOutput(); err != nil {
+		t.Fatalf("git checkout C failed: %v\n%s", err, out)
+	}
+	if err := g.Rebase("main", true); err != nil {
+		t.Fatalf("Rebase failed: %v", err)
+	}
+
+	bAfter, _ := g.GetTip("B")
+	bookmarkAfter, _ := g.GetTip("bookmark")
+
+	if bAfter == bBefore {
+		t.Error("expected B to be updated by --update-refs, but it was unchanged")
+	}
+	if bookmarkAfter != bAfter {
+		t.Errorf("expected bookmark to track new B tip %s, got %s", bAfter, bookmarkAfter)
+	}
+}
+
+// TestRebaseNoUpdateRefsPreservesBookmark verifies that Rebase with
+// updateRefs=false preserves untracked bookmark branches.
+func TestRebaseNoUpdateRefsPreservesBookmark(t *testing.T) {
+	dir := setupLinearStack(t)
+	g := git.New(dir)
+
+	// Create an untracked bookmark pointing at B's current tip
+	if out, err := exec.Command("git", "-C", dir, "branch", "bookmark", "B").CombinedOutput(); err != nil {
+		t.Fatalf("git branch bookmark B failed: %v\n%s", err, out)
+	}
+	bookmarkBefore, _ := g.GetTip("bookmark")
+
+	// Checkout C and rebase with --no-update-refs; bookmark should not move
+	if out, err := exec.Command("git", "-C", dir, "checkout", "C").CombinedOutput(); err != nil {
+		t.Fatalf("git checkout C failed: %v\n%s", err, out)
+	}
+	if err := g.Rebase("main", false); err != nil {
+		t.Fatalf("Rebase failed: %v", err)
+	}
+
+	bookmarkAfter, _ := g.GetTip("bookmark")
+
+	if bookmarkAfter != bookmarkBefore {
+		t.Errorf("expected bookmark to be preserved with --no-update-refs, but it moved from %s to %s", bookmarkBefore, bookmarkAfter)
 	}
 }
