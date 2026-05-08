@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/boneskull/gh-stack/compare/v1.0.0...v1.1.0) (2026-05-08)
+
+
+### Features
+
+* **adopt:** allow re-adoption of branches ([2b49c2b](https://github.com/boneskull/gh-stack/commit/2b49c2b4c8a2f55d6242417c30a4019bb4d3cb4f))
+* **adopt:** allow re-adoption of branches ([#117](https://github.com/boneskull/gh-stack/issues/117)) ([2b49c2b](https://github.com/boneskull/gh-stack/commit/2b49c2b4c8a2f55d6242417c30a4019bb4d3cb4f))
+* **style:** hyperlink PR numbers in submit output ([#107](https://github.com/boneskull/gh-stack/issues/107)) ([32a9534](https://github.com/boneskull/gh-stack/commit/32a95340d9657b3116aeb0a28af316570a8a5824))
+
+
+### Bug Fixes
+
+* **restack:** pass --update-refs to git rebase by default ([#119](https://github.com/boneskull/gh-stack/issues/119)) ([bc8a746](https://github.com/boneskull/gh-stack/commit/bc8a74680b404db2523f648b8288d65cb920b13b))
+
 ## [1.0.0](https://github.com/boneskull/gh-stack/compare/v0.6.3...v1.0.0) (2026-04-20)
 
 
