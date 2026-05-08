@@ -1,4 +1,21 @@
 {
   "projectName": "gh-stack",
-  "projectOwner": "boneskull"
+  "projectOwner": "boneskull",
+  "files": [
+    "README.md"
+  ],
+  "commitType": "docs",
+  "commitConvention": "angular",
+  "contributorsPerLine": 7,
+  "contributors": [
+    {
+      "login": "mvanhorn",
+      "name": "Matt Van Horn",
+      "avatar_url": "https://avatars.githubusercontent.com/u/455140?v=4",
+      "profile": "https://github.com/mvanhorn",
+      "contributions": [
+        "code"
+      ]
+    }
+  ]
 }
