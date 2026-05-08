@@ -1,9 +1,6 @@
 package style
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 func TestHyperlinkColorsDisabled(t *testing.T) {
 	s := NewWithColor(false)
@@ -17,15 +14,9 @@ func TestHyperlinkColorsDisabled(t *testing.T) {
 func TestHyperlinkColorsEnabled(t *testing.T) {
 	s := NewWithColor(true)
 	got := s.Hyperlink("PR #42", "https://github.com/owner/repo/pull/42")
-	// OSC 8 sequence wraps the visible text
-	if !strings.Contains(got, "PR #42") {
-		t.Errorf("Hyperlink should contain visible text; got %q", got)
-	}
-	if !strings.Contains(got, "https://github.com/owner/repo/pull/42") {
-		t.Errorf("Hyperlink should contain URL; got %q", got)
-	}
-	if !strings.HasPrefix(got, "\x1b]8;;") {
-		t.Errorf("Hyperlink should start with OSC 8 sequence; got %q", got)
+	want := "\x1b]8;;https://github.com/owner/repo/pull/42\x1b\\PR #42\x1b]8;;\x1b\\"
+	if got != want {
+		t.Errorf("Hyperlink OSC 8: got %q, want %q", got, want)
 	}
 }
 

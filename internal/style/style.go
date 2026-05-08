@@ -15,6 +15,7 @@ import (
 // All methods return plain text when colors are disabled.
 type Style struct {
 	enabled bool
+	isTTY   bool
 }
 
 var (
@@ -54,13 +55,19 @@ func isColorEnabled() bool {
 // New creates a new Style instance.
 // Colors are automatically enabled/disabled based on terminal capabilities.
 func New() *Style {
-	return &Style{enabled: isColorEnabled()}
+	return &Style{
+		enabled: isColorEnabled(),
+		isTTY:   getTermState().IsTerminalOutput(),
+	}
 }
 
 // NewWithColor creates a Style with explicit color setting.
 // Useful for testing or forcing color on/off.
 func NewWithColor(enabled bool) *Style {
-	return &Style{enabled: enabled}
+	return &Style{
+		enabled: enabled,
+		isTTY:   enabled,
+	}
 }
 
 // Enabled returns whether colors are enabled.
@@ -199,7 +206,7 @@ func (s *Style) FailureMessage(msg string) string {
 //
 // Reference: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
 func (s *Style) Hyperlink(text, url string) string {
-	if !s.enabled || url == "" {
+	if !s.enabled || !s.isTTY || url == "" {
 		if url == "" {
 			return text
 		}
