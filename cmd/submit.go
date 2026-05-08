@@ -38,13 +38,14 @@ If a rebase conflict occurs, resolve it and run 'gh stack continue'.`,
 }
 
 var (
-	submitDryRunFlag      bool
-	submitCurrentOnlyFlag bool
-	submitUpdateOnlyFlag  bool
-	submitPushOnlyFlag    bool
-	submitYesFlag         bool
-	submitWebFlag         bool
-	submitFromFlag        string
+	submitDryRunFlag       bool
+	submitCurrentOnlyFlag  bool
+	submitUpdateOnlyFlag   bool
+	submitPushOnlyFlag     bool
+	submitYesFlag          bool
+	submitWebFlag          bool
+	submitFromFlag         string
+	submitNoUpdateRefsFlag bool
 )
 
 // prAction describes what we will do for a branch in the PR phase after push.
@@ -86,6 +87,7 @@ func init() {
 	submitCmd.Flags().BoolVar(&submitWebFlag, "web", false, "open created/updated PRs in web browser")
 	submitCmd.Flags().StringVarP(&submitFromFlag, "from", "f", "", "submit from this branch toward leaves (default: entire stack; bare --from = current branch)")
 	submitCmd.Flags().Lookup("from").NoOptDefVal = "HEAD"
+	submitCmd.Flags().BoolVar(&submitNoUpdateRefsFlag, "no-update-refs", false, "do not pass --update-refs to git (preserves untracked bookmark branches pointing into the stack)")
 	rootCmd.AddCommand(submitCmd)
 }
 
@@ -205,13 +207,14 @@ func runSubmit(cmd *cobra.Command, args []string) error {
 	// Phase 1: Restack
 	fmt.Println(s.Bold("=== Phase 1: Restack ==="))
 	if restackErr := doRestackWithState(g, cfg, branches, RestackOptions{
-		DryRun:     submitDryRunFlag,
-		Operation:  state.OperationSubmit,
-		UpdateOnly: submitUpdateOnlyFlag,
-		OpenWeb:    submitWebFlag,
-		PushOnly:   submitPushOnlyFlag,
-		Branches:   branchNames,
-		StashRef:   stashRef,
+		DryRun:       submitDryRunFlag,
+		Operation:    state.OperationSubmit,
+		UpdateOnly:   submitUpdateOnlyFlag,
+		OpenWeb:      submitWebFlag,
+		PushOnly:     submitPushOnlyFlag,
+		Branches:     branchNames,
+		StashRef:     stashRef,
+		NoUpdateRefs: submitNoUpdateRefsFlag,
 	}, s); restackErr != nil {
 		// Stash is saved in state for conflicts; restore on other errors
 		if !errors.Is(restackErr, ErrConflict) && stashRef != "" {

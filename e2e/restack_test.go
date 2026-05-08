@@ -290,3 +290,79 @@ func TestRestackOntoUsedForRewrittenParent(t *testing.T) {
 	env.AssertAncestor("feature-a", "feature-b")
 	env.AssertNoRebaseInProgress()
 }
+
+// TestRestackMovesUntrackedBookmark verifies that gh-stack restack (with the
+// default --update-refs) moves untracked bookmark branches that point into the
+// rebased chain.
+func TestRestackMovesUntrackedBookmark(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("feature a work")
+
+	env.MustRun("create", "feature-b")
+	env.CreateCommit("feature b work")
+
+	// Record feature-a's tip before restack
+	aBeforeRestack := env.BranchTip("feature-a")
+
+	// Create an untracked bookmark pointing at feature-a
+	env.Git("branch", "my-bookmark", "feature-a")
+
+	// Move main forward so a restack is required
+	env.Git("checkout", "main")
+	env.CreateCommit("main moved forward")
+
+	// Restack from feature-a (default: --update-refs active)
+	env.Git("checkout", "feature-a")
+	env.MustRun("restack")
+
+	aAfterRestack := env.BranchTip("feature-a")
+	bookmarkAfter := env.BranchTip("my-bookmark")
+
+	if aAfterRestack == aBeforeRestack {
+		t.Fatal("expected feature-a to be rebased, but its tip did not change")
+	}
+	if bookmarkAfter != aAfterRestack {
+		t.Errorf("expected my-bookmark to track new feature-a tip %s after --update-refs, got %s",
+			aAfterRestack[:8], bookmarkAfter[:8])
+	}
+}
+
+// TestRestackNoUpdateRefsFlagPreservesBookmark verifies that --no-update-refs
+// leaves untracked bookmark branches pointing at their original commits.
+func TestRestackNoUpdateRefsFlagPreservesBookmark(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("feature a work")
+
+	env.MustRun("create", "feature-b")
+	env.CreateCommit("feature b work")
+
+	// Record feature-a's tip and create an untracked bookmark there
+	aBeforeRestack := env.BranchTip("feature-a")
+	env.Git("branch", "my-bookmark", "feature-a")
+	bookmarkBefore := env.BranchTip("my-bookmark")
+
+	// Move main forward so a restack is required
+	env.Git("checkout", "main")
+	env.CreateCommit("main moved forward")
+
+	// Restack with --no-update-refs; bookmark must not move
+	env.Git("checkout", "feature-a")
+	env.MustRun("restack", "--no-update-refs")
+
+	aAfterRestack := env.BranchTip("feature-a")
+	bookmarkAfter := env.BranchTip("my-bookmark")
+
+	if aAfterRestack == aBeforeRestack {
+		t.Fatal("expected feature-a to be rebased, but its tip did not change")
+	}
+	if bookmarkAfter != bookmarkBefore {
+		t.Errorf("expected my-bookmark to be unchanged with --no-update-refs: was %s, now %s",
+			bookmarkBefore[:8], bookmarkAfter[:8])
+	}
+}

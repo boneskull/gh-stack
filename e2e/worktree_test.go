@@ -220,3 +220,70 @@ func containsString(s, substr string) bool {
 	}
 	return false
 }
+
+// TestRestackWorktreesSuppressesUpdateRefs verifies that --worktrees mode
+// automatically suppresses --update-refs. When an intermediate branch is
+// checked out in a linked worktree, git silently skips updating that ref with
+// --update-refs, which leaves the stack in a broken state. gh-stack prevents
+// this by always passing --no-update-refs when --worktrees is active.
+//
+// We verify the suppression indirectly: an untracked bookmark pointing at the
+// worktree branch must NOT be moved after the restack (proving --no-update-refs
+// was passed). If it were moved, git would have had to process the worktree
+// branch's ref — which we know it silently skips — and the stack would be
+// broken.
+func TestRestackWorktreesSuppressesUpdateRefs(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	// Build chain: main -> feature-a -> feature-b -> feature-c
+	env.MustRun("create", "feature-a")
+	env.CreateCommit("feature a work")
+
+	env.MustRun("create", "feature-b")
+	env.CreateCommit("feature b work")
+
+	env.MustRun("create", "feature-c")
+	env.CreateCommit("feature c work")
+
+	// Check out feature-b in a linked worktree
+	wtPath := filepath.Join(t.TempDir(), "wt-feature-b")
+	env.CreateWorktree("feature-b", wtPath)
+
+	// Create an untracked bookmark pointing at feature-b
+	env.Git("branch", "bookmark", "feature-b")
+	bookmarkBefore := env.BranchTip("bookmark")
+
+	// Move main forward so a restack is needed
+	env.Git("checkout", "main")
+	env.CreateCommit("main moved forward")
+
+	// Restack with --worktrees; --update-refs must be suppressed automatically
+	env.Git("checkout", "feature-a")
+	env.MustRun("restack", "--worktrees")
+
+	// Stack integrity: all branches must be in correct ancestry order
+	env.AssertAncestor("main", "feature-a")
+	env.AssertAncestor("feature-a", "feature-b")
+	env.AssertAncestor("feature-b", "feature-c")
+	env.AssertNoRebaseInProgress()
+
+	// Verify the worktree branch is intact (reachable from feature-c)
+	wtBranchTip := env.BranchTip("feature-b")
+	mainTip := env.BranchTip("main")
+	if wtBranchTip == mainTip {
+		t.Error("feature-b should not point at main after worktree restack")
+	}
+
+	// The bookmark must NOT have moved: --no-update-refs was in effect.
+	// If it moved, it would prove --update-refs was passed, and the stack
+	// integrity check above would likely also fail (silent skip corrupts the chain).
+	bookmarkAfter := env.BranchTip("bookmark")
+	if bookmarkAfter != bookmarkBefore {
+		t.Errorf("bookmark moved from %s to %s under --worktrees: --no-update-refs was not suppressed",
+			bookmarkBefore[:8], bookmarkAfter[:8])
+	}
+
+	// Clean up
+	_ = os.RemoveAll(wtPath)
+}

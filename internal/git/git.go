@@ -31,6 +31,44 @@ func resolveGitPath() (string, error) {
 	return gitPath, errGitPath
 }
 
+var (
+	gitVersionOnce sync.Once
+	gitVersionMaj  int
+	gitVersionMin  int
+)
+
+// initGitVersion lazily resolves and caches the major.minor of the installed git.
+// On parse failure (unusual version strings) both values remain zero.
+func initGitVersion() {
+	gitVersionOnce.Do(func() {
+		p, err := resolveGitPath()
+		if err != nil {
+			return
+		}
+		out, err := exec.Command(p, "--version").Output()
+		if err != nil {
+			return
+		}
+		// Output: "git version X.Y.Z[.extra]"
+		fmt.Sscanf(strings.TrimSpace(string(out)), "git version %d.%d", &gitVersionMaj, &gitVersionMin) //nolint:errcheck // best effort
+	})
+}
+
+// requireUpdateRefsSupport returns an error if the installed git is older than
+// 2.38, which introduced --update-refs. When the version cannot be determined
+// (unusual build) the check is skipped and git itself will surface any failure.
+func requireUpdateRefsSupport() error {
+	initGitVersion()
+	if gitVersionMaj == 0 {
+		return nil // version unknown; proceed and let git surface the error
+	}
+	if gitVersionMaj > 2 || (gitVersionMaj == 2 && gitVersionMin >= 38) {
+		return nil
+	}
+	return fmt.Errorf("git 2.38 or newer is required (installed: %d.%d); upgrade git and try again",
+		gitVersionMaj, gitVersionMin)
+}
+
 // Git provides git operations for a repository.
 type Git struct {
 	repoPath string
@@ -167,9 +205,27 @@ func (g *Git) NeedsRebase(branch, parent string) (bool, error) {
 	return mergeBase != parentTip, nil
 }
 
+// updateRefsArg returns the --update-refs or --no-update-refs flag string.
+// Passing the explicit flag ensures we override any ambient rebase.updateRefs
+// git config setting, making behavior predictable regardless of user config.
+func updateRefsArg(updateRefs bool) string {
+	if updateRefs {
+		return "--update-refs"
+	}
+	return "--no-update-refs"
+}
+
 // Rebase rebases the current branch onto target.
-func (g *Git) Rebase(onto string) error {
-	return g.runInteractive("rebase", onto)
+// updateRefs controls whether --update-refs is passed to git rebase.
+// When true, git moves any branch refs that point to commits inside the rebased
+// range. When false, --no-update-refs is passed explicitly to override any
+// ambient rebase.updateRefs git config.
+// Both flags require Git 2.38+; an error is returned if the requirement is not met.
+func (g *Git) Rebase(onto string, updateRefs bool) error {
+	if err := requireUpdateRefsSupport(); err != nil {
+		return err
+	}
+	return g.runInteractive("rebase", updateRefsArg(updateRefs), onto)
 }
 
 // CommitExists checks if a commit SHA exists in the repository.
@@ -254,12 +310,17 @@ func (g *Git) ListRemoteBranches() (map[string]bool, error) {
 // Checks out the branch first, then runs: git rebase --onto <newBase> <oldBase>
 // Useful when a parent branch was squash-merged and we need to replay only
 // the commits unique to the child branch.
-func (g *Git) RebaseOnto(newBase, oldBase, branch string) error {
+// updateRefs controls whether --update-refs is passed; see Rebase for details.
+// Requires Git 2.38+; an error is returned if the requirement is not met.
+func (g *Git) RebaseOnto(newBase, oldBase, branch string, updateRefs bool) error {
+	if err := requireUpdateRefsSupport(); err != nil {
+		return err
+	}
 	// Checkout the branch to rebase (git rebase operates on HEAD)
 	if err := g.Checkout(branch); err != nil {
 		return err
 	}
-	return g.runInteractive("rebase", "--onto", newBase, oldBase)
+	return g.runInteractive("rebase", updateRefsArg(updateRefs), "--onto", newBase, oldBase)
 }
 
 // RebaseContinue continues an in-progress rebase.
@@ -354,15 +415,25 @@ func (g *Git) ListWorktrees() (map[string]string, error) {
 // This is semantically identical to Rebase but named explicitly to clarify
 // that no checkout is needed -- the caller is operating inside a worktree
 // that already has the target branch checked out.
-func (g *Git) RebaseHere(onto string) error {
-	return g.runInteractive("rebase", onto)
+// updateRefs controls whether --update-refs is passed; see Rebase for details.
+// Requires Git 2.38+; an error is returned if the requirement is not met.
+func (g *Git) RebaseHere(onto string, updateRefs bool) error {
+	if err := requireUpdateRefsSupport(); err != nil {
+		return err
+	}
+	return g.runInteractive("rebase", updateRefsArg(updateRefs), onto)
 }
 
 // RebaseOntoHere runs `git rebase --onto <newBase> <oldBase>` on the
 // already-checked-out HEAD. Needed for fork-point rebases in worktrees
 // where we cannot (and don't need to) checkout first.
-func (g *Git) RebaseOntoHere(newBase, oldBase string) error {
-	return g.runInteractive("rebase", "--onto", newBase, oldBase)
+// updateRefs controls whether --update-refs is passed; see Rebase for details.
+// Requires Git 2.38+; an error is returned if the requirement is not met.
+func (g *Git) RebaseOntoHere(newBase, oldBase string, updateRefs bool) error {
+	if err := requireUpdateRefsSupport(); err != nil {
+		return err
+	}
+	return g.runInteractive("rebase", updateRefsArg(updateRefs), "--onto", newBase, oldBase)
 }
 
 // GetGitDir returns the .git directory path.
