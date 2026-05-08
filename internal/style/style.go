@@ -15,6 +15,7 @@ import (
 // All methods return plain text when colors are disabled.
 type Style struct {
 	enabled bool
+	isTTY   bool
 }
 
 var (
@@ -54,13 +55,19 @@ func isColorEnabled() bool {
 // New creates a new Style instance.
 // Colors are automatically enabled/disabled based on terminal capabilities.
 func New() *Style {
-	return &Style{enabled: isColorEnabled()}
+	return &Style{
+		enabled: isColorEnabled(),
+		isTTY:   getTermState().IsTerminalOutput(),
+	}
 }
 
 // NewWithColor creates a Style with explicit color setting.
 // Useful for testing or forcing color on/off.
 func NewWithColor(enabled bool) *Style {
-	return &Style{enabled: enabled}
+	return &Style{
+		enabled: enabled,
+		isTTY:   enabled,
+	}
 }
 
 // Enabled returns whether colors are enabled.
@@ -190,4 +197,21 @@ func (s *Style) WarningMessage(msg string) string {
 // Example: "✗ Operation failed"
 func (s *Style) FailureMessage(msg string) string {
 	return fmt.Sprintf("%s %s", s.FailureIcon(), s.Error(msg))
+}
+
+// Hyperlink renders text as a terminal hyperlink to url using the OSC 8
+// escape sequence when colors/TTY are enabled. When the terminal can't
+// support it (NO_COLOR, piped output, dumb terminal), it falls back to
+// "text (url)" so the URL stays visible to the user.
+//
+// Reference: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
+func (s *Style) Hyperlink(text, url string) string {
+	if !s.enabled || !s.isTTY || url == "" {
+		if url == "" {
+			return text
+		}
+		return fmt.Sprintf("%s (%s)", text, url)
+	}
+	// OSC 8 hyperlink: ESC]8;;URLESC\TEXTESC]8;;ESC\
+	return fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", url, text)
 }

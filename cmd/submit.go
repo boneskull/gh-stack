@@ -462,7 +462,7 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 			if opts.DryRun {
 				fmt.Printf("%s Would update PR #%d base to %s\n", s.Muted("dry-run:"), d.prNum, s.Branch(parent))
 			} else {
-				fmt.Printf("Updating PR #%d for %s (base: %s)... ", d.prNum, s.Branch(b.Name), s.Branch(parent))
+				fmt.Printf("Updating %s for %s (base: %s)... ", s.Hyperlink(fmt.Sprintf("PR #%d", d.prNum), ghClient.PRURL(d.prNum)), s.Branch(b.Name), s.Branch(parent))
 				if err := ghClient.UpdatePRBase(d.prNum, parent); err != nil {
 					fmt.Println(s.Error("failed"))
 					fmt.Printf("%s failed to update PR #%d base: %v\n", s.WarningIcon(), d.prNum, err)
