@@ -494,6 +494,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of **gh-stack**'
   <tbody>
     <tr>
       <td align="center" valign="top" width="14.28%"><a href="https://github.com/mvanhorn"><img src="https://avatars.githubusercontent.com/u/455140?v=4?s=100" width="100px;" alt="Matt Van Horn"/><br /><sub><b>Matt Van Horn</b></sub></a><br /><a href="#code-mvanhorn" title="Code">💻</a></td>
+      <td align="center" valign="top" width="14.28%"><a href="https://github.com/boneskull"><img src="https://avatars.githubusercontent.com/u/924465?v=4?s=100" width="100px;" alt="Christopher Hiller"/><br /><sub><b>Christopher Hiller</b></sub></a><br /><a href="#maintenance-boneskull" title="Maintenance">🚧</a></td>
     </tr>
   </tbody>
 </table>
