@@ -9,21 +9,21 @@
   "contributorsPerLine": 7,
   "contributors": [
     {
-      "login": "mvanhorn",
-      "name": "Matt Van Horn",
-      "avatar_url": "https://avatars.githubusercontent.com/u/455140?v=4",
-      "profile": "https://github.com/mvanhorn",
-      "contributions": [
-        "code"
-      ]
-    },
-    {
       "login": "boneskull",
       "name": "Christopher Hiller",
       "avatar_url": "https://avatars.githubusercontent.com/u/924465?v=4",
       "profile": "https://github.com/boneskull",
       "contributions": [
         "maintenance"
+      ]
+    },
+    {
+      "login": "mvanhorn",
+      "name": "Matt Van Horn",
+      "avatar_url": "https://avatars.githubusercontent.com/u/455140?v=4",
+      "profile": "https://github.com/mvanhorn",
+      "contributions": [
+        "code"
       ]
     }
   ]
