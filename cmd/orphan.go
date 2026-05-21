@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
@@ -59,7 +60,30 @@ func runOrphan(cmd *cobra.Command, args []string) error {
 
 	node := tree.FindNode(root, branchName)
 	if node == nil {
-		return fmt.Errorf("branch %q is not tracked", branchName)
+		// FindNode walks Parent->Children links starting from trunk, so a
+		// branch whose recorded parent is missing or itself untracked is
+		// disconnected from the tree even though it still has a
+		// stackParent entry in git config. Treat that as orphan-able
+		// rather than rejecting: the branch IS tracked, the link is just
+		// dangling. (#116)
+		trackedBranches, listErr := cfg.ListTrackedBranches()
+		if listErr != nil {
+			return fmt.Errorf("branch %q is not tracked", branchName)
+		}
+		if !slices.Contains(trackedBranches, branchName) {
+			return fmt.Errorf("branch %q is not tracked", branchName)
+		}
+		// A disconnected branch has no children in the in-memory tree
+		// (children require a parent link from this branch, which Build
+		// would have wired up before disconnecting it), so drop straight
+		// into the cleanup path without the children check.
+		s := style.New()
+		_ = cfg.RemoveParent(branchName)    //nolint:errcheck // best effort cleanup
+		_ = cfg.RemovePR(branchName)        //nolint:errcheck // best effort cleanup
+		_ = cfg.RemoveForkPoint(branchName) //nolint:errcheck // best effort cleanup
+		_ = cfg.RemovePRBase(branchName)    //nolint:errcheck // best effort cleanup
+		fmt.Printf("%s Orphaned %s\n", s.SuccessIcon(), s.Branch(branchName))
+		return nil
 	}
 
 	// Check for children

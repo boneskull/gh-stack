@@ -53,3 +53,29 @@ func TestOrphanForceClearsPRBaseOnDescendants(t *testing.T) {
 		t.Errorf("expected feat-b stackPRBase cleared, got %q", v)
 	}
 }
+
+func TestOrphanDisconnectedBranchIsAllowed(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	// Create the branch chain main -> feat-a, then manually delete the
+	// parent link so feat-a's recorded parent ("missing-branch") is not
+	// itself a tracked branch. This mirrors the scenario in #116 where
+	// the parent is no longer valid and `gh stack orphan` previously
+	// refused to orphan the current branch.
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("feat-a work")
+	env.Git("config", "branch.feat-a.stackParent", "missing-branch")
+
+	if env.GetStackConfig("branch.feat-a.stackParent") != "missing-branch" {
+		t.Fatal("expected feat-a parent override to land before orphan")
+	}
+
+	result := env.Run("orphan", "feat-a")
+	if !result.Success() {
+		t.Fatalf("expected orphan of disconnected branch to succeed, got exit %d stderr=%q", result.ExitCode, result.Stderr)
+	}
+	if v := env.GetStackConfig("branch.feat-a.stackParent"); v != "" {
+		t.Errorf("expected feat-a stackParent cleared after orphan, got %q", v)
+	}
+}
