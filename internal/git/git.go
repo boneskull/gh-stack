@@ -173,7 +173,9 @@ func (g *Git) Commit(message string) error {
 	return g.runSilent("commit", "-m", message)
 }
 
-// Push force-pushes a branch to origin with lease.
+// Push pushes a branch to origin. When force is true, --force-with-lease is
+// used; when false, the push is a normal fast-forward push (and will fail if
+// the remote has diverged).
 func (g *Git) Push(branch string, force bool) error {
 	return g.PushMany([]string{branch}, force)
 }
