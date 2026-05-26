@@ -1056,8 +1056,6 @@ func TestPushManyAtomicRejection(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "b2"), []byte("b2"), 0644)
 	run("add", ".")
 	run("commit", "-m", "b2")
-	tipBNew, _ := g.GetTip("feat-b")
-	_ = tipBLocal // original tip before the new commit
 
 	// PushMany should fail because feat-a's lease is broken.
 	err := g.PushMany([]string{"feat-a", "feat-b"}, true)
@@ -1065,9 +1063,14 @@ func TestPushManyAtomicRejection(t *testing.T) {
 		t.Fatal("expected PushMany to fail due to lease rejection on feat-a, but it succeeded")
 	}
 
-	// Due to --atomic, feat-b must NOT have advanced on the remote.
+	// Due to --atomic, feat-b must remain at exactly its pre-push value on
+	// the remote. Assert strict equality (and fail loudly if the remote ref
+	// cannot be read) so a missing/blank rev-parse can't masquerade as success.
 	remoteB := remoteRef(t, remoteDir, "feat-b")
-	if remoteB == tipBNew {
-		t.Errorf("remote feat-b advanced to %s despite atomic failure — --atomic is not working", tipBNew)
+	if remoteB == "" {
+		t.Fatal("could not read remote feat-b SHA after PushMany failure")
+	}
+	if remoteB != tipBLocal {
+		t.Errorf("remote feat-b = %s, want unchanged %s — --atomic did not hold", remoteB, tipBLocal)
 	}
 }
