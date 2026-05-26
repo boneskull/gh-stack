@@ -309,7 +309,7 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 		}
 		fmt.Printf("Pushing %s to origin (force-with-lease, atomic)...\n", strings.Join(styled, ", "))
 		if err := g.PushMany(toPush, true); err != nil {
-			return fmt.Errorf("push failed: %w", err)
+			return fmt.Errorf("failed to push branches [%s]: %w", strings.Join(toPush, ", "), err)
 		}
 	}
 
