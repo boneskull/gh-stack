@@ -904,3 +904,166 @@ func TestRebaseNoUpdateRefsPreservesBookmark(t *testing.T) {
 		t.Errorf("expected bookmark to be preserved with --no-update-refs, but it moved from %s to %s", bookmarkBefore, bookmarkAfter)
 	}
 }
+
+// setupRepoWithRemote creates a local repo + bare remote and returns (localDir, remoteDir, Git).
+// The trunk branch is pushed to the remote and the remote is set as "origin".
+func setupRepoWithRemote(t *testing.T) (dir, remoteDir string, g *git.Git, trunk string) {
+	t.Helper()
+	dir = t.TempDir()
+
+	run := func(args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+
+	run("init", "-b", "main")
+	run("config", "user.email", "test@test.com")
+	run("config", "user.name", "Test")
+	os.WriteFile(filepath.Join(dir, "root"), []byte("root"), 0644)
+	run("add", ".")
+	run("commit", "-m", "root")
+
+	remoteDir = t.TempDir()
+	exec.Command("git", "clone", "--bare", dir, remoteDir).Run() //nolint:errcheck
+	run("remote", "add", "origin", remoteDir)
+	run("push", "-u", "origin", "main")
+
+	g = git.New(dir)
+	trunk = "main"
+	return dir, remoteDir, g, trunk
+}
+
+// remoteRef returns the SHA that a ref points to on the bare remote, or "" on error.
+func remoteRef(t *testing.T, remoteDir, branch string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", remoteDir, "rev-parse", "refs/heads/"+branch).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func TestPushManyHappyPath(t *testing.T) {
+	dir, remoteDir, g, _ := setupRepoWithRemote(t)
+
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create feat-a
+	run("checkout", "-b", "feat-a")
+	os.WriteFile(filepath.Join(dir, "a"), []byte("a"), 0644)
+	run("add", ".")
+	run("commit", "-m", "a")
+	tipA, _ := g.GetTip("feat-a")
+
+	// Create feat-b on top
+	run("checkout", "-b", "feat-b")
+	os.WriteFile(filepath.Join(dir, "b"), []byte("b"), 0644)
+	run("add", ".")
+	run("commit", "-m", "b")
+	tipB, _ := g.GetTip("feat-b")
+
+	// Both branches are local-only at this point; PushMany should create them on remote.
+	if err := g.PushMany([]string{"feat-a", "feat-b"}, false); err != nil {
+		t.Fatalf("PushMany failed: %v", err)
+	}
+
+	if got := remoteRef(t, remoteDir, "feat-a"); got != tipA {
+		t.Errorf("remote feat-a = %s, want %s", got, tipA)
+	}
+	if got := remoteRef(t, remoteDir, "feat-b"); got != tipB {
+		t.Errorf("remote feat-b = %s, want %s", got, tipB)
+	}
+}
+
+func TestPushManyEmpty(t *testing.T) {
+	_, _, g, _ := setupRepoWithRemote(t)
+	// Should be a no-op with no error.
+	if err := g.PushMany(nil, true); err != nil {
+		t.Fatalf("PushMany(nil) returned unexpected error: %v", err)
+	}
+	if err := g.PushMany([]string{}, true); err != nil {
+		t.Fatalf("PushMany([]) returned unexpected error: %v", err)
+	}
+}
+
+// TestPushManyAtomicRejection verifies that when one branch fails --force-with-lease,
+// the --atomic flag prevents the other branch from being updated on the remote.
+func TestPushManyAtomicRejection(t *testing.T) {
+	dir, remoteDir, g, _ := setupRepoWithRemote(t)
+
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v failed: %v\n%s", args, err, out)
+		}
+	}
+
+	// Create and push feat-a
+	run("checkout", "-b", "feat-a")
+	os.WriteFile(filepath.Join(dir, "a"), []byte("a"), 0644)
+	run("add", ".")
+	run("commit", "-m", "a")
+	run("push", "origin", "feat-a")
+
+	// Create feat-b (will be pushed clean — no prior remote ref)
+	run("checkout", "main")
+	run("checkout", "-b", "feat-b")
+	os.WriteFile(filepath.Join(dir, "b"), []byte("b"), 0644)
+	run("add", ".")
+	run("commit", "-m", "b")
+	tipBLocal, _ := g.GetTip("feat-b")
+	run("push", "origin", "feat-b")
+
+	// Diverge the remote's feat-a by adding a commit there directly.
+	// This will cause the force-with-lease for feat-a to be rejected.
+	exec.Command("git", "-C", remoteDir, "config", "--local", "receive.denyNonFastForwards", "false").Run() //nolint:errcheck
+	os.WriteFile(filepath.Join(remoteDir, "diverged"), []byte("diverged"), 0644)
+	exec.Command("git", "-C", remoteDir, "update-ref", "refs/heads/feat-a",
+		// Point feat-a on remote to a newly-created orphan commit so the lease check fails.
+		// Easiest: use fast-import to write a new root commit.
+		// Simpler approach: just push a new commit from a temp clone.
+		"HEAD").Run() //nolint:errcheck
+
+	// Simpler divergence: commit directly to feat-a on the remote via a temp clone
+	tmp := t.TempDir()
+	exec.Command("git", "clone", remoteDir, tmp).Run() //nolint:errcheck
+	os.WriteFile(filepath.Join(tmp, "remote-diverge"), []byte("x"), 0644)
+	exec.Command("git", "-C", tmp, "config", "user.email", "t@t.com").Run() //nolint:errcheck
+	exec.Command("git", "-C", tmp, "config", "user.name", "T").Run()        //nolint:errcheck
+	exec.Command("git", "-C", tmp, "checkout", "feat-a").Run()              //nolint:errcheck
+	exec.Command("git", "-C", tmp, "add", ".").Run()                        //nolint:errcheck
+	exec.Command("git", "-C", tmp, "commit", "-m", "diverge").Run()         //nolint:errcheck
+	exec.Command("git", "-C", tmp, "push", "origin", "feat-a").Run()        //nolint:errcheck
+
+	// Add a new commit to feat-b locally (so we're trying to advance it)
+	run("checkout", "feat-b")
+	os.WriteFile(filepath.Join(dir, "b2"), []byte("b2"), 0644)
+	run("add", ".")
+	run("commit", "-m", "b2")
+	tipBNew, _ := g.GetTip("feat-b")
+	_ = tipBLocal // original tip before the new commit
+
+	// PushMany should fail because feat-a's lease is broken.
+	err := g.PushMany([]string{"feat-a", "feat-b"}, true)
+	if err == nil {
+		t.Fatal("expected PushMany to fail due to lease rejection on feat-a, but it succeeded")
+	}
+
+	// Due to --atomic, feat-b must NOT have advanced on the remote.
+	remoteB := remoteRef(t, remoteDir, "feat-b")
+	if remoteB == tipBNew {
+		t.Errorf("remote feat-b advanced to %s despite atomic failure — --atomic is not working", tipBNew)
+	}
+}
