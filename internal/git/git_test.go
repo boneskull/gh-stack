@@ -1027,26 +1027,29 @@ func TestPushManyAtomicRejection(t *testing.T) {
 	tipBLocal, _ := g.GetTip("feat-b")
 	run("push", "origin", "feat-b")
 
-	// Diverge the remote's feat-a by adding a commit there directly.
-	// This will cause the force-with-lease for feat-a to be rejected.
-	exec.Command("git", "-C", remoteDir, "config", "--local", "receive.denyNonFastForwards", "false").Run() //nolint:errcheck
-	os.WriteFile(filepath.Join(remoteDir, "diverged"), []byte("diverged"), 0644)
-	exec.Command("git", "-C", remoteDir, "update-ref", "refs/heads/feat-a",
-		// Point feat-a on remote to a newly-created orphan commit so the lease check fails.
-		// Easiest: use fast-import to write a new root commit.
-		// Simpler approach: just push a new commit from a temp clone.
-		"HEAD").Run() //nolint:errcheck
-
-	// Simpler divergence: commit directly to feat-a on the remote via a temp clone
+	// Diverge feat-a on the remote by committing & pushing through a temp
+	// clone. This advances refs/heads/feat-a on the bare remote out from
+	// under our local clone, so our next force-with-lease for feat-a will
+	// see a stale lease and be rejected.
 	tmp := t.TempDir()
-	exec.Command("git", "clone", remoteDir, tmp).Run() //nolint:errcheck
+	cloneTmp := exec.Command("git", "clone", remoteDir, tmp)
+	if out, err := cloneTmp.CombinedOutput(); err != nil {
+		t.Fatalf("git clone (divergence) failed: %v\n%s", err, out)
+	}
+	tmpRun := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = tmp
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v (divergence) failed: %v\n%s", args, err, out)
+		}
+	}
+	tmpRun("config", "user.email", "t@t.com")
+	tmpRun("config", "user.name", "T")
+	tmpRun("checkout", "feat-a")
 	os.WriteFile(filepath.Join(tmp, "remote-diverge"), []byte("x"), 0644)
-	exec.Command("git", "-C", tmp, "config", "user.email", "t@t.com").Run() //nolint:errcheck
-	exec.Command("git", "-C", tmp, "config", "user.name", "T").Run()        //nolint:errcheck
-	exec.Command("git", "-C", tmp, "checkout", "feat-a").Run()              //nolint:errcheck
-	exec.Command("git", "-C", tmp, "add", ".").Run()                        //nolint:errcheck
-	exec.Command("git", "-C", tmp, "commit", "-m", "diverge").Run()         //nolint:errcheck
-	exec.Command("git", "-C", tmp, "push", "origin", "feat-a").Run()        //nolint:errcheck
+	tmpRun("add", ".")
+	tmpRun("commit", "-m", "diverge")
+	tmpRun("push", "origin", "feat-a")
 
 	// Add a new commit to feat-b locally (so we're trying to advance it)
 	run("checkout", "feat-b")
