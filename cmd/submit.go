@@ -303,7 +303,11 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 		}
 	}
 	if !opts.DryRun && len(toPush) > 0 {
-		fmt.Printf("Pushing %s to origin (force-with-lease, atomic)...\n", strings.Join(toPush, ", "))
+		styled := make([]string, len(toPush))
+		for i, name := range toPush {
+			styled[i] = s.Branch(name)
+		}
+		fmt.Printf("Pushing %s to origin (force-with-lease, atomic)...\n", strings.Join(styled, ", "))
 		if err := g.PushMany(toPush, true); err != nil {
 			return fmt.Errorf("push failed: %w", err)
 		}
