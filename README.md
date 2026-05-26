@@ -268,7 +268,7 @@ Restack, push, and create/update PRs for the entire stack.
 This is the primary workflow command. By default it processes **every tracked branch** in parent-before-child order. It performs three phases:
 
 1. **Restack**: Rebase affected branches onto their parents
-2. **Push**: Force-push all affected branches (using `--force-with-lease`)
+2. **Push**: Force-push all affected branches in a single atomic `git push` (`--force-with-lease --atomic`); if any ref is rejected the push fails immediately and no refs are updated
 3. **PR**: Create PRs for branches without them; update PR bases for existing PRs
 
 PRs targeting non-trunk branches are created as drafts. When a PR's base changes to trunk (after its parent merges), you'll be prompted to mark it ready for review.

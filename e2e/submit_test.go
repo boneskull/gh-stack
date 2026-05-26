@@ -491,3 +491,44 @@ func TestSubmitFromTrunkFallback(t *testing.T) {
 		t.Error("should not push trunk branch")
 	}
 }
+
+// TestSubmitBatchPush verifies that a multi-branch submit advances all remote
+// refs in one atomic push and emits the expected summary line.
+func TestSubmitBatchPush(t *testing.T) {
+	env := NewTestEnvWithRemote(t)
+	env.MustRun("init")
+
+	// Build a 3-branch stack: main -> feat-a -> feat-b -> feat-c
+	env.MustRun("create", "feat-a")
+	tipA := env.CreateCommit("a work")
+
+	env.MustRun("create", "feat-b")
+	tipB := env.CreateCommit("b work")
+
+	env.MustRun("create", "feat-c")
+	tipC := env.CreateCommit("c work")
+
+	result := env.MustRun("submit", "--skip-prs", "--yes")
+
+	// Output should mention the batch push summary
+	if !strings.Contains(result.Stdout, "Pushing") {
+		t.Error("expected batch push summary line in output")
+	}
+	if !strings.Contains(result.Stdout, "atomic") {
+		t.Error("expected 'atomic' in push summary line")
+	}
+
+	// All three remote refs must match local tips
+	remoteA := env.GitRemote("rev-parse", "refs/heads/feat-a")
+	if remoteA != tipA {
+		t.Errorf("remote feat-a = %s, want %s", remoteA, tipA)
+	}
+	remoteB := env.GitRemote("rev-parse", "refs/heads/feat-b")
+	if remoteB != tipB {
+		t.Errorf("remote feat-b = %s, want %s", remoteB, tipB)
+	}
+	remoteC := env.GitRemote("rev-parse", "refs/heads/feat-c")
+	if remoteC != tipC {
+		t.Errorf("remote feat-c = %s, want %s", remoteC, tipC)
+	}
+}

@@ -285,6 +285,7 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 
 	// Phase 2: Push branches that will participate in PRs (or all if --skip-prs).
 	fmt.Println(s.Bold("\n=== Phase 2: Push ==="))
+	var toPush []string
 	for _, b := range branches {
 		var d *prDecision
 		if !opts.PushOnly {
@@ -298,12 +299,17 @@ func doSubmitPushAndPR(g *git.Git, cfg *config.Config, root *tree.Node, branches
 		if opts.DryRun {
 			fmt.Printf("%s Would push %s -> origin/%s (forced)\n", s.Muted("dry-run:"), s.Branch(b.Name), s.Branch(b.Name))
 		} else {
-			fmt.Printf("Pushing %s -> origin/%s (forced)... ", s.Branch(b.Name), s.Branch(b.Name))
-			if err := g.Push(b.Name, true); err != nil {
-				fmt.Println(s.Error("failed"))
-				return fmt.Errorf("failed to push %s: %w", b.Name, err)
-			}
-			fmt.Println(s.Success("ok"))
+			toPush = append(toPush, b.Name)
+		}
+	}
+	if !opts.DryRun && len(toPush) > 0 {
+		styled := make([]string, len(toPush))
+		for i, name := range toPush {
+			styled[i] = s.Branch(name)
+		}
+		fmt.Printf("Pushing %s to origin (force-with-lease, atomic)...\n", strings.Join(styled, ", "))
+		if err := g.PushMany(toPush, true); err != nil {
+			return fmt.Errorf("failed to push branches [%s]: %w", strings.Join(toPush, ", "), err)
 		}
 	}
 

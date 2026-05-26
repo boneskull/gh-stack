@@ -173,12 +173,31 @@ func (g *Git) Commit(message string) error {
 	return g.runSilent("commit", "-m", message)
 }
 
-// Push force-pushes a branch to origin with lease.
+// Push pushes a branch to origin. When force is true, --force-with-lease is
+// used; when false, the push is a normal fast-forward push (and will fail if
+// the remote has diverged).
 func (g *Git) Push(branch string, force bool) error {
-	args := []string{"push", "origin", branch}
-	if force {
-		args = append(args, "--force-with-lease")
+	return g.PushMany([]string{branch}, force)
+}
+
+// PushMany pushes multiple branches to origin in a single invocation.
+// When force is true, --force-with-lease and --atomic are added so that the
+// push is all-or-nothing: if any ref is rejected (e.g. lease conflict), none
+// of the refs are updated on the remote.
+// Returns nil immediately when branches is empty.
+//
+// All flags are placed before a `--` end-of-options marker so refspecs that
+// happen to start with `-` are never misinterpreted as git options.
+func (g *Git) PushMany(branches []string, force bool) error {
+	if len(branches) == 0 {
+		return nil
 	}
+	args := []string{"push"}
+	if force {
+		args = append(args, "--force-with-lease", "--atomic")
+	}
+	args = append(args, "origin", "--")
+	args = append(args, branches...)
 	return g.runInteractive(args...)
 }
 
