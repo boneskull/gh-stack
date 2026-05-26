@@ -905,8 +905,9 @@ func TestRebaseNoUpdateRefsPreservesBookmark(t *testing.T) {
 	}
 }
 
-// setupRepoWithRemote creates a local repo + bare remote and returns (localDir, remoteDir, Git).
-// The trunk branch is pushed to the remote and the remote is set as "origin".
+// setupRepoWithRemote creates a local repo + bare remote and returns
+// (localDir, remoteDir, *Git, trunk). The trunk branch is pushed to the
+// remote and the remote is set as "origin".
 func setupRepoWithRemote(t *testing.T) (dir, remoteDir string, g *git.Git, trunk string) {
 	t.Helper()
 	dir = t.TempDir()
