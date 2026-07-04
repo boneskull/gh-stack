@@ -79,3 +79,38 @@ func TestOrphanDisconnectedBranchIsAllowed(t *testing.T) {
 		t.Errorf("expected feat-a stackParent cleared after orphan, got %q", v)
 	}
 }
+
+func TestOrphanDisconnectedBranchWithDescendantsRequiresForce(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("feat-a work")
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("feat-b work")
+
+	env.Git("config", "branch.feat-a.stackParent", "missing-branch")
+
+	result := env.Run("orphan", "feat-a")
+	if result.Success() {
+		t.Fatal("expected orphan of disconnected branch with descendants to require --force")
+	}
+	if !result.ContainsStderr("has children") {
+		t.Errorf("expected error about children, got: %s", result.Stderr)
+	}
+	if v := env.GetStackConfig("branch.feat-a.stackParent"); v != "missing-branch" {
+		t.Errorf("expected feat-a stackParent to remain after failed orphan, got %q", v)
+	}
+	if v := env.GetStackConfig("branch.feat-b.stackParent"); v != "feat-a" {
+		t.Errorf("expected feat-b stackParent to remain after failed orphan, got %q", v)
+	}
+
+	env.MustRun("orphan", "--force", "feat-a")
+
+	if v := env.GetStackConfig("branch.feat-a.stackParent"); v != "" {
+		t.Errorf("expected feat-a stackParent cleared after forced orphan, got %q", v)
+	}
+	if v := env.GetStackConfig("branch.feat-b.stackParent"); v != "" {
+		t.Errorf("expected feat-b stackParent cleared after forced orphan, got %q", v)
+	}
+}
