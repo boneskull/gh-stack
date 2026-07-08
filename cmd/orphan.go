@@ -4,6 +4,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
@@ -59,7 +60,10 @@ func runOrphan(cmd *cobra.Command, args []string) error {
 
 	node := tree.FindNode(root, branchName)
 	if node == nil {
-		return fmt.Errorf("branch %q is not tracked", branchName)
+		node, err = disconnectedNode(cfg, branchName)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Check for children
@@ -89,4 +93,47 @@ func runOrphan(cmd *cobra.Command, args []string) error {
 	fmt.Printf("%s Orphaned %s\n", s.SuccessIcon(), s.Branch(branchName))
 
 	return nil
+}
+
+func disconnectedNode(cfg *config.Config, branchName string) (*tree.Node, error) {
+	trackedBranches, err := cfg.ListTrackedBranches()
+	if err != nil {
+		return nil, fmt.Errorf("branch %q is not tracked", branchName)
+	}
+	if !slices.Contains(trackedBranches, branchName) {
+		return nil, fmt.Errorf("branch %q is not tracked", branchName)
+	}
+
+	childrenByParent := make(map[string][]string)
+	for _, branch := range trackedBranches {
+		parent, parentErr := cfg.GetParent(branch)
+		if parentErr != nil {
+			continue
+		}
+		childrenByParent[parent] = append(childrenByParent[parent], branch)
+	}
+	for parent := range childrenByParent {
+		slices.Sort(childrenByParent[parent])
+	}
+
+	visiting := make(map[string]bool)
+	var build func(string) *tree.Node
+	build = func(name string) *tree.Node {
+		node := &tree.Node{Name: name}
+		visiting[name] = true
+		defer delete(visiting, name)
+
+		for _, childName := range childrenByParent[name] {
+			if visiting[childName] {
+				continue
+			}
+			child := build(childName)
+			child.Parent = node
+			node.Children = append(node.Children, child)
+		}
+
+		return node
+	}
+
+	return build(branchName), nil
 }

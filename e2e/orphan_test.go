@@ -53,3 +53,64 @@ func TestOrphanForceClearsPRBaseOnDescendants(t *testing.T) {
 		t.Errorf("expected feat-b stackPRBase cleared, got %q", v)
 	}
 }
+
+func TestOrphanDisconnectedBranchIsAllowed(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	// Create the branch chain main -> feat-a, then manually delete the
+	// parent link so feat-a's recorded parent ("missing-branch") is not
+	// itself a tracked branch. This mirrors the scenario in #116 where
+	// the parent is no longer valid and `gh stack orphan` previously
+	// refused to orphan the current branch.
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("feat-a work")
+	env.Git("config", "branch.feat-a.stackParent", "missing-branch")
+
+	if env.GetStackConfig("branch.feat-a.stackParent") != "missing-branch" {
+		t.Fatal("expected feat-a parent override to land before orphan")
+	}
+
+	result := env.Run("orphan", "feat-a")
+	if !result.Success() {
+		t.Fatalf("expected orphan of disconnected branch to succeed, got exit %d stderr=%q", result.ExitCode, result.Stderr)
+	}
+	if v := env.GetStackConfig("branch.feat-a.stackParent"); v != "" {
+		t.Errorf("expected feat-a stackParent cleared after orphan, got %q", v)
+	}
+}
+
+func TestOrphanDisconnectedBranchWithDescendantsRequiresForce(t *testing.T) {
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	env.MustRun("create", "feat-a")
+	env.CreateCommit("feat-a work")
+	env.MustRun("create", "feat-b")
+	env.CreateCommit("feat-b work")
+
+	env.Git("config", "branch.feat-a.stackParent", "missing-branch")
+
+	result := env.Run("orphan", "feat-a")
+	if result.Success() {
+		t.Fatal("expected orphan of disconnected branch with descendants to require --force")
+	}
+	if !result.ContainsStderr("has children") {
+		t.Errorf("expected error about children, got: %s", result.Stderr)
+	}
+	if v := env.GetStackConfig("branch.feat-a.stackParent"); v != "missing-branch" {
+		t.Errorf("expected feat-a stackParent to remain after failed orphan, got %q", v)
+	}
+	if v := env.GetStackConfig("branch.feat-b.stackParent"); v != "feat-a" {
+		t.Errorf("expected feat-b stackParent to remain after failed orphan, got %q", v)
+	}
+
+	env.MustRun("orphan", "--force", "feat-a")
+
+	if v := env.GetStackConfig("branch.feat-a.stackParent"); v != "" {
+		t.Errorf("expected feat-a stackParent cleared after forced orphan, got %q", v)
+	}
+	if v := env.GetStackConfig("branch.feat-b.stackParent"); v != "" {
+		t.Errorf("expected feat-b stackParent cleared after forced orphan, got %q", v)
+	}
+}
