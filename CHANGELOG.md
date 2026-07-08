@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/boneskull/gh-stack/compare/v1.1.0...v1.2.0) (2026-07-08)
+
+
+### Features
+
+* batch push branches ([#125](https://github.com/boneskull/gh-stack/issues/125)) ([2250f2b](https://github.com/boneskull/gh-stack/commit/2250f2bb81bf9bd3c7bce85a08d470d40cb36a92))
+
+
+### Bug Fixes
+
+* **orphan:** allow orphaning branches whose parent link is invalid ([#123](https://github.com/boneskull/gh-stack/issues/123)) ([370efb1](https://github.com/boneskull/gh-stack/commit/370efb106acc038447d4699004cefbdadfdc1a71))
+
 ## [1.1.0](https://github.com/boneskull/gh-stack/compare/v1.0.0...v1.1.0) (2026-05-08)
 
 
