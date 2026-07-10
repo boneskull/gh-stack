@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/boneskull/gh-stack/internal/config"
@@ -531,6 +533,133 @@ func TestApplyMustPushForSkippedAncestors(t *testing.T) {
 			t.Error("feat-a is not skipped; pushAnyway should stay false")
 		}
 	})
+}
+
+func TestCollectSubmitPRURL(t *testing.T) {
+	ghClient := github.NewClientWithREST(nil, "owner", "repo")
+
+	type prResult struct {
+		action  prAction
+		prNum   int
+		adopted bool
+		err     error
+	}
+
+	tests := []struct {
+		name    string
+		opts    SubmitOptions
+		results []prResult
+		want    []string
+	}{
+		{
+			name: "all branches create new PRs",
+			opts: SubmitOptions{OpenWeb: true},
+			results: []prResult{
+				{action: prActionCreate, prNum: 10},
+				{action: prActionCreate, prNum: 11},
+			},
+			want: []string{
+				"https://github.com/owner/repo/pull/10",
+				"https://github.com/owner/repo/pull/11",
+			},
+		},
+		{
+			name: "all PRs already exist and are updated",
+			opts: SubmitOptions{OpenWeb: true},
+			results: []prResult{
+				{action: prActionUpdate, prNum: 20},
+				{action: prActionUpdate, prNum: 21},
+			},
+		},
+		{
+			name: "mixed created updated and adopted PRs",
+			opts: SubmitOptions{OpenWeb: true},
+			results: []prResult{
+				{action: prActionUpdate, prNum: 30},
+				{action: prActionCreate, prNum: 31},
+				{action: prActionAdopt, prNum: 32, adopted: true},
+				{action: prActionCreate, prNum: 33, adopted: true},
+				{action: prActionCreate, prNum: 34},
+			},
+			want: []string{
+				"https://github.com/owner/repo/pull/31",
+				"https://github.com/owner/repo/pull/34",
+			},
+		},
+		{
+			name: "create failure contributes no URL and later creates still open",
+			opts: SubmitOptions{OpenWeb: true},
+			results: []prResult{
+				{action: prActionCreate, prNum: 40, err: errors.New("create failed")},
+				{action: prActionCreate, prNum: 41},
+			},
+			want: []string{"https://github.com/owner/repo/pull/41"},
+		},
+		{
+			name: "web disabled collects no URLs",
+			opts: SubmitOptions{},
+			results: []prResult{
+				{action: prActionCreate, prNum: 50},
+			},
+		},
+		{
+			name: "dry run collects no URLs",
+			opts: SubmitOptions{DryRun: true, OpenWeb: true},
+			results: []prResult{
+				{action: prActionCreate, prNum: 60},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []string
+			for _, result := range tt.results {
+				got = collectSubmitPRURL(got, tt.opts, result.action, result.prNum, result.adopted, result.err, ghClient)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("collectSubmitPRURL() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRunSubmitRejectsSkipPRsWithWeb(t *testing.T) {
+	oldDryRun := submitDryRunFlag
+	oldCurrentOnly := submitCurrentOnlyFlag
+	oldUpdateOnly := submitUpdateOnlyFlag
+	oldPushOnly := submitPushOnlyFlag
+	oldYes := submitYesFlag
+	oldWeb := submitWebFlag
+	oldFrom := submitFromFlag
+	oldNoUpdateRefs := submitNoUpdateRefsFlag
+	t.Cleanup(func() {
+		submitDryRunFlag = oldDryRun
+		submitCurrentOnlyFlag = oldCurrentOnly
+		submitUpdateOnlyFlag = oldUpdateOnly
+		submitPushOnlyFlag = oldPushOnly
+		submitYesFlag = oldYes
+		submitWebFlag = oldWeb
+		submitFromFlag = oldFrom
+		submitNoUpdateRefsFlag = oldNoUpdateRefs
+	})
+
+	submitDryRunFlag = false
+	submitCurrentOnlyFlag = false
+	submitUpdateOnlyFlag = false
+	submitPushOnlyFlag = true
+	submitYesFlag = false
+	submitWebFlag = true
+	submitFromFlag = ""
+	submitNoUpdateRefsFlag = false
+
+	err := runSubmit(nil, nil)
+	if err == nil {
+		t.Fatal("expected --skip-prs/--web validation error")
+	}
+	if !strings.Contains(err.Error(), "--skip-prs and --web cannot be used together") {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }
 
 func TestDeleteMergedBranchClearsPRBase(t *testing.T) {

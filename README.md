@@ -287,7 +287,7 @@ If a rebase conflict occurs, resolve it and run `gh stack continue`.
 | `-u, --update`        | Only update existing PRs, don't create new ones                            |
 | `-s, --skip-prs`      | Skip PR creation/update, only restack and push                             |
 | `-y, --yes`           | Skip interactive prompts; use auto-generated PR title/description          |
-| `--web`               | Open created/updated PRs in web browser                                    |
+| `--web`               | Open newly created PRs in web browser                                      |
 | `--no-update-refs`    | Do not pass `--update-refs` to git (preserves untracked bookmark branches) |
 
 ### restack
