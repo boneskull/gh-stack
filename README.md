@@ -333,6 +333,7 @@ This is the command to run when upstream changes have occurred (e.g., a PR in yo
 | `-D, --dry-run`     | Show what would be done                                                    |
 | `-w, --worktrees`   | Rebase branches checked out in linked worktrees in-place                   |
 | `--no-update-refs`  | Do not pass `--update-refs` to git (preserves untracked bookmark branches) |
+| `-y, --yes`         | Accept the default action (delete merged branches) without prompting       |
 
 ### undo
 
