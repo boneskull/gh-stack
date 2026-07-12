@@ -292,7 +292,7 @@ func runSync(cmd *cobra.Command, args []string) error {
 		if syncDryRunFlag {
 			fmt.Printf("%s Would handle merged branch %s\n", s.Muted("dry-run:"), s.Branch(branch))
 		} else {
-			action := handleMergedBranch(g, cfg, branch, trunk, &currentBranch, syncYesFlag, s)
+			action := handleMergedBranch(g, cfg, branch, trunk, &currentBranch, syncYesFlag, prompt.IsInteractive, s)
 			if action == mergedActionSkip {
 				// User chose to skip - don't collect fork points or retarget children
 				continue
@@ -441,12 +441,13 @@ const (
 // handleMergedBranch prompts the user for how to handle a merged branch and executes the choice.
 // Returns the action taken. If the user is on the merged branch, it will checkout trunk first.
 // The currentBranch pointer is updated if a checkout occurs. If yes is true, the default action
-// (delete) is taken without prompting.
-func handleMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string, yes bool, s *style.Style) mergedAction {
+// (delete) is taken without prompting. isInteractive is injected so tests can force the
+// interactive code path independently of terminal detection.
+func handleMergedBranch(g *git.Git, cfg *config.Config, branch, trunk string, currentBranch *string, yes bool, isInteractive func() bool, s *style.Style) mergedAction {
 	fmt.Printf("\nBranch %s appears to be %s into %s.\n", s.Branch(branch), s.Merged("merged"), s.Branch(trunk))
 
 	// Default to delete when --yes is set or in non-interactive mode
-	if yes || !prompt.IsInteractive() {
+	if yes || !isInteractive() {
 		return deleteMergedBranch(g, cfg, branch, trunk, currentBranch, s)
 	}
 
