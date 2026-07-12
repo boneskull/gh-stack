@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/boneskull/gh-stack/compare/v1.2.0...v1.3.0) (2026-07-12)
+
+
+### Features
+
+* **sync:** add -y/--yes flag ([#136](https://github.com/boneskull/gh-stack/issues/136)) ([f7cf20c](https://github.com/boneskull/gh-stack/commit/f7cf20c48856412a18d224dc8b5cca6649de5d62))
+
 ## [1.2.0](https://github.com/boneskull/gh-stack/compare/v1.1.0...v1.2.0) (2026-07-08)
 
 
