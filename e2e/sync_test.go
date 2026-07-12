@@ -28,3 +28,14 @@ func TestSyncAcceptsDryRunFlag(t *testing.T) {
 		t.Errorf("expected sync --help to show --dry-run flag, got:\n%s", result.Stdout)
 	}
 }
+
+func TestSyncAcceptsYesFlag(t *testing.T) {
+	// Verify --yes / -y flag is recognized by sync
+	env := NewTestEnv(t)
+	env.MustRun("init")
+
+	result := env.Run("sync", "--help")
+	if !result.ContainsStdout("--yes") {
+		t.Errorf("expected sync --help to show --yes flag, got:\n%s", result.Stdout)
+	}
+}
