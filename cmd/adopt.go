@@ -9,6 +9,7 @@ import (
 	"github.com/boneskull/gh-stack/internal/config"
 	"github.com/boneskull/gh-stack/internal/git"
 	"github.com/boneskull/gh-stack/internal/style"
+	"github.com/boneskull/gh-stack/internal/tree"
 	"github.com/spf13/cobra"
 )
 
@@ -84,24 +85,19 @@ func runAdopt(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Check for cycles by walking configured parent links directly. A broken
-	// parent can disconnect branches from the trunk-rooted tree while their
-	// stackParent links still form a cycle.
-	seen := map[string]bool{}
-	for current := parent; current != trunk; {
-		if current == branchName {
-			return errors.New("cannot adopt: would create a cycle")
-		}
-		if seen[current] {
-			return errors.New("cannot adopt: parent chain contains a cycle")
-		}
-		seen[current] = true
+	// Check for cycles (branch can't be ancestor of parent)
+	root, err := tree.Build(cfg)
+	if err != nil {
+		return err
+	}
 
-		next, parentErr := cfg.GetParent(current)
-		if parentErr != nil {
-			break
+	parentNode := tree.FindNode(root, parent)
+	if parentNode != nil {
+		for _, ancestor := range tree.GetAncestors(parentNode) {
+			if ancestor.Name == branchName {
+				return errors.New("cannot adopt: would create a cycle")
+			}
 		}
-		current = next
 	}
 
 	s := style.New()
