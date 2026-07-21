@@ -84,7 +84,7 @@ func init() {
 	submitCmd.Flags().BoolVarP(&submitUpdateOnlyFlag, "update", "u", false, "only update existing PRs, don't create new ones")
 	submitCmd.Flags().BoolVarP(&submitPushOnlyFlag, "skip-prs", "s", false, "skip PR creation/update, only restack and push")
 	submitCmd.Flags().BoolVarP(&submitYesFlag, "yes", "y", false, "skip interactive prompts and use auto-generated title/description for PRs")
-	submitCmd.Flags().BoolVar(&submitWebFlag, "web", false, "open created/updated PRs in web browser")
+	submitCmd.Flags().BoolVar(&submitWebFlag, "web", false, "open newly created PRs in web browser")
 	submitCmd.Flags().StringVarP(&submitFromFlag, "from", "f", "", "submit from this branch toward leaves (default: entire stack; bare --from = current branch)")
 	submitCmd.Flags().Lookup("from").NoOptDefVal = "HEAD"
 	submitCmd.Flags().BoolVar(&submitNoUpdateRefsFlag, "no-update-refs", false, "do not pass --update-refs to git (preserves untracked bookmark branches pointing into the stack)")
@@ -251,7 +251,7 @@ type SubmitOptions struct {
 	DryRun bool
 	// UpdateOnly skips creating new PRs; only existing PRs are updated.
 	UpdateOnly bool
-	// OpenWeb opens created/updated PRs in the browser.
+	// OpenWeb opens newly created PRs in the browser.
 	OpenWeb bool
 	// PushOnly skips the PR creation/update phase entirely.
 	PushOnly bool
@@ -484,9 +484,6 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 					if err := ghClient.GenerateAndPostStackComment(root, b.Name, trunk, d.prNum, remoteBranches); err != nil {
 						fmt.Printf("%s failed to update stack comment for PR #%d: %v\n", s.WarningIcon(), d.prNum, err)
 					}
-					if opts.OpenWeb {
-						prURLs = append(prURLs, ghClient.PRURL(d.prNum))
-					}
 				}
 			}
 		case prActionAdopt:
@@ -499,9 +496,6 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 					fmt.Printf("%s failed to adopt PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), adoptErr)
 				default:
 					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
-					if opts.OpenWeb {
-						prURLs = append(prURLs, ghClient.PRURL(prNum))
-					}
 				}
 			}
 		case prActionCreate:
@@ -514,15 +508,10 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 					fmt.Printf("%s failed to create PR for %s: %v\n", s.WarningIcon(), s.Branch(b.Name), execErr)
 				case adopted:
 					fmt.Printf("%s Adopted PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
-					if opts.OpenWeb {
-						prURLs = append(prURLs, ghClient.PRURL(prNum))
-					}
 				default:
 					fmt.Printf("%s Created PR #%d for %s (%s)\n", s.SuccessIcon(), prNum, s.Branch(b.Name), ghClient.PRURL(prNum))
-					if opts.OpenWeb {
-						prURLs = append(prURLs, ghClient.PRURL(prNum))
-					}
 				}
+				prURLs = collectSubmitPRURL(prURLs, opts, d.action, prNum, adopted, execErr, ghClient)
 			}
 		}
 	}
@@ -537,6 +526,15 @@ func executePRDecisions(g *git.Git, cfg *config.Config, root *tree.Node, decisio
 	}
 
 	return nil
+}
+
+// collectSubmitPRURL records only newly created PRs for --web. Updated and
+// adopted PRs already existed, and their URLs are printed in the action output.
+func collectSubmitPRURL(prURLs []string, opts SubmitOptions, action prAction, prNum int, adopted bool, err error, ghClient *github.Client) []string {
+	if !opts.OpenWeb || opts.DryRun || err != nil || action != prActionCreate || adopted || prNum <= 0 || ghClient == nil {
+		return prURLs
+	}
+	return append(prURLs, ghClient.PRURL(prNum))
 }
 
 // prContext bundles the shared read-only context that is threaded through the

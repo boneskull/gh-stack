@@ -296,6 +296,9 @@ func doRestackWithState(g *git.Git, cfg *config.Config, branches []*tree.Node, o
 			} else {
 				rebaseErr = g.Rebase(parent, updateRefs)
 			}
+			if rebaseErr != nil && !g.IsRebaseInProgress() {
+				return fmt.Errorf("rebase of %s onto %s failed: %w", b.Name, parent, rebaseErr)
+			}
 		}
 
 		if rebaseErr != nil {
