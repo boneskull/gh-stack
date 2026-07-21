@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/boneskull/gh-stack/compare/v1.3.0...v1.3.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* --web opens a browser tab for every PR when submitting a multi-branch stack ([#135](https://github.com/boneskull/gh-stack/issues/135)) ([6550109](https://github.com/boneskull/gh-stack/commit/655010993806b77d5c7950616da6d8d6e0c2f56d))
+
 ## [1.3.0](https://github.com/boneskull/gh-stack/compare/v1.2.0...v1.3.0) (2026-07-12)
 
 
