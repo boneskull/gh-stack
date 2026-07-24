@@ -40,5 +40,5 @@ jobs:
             persona: pedantic
             advanced-security: 'false'
             annotations: 'true'
-            version: '1.27.0'
+            version: '1.28.0'
             # TODO: add enable strict collection when the action enables it
