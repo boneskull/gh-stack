@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/charmbracelet/bubbles v0.21.1
 	github.com/charmbracelet/huh v1.0.0
-	github.com/cli/go-gh/v2 v2.15.0
+	github.com/cli/go-gh/v2 v2.16.0
 	github.com/cli/safeexec v1.0.1
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d
 	github.com/spf13/cobra v1.10.2
