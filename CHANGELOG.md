@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.2](https://github.com/boneskull/gh-stack/compare/v1.3.1...v1.3.2) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/cli/go-gh/v2 to v2.15.0 ([#157](https://github.com/boneskull/gh-stack/issues/157)) ([3e5a341](https://github.com/boneskull/gh-stack/commit/3e5a3419d12dc0b31b22b60364f17647f9e4c511))
+* **deps:** update module github.com/cli/go-gh/v2 to v2.16.0 ([#159](https://github.com/boneskull/gh-stack/issues/159)) ([f338efa](https://github.com/boneskull/gh-stack/commit/f338efa6a40cb776f34321ccd64257a4f22fe32f))
+
 ## [1.3.1](https://github.com/boneskull/gh-stack/compare/v1.3.0...v1.3.1) (2026-07-21)
 
 
