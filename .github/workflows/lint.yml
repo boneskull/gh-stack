@@ -32,7 +32,7 @@ jobs:
         - name: golangci-lint
           uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
           with:
-            version: v2.13.2
+            version: v2.14.0
   
         - name: Run zizmor
           uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
